@@ -1,0 +1,124 @@
+{
+  "metadata": {
+    "schema_version": "1",
+    "controller_version": "0.7.0",
+    "ran_at": "2026-05-30T20:00:00Z",
+    "window_start": "2026-05-29T20:00:00Z",
+    "window_end": "2026-05-30T20:00:00Z",
+    "warmup_start": "2026-05-29T20:00:00Z",
+    "warmup_end": "2026-05-30T00:48:00Z",
+    "warmup_fraction": 0.2,
+    "tick_interval_seconds": 30,
+    "result_status": "anomalies_detected",
+    "config_summary": {
+      "static_rules": 3,
+      "adaptive_metrics": 4,
+      "log_patterns": 3
+    },
+    "execution_metrics": {
+      "ticks_processed": 2304,
+      "ticks_skipped_query_error": 2,
+      "vm_queries_total": 4608,
+      "vm_query_duration_seconds_p95": 0.42,
+      "loki_queries_total": 1152,
+      "memory_peak_mb": 348.5,
+      "duration_seconds": 187.4
+    }
+  },
+  "totals": {
+    "anomalies": 3,
+    "by_severity": {
+      "critical": 1,
+      "warning": 2
+    },
+    "by_signal": {
+      "logs": 1,
+      "metrics": 2
+    },
+    "by_detector": {
+      "adaptive": 2,
+      "static": 1
+    },
+    "by_kind": {
+      "pod": 2,
+      "workload": 1
+    },
+    "warmup_skipped": 0,
+    "query_errors": 0
+  },
+  "top_workloads": [
+    {
+      "namespace": "payments",
+      "workload": "pay-api",
+      "count": 2
+    },
+    {
+      "namespace": "orders",
+      "workload": "order-svc",
+      "count": 1
+    }
+  ],
+  "timeline": [
+    {
+      "hour": "2026-05-30T12:00:00Z",
+      "anomalies": 1,
+      "by_severity": {
+        "warning": 1
+      }
+    },
+    {
+      "hour": "2026-05-30T13:00:00Z",
+      "anomalies": 1,
+      "by_severity": {
+        "critical": 1
+      }
+    },
+    {
+      "hour": "2026-05-30T14:00:00Z",
+      "anomalies": 1,
+      "by_severity": {
+        "warning": 1
+      }
+    }
+  ],
+  "anomalies": [
+    {
+      "timestamp": "2026-05-30T12:00:00Z",
+      "namespace": "payments",
+      "pod": "pay-api-abc12",
+      "workload": "pay-api",
+      "metric": "cpu_by_workload",
+      "severity": "warning",
+      "signal": "metrics",
+      "detector": "adaptive",
+      "score": 4.5,
+      "current": 0.87,
+      "baseline_mean": 0.42
+    },
+    {
+      "timestamp": "2026-05-30T13:00:00Z",
+      "namespace": "payments",
+      "pod": "pay-api-def34",
+      "workload": "pay-api",
+      "metric": "error_rate",
+      "severity": "critical",
+      "signal": "metrics",
+      "detector": "static",
+      "score": 13,
+      "current": 15,
+      "baseline_mean": 2
+    },
+    {
+      "timestamp": "2026-05-30T14:00:00Z",
+      "namespace": "orders",
+      "workload": "order-svc",
+      "metric": "log_error_rate",
+      "severity": "warning",
+      "signal": "logs",
+      "detector": "adaptive",
+      "score": 15,
+      "current": 50,
+      "baseline_mean": 5
+    }
+  ]
+}

@@ -12,22 +12,13 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
 )
 
-// Report holds the results of a replay run.
-type Report struct {
-	Anomalies    []detection.Anomaly
-	TotalTicks   int
-	TicksSkipped int
-	Duration     time.Duration
-	Status       string // "complete" or "partial"
-}
-
 // Run executes the replay tick simulator over the configured window.
 // It loads metric/log data in 1h chunks, iterates ticks from warmup_end to To,
 // and runs detection on each tick's samples.
 //
 // No side effects: no Redis, no Alertmanager, no gRPC workers, no ML calls.
 func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, error) {
-	start := time.Now()
+	mc := newMetricsCollector()
 
 	// Set up signal handling for graceful partial flush.
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
@@ -57,7 +48,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 	engine := detection.NewEngine(cfg.Detection, store)
 
 	step := cfg.Controller.JobInterval
-	report := &Report{Status: "complete"}
+	rb := newReportBuilder(rcfg.MaxAnomalies)
 
 	// Count total ticks for progress logging.
 	totalTicks := int(rcfg.To.Sub(rcfg.From) / step)
@@ -66,16 +57,15 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 		progressInterval = 1
 	}
 
+	partial := false
 	tickIdx := 0
 	for tick := rcfg.From.Add(step); !tick.After(rcfg.To); tick = tick.Add(step) {
 		// Check for cancellation (SIGINT/SIGTERM).
 		select {
 		case <-ctx.Done():
 			slog.Warn("[REPLAY] interrupted, flushing partial report", "ticks_processed", tickIdx)
-			report.Status = "partial"
-			report.TotalTicks = tickIdx
-			report.Duration = time.Since(start)
-			return report, nil
+			partial = true
+			goto done
 		default:
 		}
 
@@ -89,20 +79,28 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 		}
 
 		// Query metrics for all adaptive metrics + static rules.
-		var metricSeries []ingestion.TimeSeries
-		for _, am := range cfg.Detection.AdaptiveMetrics {
-			series, err := vm.QueryRange(ctx, am.Query, chunkStart, tick, step)
-			if err != nil {
-				slog.Warn("[REPLAY] vm query failed, skipping tick",
-					"tick", tick.Format(time.RFC3339), "metric", am.Name, "error", err)
-				report.TicksSkipped++
-				goto nextTick
-			}
-			metricSeries = append(metricSeries, series...)
-		}
-
-		// Run adaptive detection on metric samples at this tick.
 		{
+			var metricSeries []ingestion.TimeSeries
+			skipTick := false
+			for _, am := range cfg.Detection.AdaptiveMetrics {
+				qStart := time.Now()
+				series, err := vm.QueryRange(ctx, am.Query, chunkStart, tick, step)
+				mc.recordVMQuery(time.Since(qStart))
+				if err != nil {
+					slog.Warn("[REPLAY] vm query failed, skipping tick",
+						"tick", tick.Format(time.RFC3339), "metric", am.Name, "error", err)
+					rb.addQueryError()
+					mc.recordSkip()
+					skipTick = true
+					break
+				}
+				metricSeries = append(metricSeries, series...)
+			}
+			if skipTick {
+				goto progress
+			}
+
+			// Run adaptive detection on metric samples at this tick.
 			samples := SamplesAt(tick, metricSeries)
 			for _, am := range cfg.Detection.AdaptiveMetrics {
 				anomalies := engine.EvaluateMetricsAdaptive(ctx, am.Name, samples)
@@ -110,18 +108,23 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 					for i := range anomalies {
 						anomalies[i].Timestamp = tick
 					}
-					report.Anomalies = append(report.Anomalies, anomalies...)
+					addAll(rb, anomalies)
+				} else {
+					rb.warmupSkipped += len(anomalies)
 				}
 			}
 		}
 
 		// Run static detection.
 		for _, rule := range cfg.Detection.StaticRules {
+			qStart := time.Now()
 			series, err := vm.QueryRange(ctx, rule.Query, chunkStart, tick, step)
+			mc.recordVMQuery(time.Since(qStart))
 			if err != nil {
 				slog.Warn("[REPLAY] vm static query failed",
 					"tick", tick.Format(time.RFC3339), "rule", rule.Name, "error", err)
-				continue // skip this rule, not the whole tick
+				rb.addQueryError()
+				continue
 			}
 			samples := SamplesAt(tick, series)
 			if !isWarmup {
@@ -129,16 +132,20 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 				for i := range anomalies {
 					anomalies[i].Timestamp = tick
 				}
-				report.Anomalies = append(report.Anomalies, anomalies...)
+				addAll(rb, anomalies)
 			}
 		}
 
 		// Run log-based detection.
 		for _, lp := range cfg.Detection.LogPatterns {
+			qStart := time.Now()
 			series, err := loki.QueryMetricRange(ctx, lp.Query, chunkStart, tick, step)
+			mc.recordLokiQuery()
+			_ = qStart // loki duration not tracked in p95 (only VM)
 			if err != nil {
 				slog.Warn("[REPLAY] loki query failed",
 					"tick", tick.Format(time.RFC3339), "pattern", lp.Name, "error", err)
+				rb.addQueryError()
 				continue
 			}
 			samples := SamplesAt(tick, series)
@@ -147,25 +154,44 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 				for i := range anomalies {
 					anomalies[i].Timestamp = tick
 				}
-				report.Anomalies = append(report.Anomalies, anomalies...)
+				addAll(rb, anomalies)
+			} else {
+				rb.warmupSkipped += len(anomalies)
 			}
 		}
 
-		// Enforce max anomalies cap.
-		if rcfg.MaxAnomalies > 0 && len(report.Anomalies) > rcfg.MaxAnomalies {
-			report.Anomalies = report.Anomalies[:rcfg.MaxAnomalies]
-		}
+		mc.recordTick()
 
-		// Progress logging every 10%.
+		// Sample memory every 10% of ticks.
+	progress:
 		if tickIdx%progressInterval == 0 {
+			mc.sampleMemory()
 			pct := (tickIdx * 100) / totalTicks
-			slog.Info("[REPLAY] progress", "percent", pct, "ticks", tickIdx, "anomalies", len(report.Anomalies))
+			slog.Info("[REPLAY] progress", "percent", pct, "ticks", tickIdx, "anomalies", len(rb.anomalies))
 		}
-
-	nextTick:
 	}
 
-	report.TotalTicks = tickIdx
-	report.Duration = time.Since(start)
+done:
+	mc.sampleMemory()
+	execMetrics := mc.snapshot()
+
+	configSummary := ConfigSummary{
+		StaticRules:     len(cfg.Detection.StaticRules),
+		AdaptiveMetrics: len(cfg.Detection.AdaptiveMetrics),
+		LogPatterns:     len(cfg.Detection.LogPatterns),
+	}
+
+	meta := NewMetadata(rcfg, step, warmupEnd, configSummary, execMetrics)
+	if partial {
+		meta.ResultStatus = "partial"
+	}
+
+	report := rb.build(meta)
 	return report, nil
+}
+
+func addAll(rb *reportBuilder, anomalies []detection.Anomaly) {
+	for _, a := range anomalies {
+		rb.addAnomaly(a)
+	}
 }

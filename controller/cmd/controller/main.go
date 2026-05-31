@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +27,7 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 	"github.com/staffops/staffops-anomaly-detection/internal/ml"
 	"github.com/staffops/staffops-anomaly-detection/internal/readiness"
+	"github.com/staffops/staffops-anomaly-detection/internal/replay"
 	"github.com/staffops/staffops-anomaly-detection/internal/version"
 	pb "github.com/staffops/staffops-anomaly-detection/proto"
 	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
@@ -32,7 +36,23 @@ import (
 func main() {
 	configPath := flag.String("config", "config/config.local.yaml", "path to config file")
 	dryRun := flag.Bool("dry-run", false, "run detection without firing alerts")
+
+	// Replay mode flags.
+	replayMode := flag.Bool("replay", false, "run in replay mode (offline analysis, no side effects). ML is V2 — not supported yet.")
+	replayFrom := flag.String("from", "", "replay window start (duration like 24h or RFC3339 timestamp)")
+	replayTo := flag.String("to", "", "replay window end (duration like 1h or RFC3339; default: now)")
+	replayOutput := flag.String("output", "./replay-report.json", "output path for replay report (writes .json and .md)")
+	replayWarmup := flag.Float64("warmup-fraction", 0.2, "fraction of window used for baseline warmup")
+	replayMaxRange := flag.String("max-range", "7d", "maximum allowed replay window duration")
+	replayMaxAnomalies := flag.Int("max-anomalies", 1000, "maximum anomalies in report output")
+
 	flag.Parse()
+
+	// --- REPLAY MODE: short-circuit before any prod infrastructure ---
+	if *replayMode {
+		runReplay(*configPath, *replayFrom, *replayTo, *replayOutput, *replayWarmup, *replayMaxRange, *replayMaxAnomalies)
+		return
+	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -316,4 +336,175 @@ func buildJobBatch(cfg *config.Config) *pb.JobBatch {
 	}
 
 	return batch
+}
+
+// runReplay handles the --replay mode: parse window, pre-flight checks, run engine, write output.
+func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction float64, maxRangeStr string, maxAnomalies int) {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
+	// Parse max-range duration.
+	maxRange, err := parseDuration(maxRangeStr)
+	if err != nil {
+		slog.Error("invalid --max-range", "value", maxRangeStr, "error", err)
+		os.Exit(1)
+	}
+
+	// Parse window.
+	from, to, err := replay.ParseWindow(fromStr, toStr, maxRange)
+	if err != nil {
+		slog.Error("invalid replay window", "error", err)
+		os.Exit(1)
+	}
+
+	// Load config.
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
+	}
+
+	// Banner.
+	warmupDur := time.Duration(float64(to.Sub(from)) * warmupFraction)
+	minWarmup := time.Duration(cfg.Baseline.WarmUpSamples) * cfg.Controller.JobInterval
+	if minWarmup > warmupDur {
+		warmupDur = minWarmup
+	}
+	warmupEnd := from.Add(warmupDur)
+
+	fmt.Println("╔══════════════════════════════════════════════════════╗")
+	fmt.Println("║         REPLAY MODE — no side effects               ║")
+	fmt.Println("╚══════════════════════════════════════════════════════╝")
+	fmt.Printf("  Window:     %s → %s\n", from.Format(time.RFC3339), to.Format(time.RFC3339))
+	fmt.Printf("  Warmup end: %s\n", warmupEnd.Format(time.RFC3339))
+	fmt.Printf("  Tick:       %s\n", cfg.Controller.JobInterval)
+	fmt.Printf("  Config:     %s\n", configPath)
+	fmt.Printf("  Output:     %s (.json + .md)\n", outputPath)
+	fmt.Println()
+
+	// Pre-flight checks.
+	if err := preflightVM(cfg.Datasources.VictoriaMetrics); err != nil {
+		slog.Error("pre-flight: VM unreachable", "error", err)
+		os.Exit(1)
+	}
+	if err := preflightLoki(cfg.Datasources.Loki); err != nil {
+		slog.Error("pre-flight: Loki unreachable", "error", err)
+		os.Exit(1)
+	}
+	if err := preflightOutput(outputPath); err != nil {
+		slog.Error("pre-flight: output path not writable", "error", err)
+		os.Exit(1)
+	}
+
+	// Build replay config and run.
+	rcfg := replay.ReplayConfig{
+		From:           from,
+		To:             to,
+		ConfigPath:     configPath,
+		OutputPath:     outputPath,
+		WarmupFraction: warmupFraction,
+		MaxAnomalies:   maxAnomalies,
+	}
+
+	ctx := context.Background()
+	report, err := replay.Run(ctx, rcfg, cfg)
+	if err != nil {
+		slog.Error("replay failed", "error", err)
+		os.Exit(1)
+	}
+
+	// Write JSON.
+	jsonPath := outputPath
+	if !strings.HasSuffix(jsonPath, ".json") {
+		jsonPath += ".json"
+	}
+	jf, err := os.Create(jsonPath)
+	if err != nil {
+		slog.Error("failed to create JSON output", "error", err)
+		os.Exit(1)
+	}
+	if err := report.WriteJSON(jf); err != nil {
+		jf.Close()
+		slog.Error("failed to write JSON", "error", err)
+		os.Exit(1)
+	}
+	jf.Close()
+
+	// Write Markdown.
+	mdPath := strings.TrimSuffix(jsonPath, ".json") + ".md"
+	mf, err := os.Create(mdPath)
+	if err != nil {
+		slog.Error("failed to create MD output", "error", err)
+		os.Exit(1)
+	}
+	if err := report.WriteMarkdown(mf); err != nil {
+		mf.Close()
+		slog.Error("failed to write Markdown", "error", err)
+		os.Exit(1)
+	}
+	mf.Close()
+
+	slog.Info("[REPLAY] complete",
+		"json", jsonPath,
+		"md", mdPath,
+		"anomalies", report.Totals.Anomalies,
+		"status", report.Metadata.ResultStatus,
+		"duration", fmt.Sprintf("%.1fs", report.Metadata.ExecutionMetrics.DurationSeconds),
+	)
+}
+
+// parseDuration parses durations like "7d", "24h", "30m".
+func parseDuration(s string) (time.Duration, error) {
+	if strings.HasSuffix(s, "d") {
+		s = strings.TrimSuffix(s, "d")
+		var days int
+		if _, err := fmt.Sscanf(s, "%d", &days); err != nil {
+			return 0, fmt.Errorf("invalid day duration: %s", s)
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(s)
+}
+
+// preflightVM checks VM is reachable with query=up.
+func preflightVM(ds config.DatasourceEndpoint) error {
+	url := strings.TrimRight(ds.URL, "/") + "/api/v1/query?query=up"
+	client := &http.Client{Timeout: ds.Timeout}
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("VM query failed: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("VM returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// preflightLoki checks Loki is reachable via /loki/api/v1/labels.
+func preflightLoki(ds config.DatasourceEndpoint) error {
+	url := strings.TrimRight(ds.URL, "/") + "/loki/api/v1/labels"
+	client := &http.Client{Timeout: ds.Timeout}
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("Loki labels failed: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Loki returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// preflightOutput checks the output path is writable.
+func preflightOutput(path string) error {
+	f, err := os.Create(path + ".preflight")
+	if err != nil {
+		return err
+	}
+	f.Close()
+	os.Remove(path + ".preflight")
+	return nil
 }
