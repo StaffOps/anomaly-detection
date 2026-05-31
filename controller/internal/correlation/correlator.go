@@ -349,5 +349,13 @@ func (c *Correlator) fingerprint(alert CorrelatedAlert) string {
 }
 
 func workloadKey(a detection.Anomaly) string {
-	return a.Labels["namespace"] + "/" + a.Labels["pod"]
+	ns := a.Labels["namespace"]
+	id := a.Labels["pod"]
+	if id == "" {
+		id = a.Labels["service_name"]
+	}
+	if ns == "" && id == "" {
+		return "_unknown_"
+	}
+	return ns + "/" + id
 }
