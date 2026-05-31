@@ -6,9 +6,7 @@ Operational scripts and compose files for the anomaly detection stack. All scrip
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.yaml` | Full stack (controller + workers + redis + ML) — external endpoints |
-| `docker-compose.local.yaml` | Stack for local mode (uses port-forwards to cluster) |
-| `config.local.yaml` | Config for local mode (localhost endpoints) |
+| `docker-compose.yaml` | Full stack (controller + workers + redis + ML + local observability) — external endpoints |
 
 ## Docker Compose Mode (external endpoints)
 
@@ -20,14 +18,6 @@ Operational scripts and compose files for the anomaly detection stack. All scrip
 | `monitor-controller.sh` | Controller-focused TUI — anomalies, correlations, severity |
 | `monitor-workers.sh` | Workers-focused TUI — jobs, queries, baseline learning |
 | `monitor-detail.sh` | Detailed anomaly view — per-metric breakdown |
-
-## Local Mode (port-forward to cluster)
-
-| Script | Purpose |
-|--------|---------|
-| `start-local.sh` | Build binaries + setup port-forwards + start stack |
-| `stop-local.sh` | Stop stack + kill port-forwards |
-| `monitor-local.sh` | TUI monitor for local mode |
 
 ## Usage
 
@@ -44,5 +34,4 @@ Operational scripts and compose files for the anomaly detection stack. All scrip
 ## Requirements
 
 - Docker + Docker Compose
-- `kubectl` + cluster access (local mode only)
 - `curl` (monitors query Prometheus metrics endpoints)

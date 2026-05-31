@@ -9,7 +9,7 @@ Controller (active/standby) → gRPC → Workers (3+ stateless) → VM/Loki/K8s 
                                               ↕
                                            Redis (baseline, dedup)
                                               
-ML Service (Python) ← gRPC ← Controller (planned integration)
+ML Service (Python) ← gRPC ← Controller
   ├── Prophet (forecasting)
   └── Isolation Forest (multivariate)
 ```
@@ -58,7 +58,7 @@ Key settings:
 - `ml.enabled`: true (ML service endpoint)
 - `controller.job_interval`: 30s (detection cycle frequency)
 
-See `config/config.local.yaml` for local-only overrides.
+All endpoints come from env vars (`${VM_URL}`, `${LOKI_URL}`, etc.) — see `.env.example`.
 
 ## Suppression
 
@@ -116,6 +116,32 @@ kubectl apply -f deploy/
 - [ML Service](../ml) — Python ML service (Prophet + Isolation Forest)
 - [Scripts](../scripts) — Operational scripts, docker-compose, monitors
 
+## Replay Mode (Preview)
+
+Simulate detection over historical metrics/logs with a candidate config, **before** applying it in production. Zero side effects: no Redis writes, no Alertmanager dispatches, no gRPC fan-out, no ML (ML is V2).
+
+```bash
+controller --replay \
+  --from=24h \            # duration (24h, 30m, 7d) or RFC3339 timestamp
+  --to=now \              # default: now
+  --config=candidate.yaml \
+  --output=report.json    # also writes report.md
+```
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--replay` | false | enable replay mode |
+| `--from` | (required) | window start — duration or RFC3339 (UTC) |
+| `--to` | now | window end |
+| `--output` | `./replay-report.json` | report path (`.json` + `.md` written) |
+| `--warmup-fraction` | 0.2 | fraction of window used to warm baselines |
+| `--max-range` | 7d | reject windows larger than this |
+| `--max-anomalies` | 1000 | cap anomalies in report |
+
+Window must be ≥ 2.5h (warm-up + detection phase). Output is UTC. Pre-flight checks validate VM/Loki reachability and output writability before processing.
+
+> **Status**: 12/16 tasks done (T1-T12). Integration test, smoke test, and final docs (T13-T16) pending. ML wiring and ground-truth comparison are V2. See [`.kiro/specs/replay-mode/`](../.kiro/specs/replay-mode/).
+
 ## Status
 
 ### ✅ Done
@@ -132,10 +158,12 @@ kubectl apply -f deploy/
 - [x] ML client integrated into controller (DetectMultivariate)
 - [x] docker-compose stack (controller + workers + redis + ML)
 
+### 🚧 In Progress
+- [ ] Replay mode for historical data validation — **12/16 tasks** (CLI functional, see "Replay Mode" below)
+
 ### 🔜 Next
 - [ ] Wire ML Forecast (Prophet) — needs time-series export from Redis baselines
 - [ ] K8s Lease leader election (multi-replica controller HA)
 - [ ] Remove `--dry-run` and validate real alerts via Alertmanager → Slack
 - [ ] Deploy to cluster (K8s manifests in `deploy/`)
-- [ ] Replay mode for historical data validation
 - [ ] Feedback loop (mark false positives to adjust baselines)

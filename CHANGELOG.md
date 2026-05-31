@@ -6,6 +6,31 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ---
 
+## [Unreleased]
+
+Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
+
+### controller
+
+**Fixed**
+- `correlator.go`: `workloadKey()` now falls back to `service_name` when the pod label is empty. Service-level anomalies (latency/error-rate by service) no longer collapse into a single `/` group (was 348 anomalies in one bucket).
+
+**Added — Replay mode (P3.1, 12/16 tasks)**
+- `internal/replay/`: offline detection over historical metrics/logs with zero side effects (no Redis/Alertmanager/gRPC/ML).
+  - Window parser (durations, `Nd` days, RFC3339, UTC), in-memory baseline store (Welford+EWMA), `baseline.Evaluator` interface
+  - Tick simulator: 1h chunked range queries, dynamic warmup split, graceful per-tick query-error skip, SIGINT partial flush
+  - Report serializers: JSON (full schema, `schema_version: 1`) + Markdown (tables + ASCII sparklines), both UTC
+  - CLI: `--replay --from --to --output --warmup-fraction --max-range --max-anomalies` with VM/Loki/output pre-flight checks (ML is V2)
+  - In-memory execution metrics embedded in `metadata.execution_metrics` (no Prometheus exposure in V1)
+- Remaining: T13 integration test, T14 smoke test, T15 README, T16 ROADMAP move-to-Done.
+
+### ml
+
+**Fixed**
+- `multivariate.py`: introduce `CANONICAL_FEATURES` (10 fixed features) with `_normalize()` padding. Eliminates the `ValueError: X has N features but model expects M` when pod-level (6+) and service-level (3-5) anomalies hit the same IsolationForest (was ~33% error rate).
+
+---
+
 ## controller — [0.7.0] — 2026-05-30
 
 Consolidated milestone covering a full day of MVP iteration. Multiple sub-features were implemented and validated together; they ship as a single release because none of them justify an independent bump on its own (still pre-production, dry-run only, no cluster deploy).

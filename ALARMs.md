@@ -278,3 +278,21 @@
 - **Detail**: New subagent at `agents/subagents/code-review/` with rigorous quality-gate framework: 7 review gates (correctness, steering, idiomatic, readability, tests, performance, security), structured output (blockers/strong/suggestions/praise + coverage check), inter-agent collaboration table, behavior anti-patterns. Total subagent count now 10 (was 9). README + setup-agents.sh validated. Symlink installed at `~/.kiro/agents/code-review.json`.
 - **Evidence**: `setup-agents.sh --validate` clean. `staffops.json` lists code-review in availableAgents + trustedAgents.
 - **Action**: agent definition exists but **subagent tool spawning still broken in this env** (3 consecutive `No result` returns earlier today). Main agent can adopt the persona by reading `prompt.md` until subagent system is fixed.
+
+## 2026-05-31 00:30 — ✅ RESOLVED: service-level anomalies collapse into "/" workload key
+- **Type**: resolved
+- **Detail**: `workloadKey()` em `correlator.go` usava `namespace + "/" + pod`. Service-level anomalies (latency_p99_by_service, error_rate_by_service) têm pod vazio → todas caíam no grupo "/". Fix: usar `service_name` como fallback quando pod está vazio; sentinel `_unknown_` quando ambos vazios. Agora cada service distinto agrupa por `namespace/service_name`.
+- **Evidence**: era 348 anomalies no key "/" (29x o segundo lugar). Go tests pass.
+- **Action**: closed. Commit `940316a`. Resolve os ALARMs "Service-level colapsam" e "306/348 anomalies no workload-key vazio".
+
+## 2026-05-31 00:30 — ✅ RESOLVED: ML feature count mismatch (IsolationForest)
+- **Type**: resolved
+- **Detail**: `multivariate.py` usava `sorted(samples.keys())` → schema dinâmico. Pod-level dava 6+ features, service-level 3-5 → `ValueError: X has 3 features, but IsolationForest is expecting 6`. Fix: `CANONICAL_FEATURES` (10 features fixas) + `_normalize()` que padda ausentes com 0.0 e descarta keys desconhecidas. Modelo sempre treina/prediz com schema estável.
+- **Evidence**: era ~33% error rate. Python test: pod-level (6) + service-level (3) na mesma instância sem crash.
+- **Action**: closed. Commit `940316a`. Resolve o ALARM "ML feature count mismatch (BUG IMPORTANTE)" e desbloqueia confiabilidade do P2.1.
+
+## 2026-05-31 00:35 — replay-mode (P3.1) progress — 12/16 tasks done
+- **Type**: progress note
+- **Detail**: Retomado replay-mode. T6-T12 implementados via fan-out (dev + code-review round-table): ReplayConfig (T6), tick simulator com warmup split + SIGINT partial flush + graceful query-error skip (T7), range-to-instant adapter SamplesAt (T8), Report struct + WriteJSON full schema (T9), WriteMarkdown com sparklines (T10), CLI flags --replay/--from/--to/--output/--warmup-fraction/--max-range/--max-anomalies + pre-flight checks (T11), exec metrics in-memory (T12). 2 code reviews aprovados (0 blockers). WriteMarkdown agora propaga write errors (paridade com WriteJSON).
+- **Evidence**: 1275+ linhas, golden-file tests JSON+MD, all Go tests green. Commits `ee64d65`, `5ff1f8c`.
+- **Action**: remaining T13 (integ test), T14 (smoke test — precisa stack rodando), T15 (README), T16 (ROADMAP move to Done). ~2 days.

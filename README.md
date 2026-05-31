@@ -7,9 +7,7 @@ Distributed anomaly detection system for Kubernetes clusters. Combines adaptive 
 ```
 staffops-anomaly-detection/
 ├── scripts/        # Operational scripts, docker-compose, configs
-│   ├── docker-compose.yaml       # Full stack (external endpoints)
-│   ├── docker-compose.local.yaml # Local mode (port-forwards)
-│   ├── config.local.yaml         # Config for local mode
+│   ├── docker-compose.yaml       # Full stack + local observability
 │   ├── start.sh / stop.sh        # Build + run
 │   └── monitor*.sh               # TUI dashboards
 ├── controller/     # Go — controller + gRPC workers + detection engine
@@ -141,12 +139,14 @@ All endpoints, cluster names and namespace lists come from env vars. See `.env.e
 - Monorepo consolidation (controller + ml in single repo)
 - Operational scripts (start, stop, monitor TUIs)
 
+### 🚧 In Progress
+- [ ] Replay mode for historical data validation — **12/16 tasks** (offline `--replay` CLI functional; see `controller/README.md`)
+
 ### 🔜 Next
 - [ ] Wire ML Forecast (Prophet) into cycle (needs baseline time-series export from Redis)
 - [ ] K8s Lease leader election (multi-replica controller HA)
 - [ ] Remove `--dry-run` and validate real alerts via Alertmanager → Slack
 - [ ] Deploy to cluster (K8s manifests in `deploy/`)
-- [ ] Replay mode for historical data validation
 - [ ] Feedback loop (mark false positives to adjust baselines)
 
 ## Development

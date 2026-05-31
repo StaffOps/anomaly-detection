@@ -4,7 +4,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
 
 ## Phase 1 — Foundation (range queries + window parsing)
 
-- [ ] **T1 — Window parser**
+- [x] **T1 — Window parser**
   - File: `controller/internal/replay/window.go`
   - Função: `ParseWindow(fromStr, toStr string, maxRange time.Duration) (time.Time, time.Time, error)`
   - Aceita: `24h`, `30m`, `2026-05-30T00:00:00Z`, mistura
@@ -13,14 +13,14 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
   - **Sempre converte para UTC** (`time.UTC()`)
   - Unit tests cobrindo todos os casos + edge cases (DST, leap second irrelevante, future timestamps)
 
-- [ ] **T2 — VM range query**
+- [x] **T2 — VM range query**
   - File: `controller/internal/ingestion/metrics.go`
   - Adicionar método `QueryRange(ctx, query string, start, end time.Time, step time.Duration) ([]TimeSeries, error)`
   - `TimeSeries` é `{Labels map[string]string, Points []Point}`, `Point` é `{T time.Time, V float64}`
   - Reusa `MetricsPoller.client` e error handling existente
   - Unit test com mock HTTP server retornando promResponse range
 
-- [ ] **T3 — Loki range query**
+- [x] **T3 — Loki range query**
   - File: `controller/internal/ingestion/logs.go`
   - Adicionar `QueryMetricRange(ctx, query, start, end, step) ([]TimeSeries, error)` análogo a T2
   - Mesmo formato `TimeSeries`
@@ -28,7 +28,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
 
 ## Phase 2 — In-memory baseline store
 
-- [ ] **T4 — InMemStore**
+- [x] **T4 — InMemStore**
   - File: `controller/internal/replay/inmem_baseline.go`
   - Implementa `baseline.Store` interface (mesmo método `Evaluate(ctx, metric, labels, value) (*Result, error)`)
   - State: `map[string]*Stats` em memória, mutex protegido
@@ -36,7 +36,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
   - Bench test garantindo perf razoável (>100k Evaluate/sec single thread)
   - **Depends**: nenhuma
 
-- [ ] **T5 — Refactor baseline.Store interface (se preciso)**
+- [x] **T5 — Refactor baseline.Store interface (se preciso)**
   - Se `baseline.Store` ainda é struct concreta, extrair interface mínima (`Evaluate(...)`)
   - Atualizar `detection/adaptive.go` para receber interface, não struct
   - Sem mudança comportamental — só introdução de interface
@@ -44,14 +44,14 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
 
 ## Phase 3 — Replay engine + tick simulator
 
-- [ ] **T6 — ReplayConfig parsing**
+- [x] **T6 — ReplayConfig parsing**
   - File: `controller/internal/replay/config.go`
   - Struct `ReplayConfig { From, To time.Time, ConfigPath, OutputPath string, WarmupFraction float64, MaxAnomalies int, EnableEnrichment, EnableML bool }`
   - Default values
   - Loaded from CLI flags em `cmd/controller/main.go`
   - **Depends**: T1
 
-- [ ] **T7 — Tick simulator**
+- [x] **T7 — Tick simulator**
   - File: `controller/internal/replay/engine.go`
   - Função `Run(ctx, ReplayConfig, *config.Config) (*Report, error)`
   - Carrega chunks de 1h via VM/Loki range queries (T2+T3)
@@ -64,7 +64,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
   - Loga progresso cada 10% da janela
   - **Depends**: T2, T3, T4, T6
 
-- [ ] **T8 — Range to instant adapter**
+- [x] **T8 — Range to instant adapter**
   - File: `controller/internal/replay/adapter.go` (ou inline em engine.go)
   - Helper `samplesAt(ts time.Time, series []TimeSeries) []ingestion.Sample`
   - Pega o último ponto antes/igual `ts` de cada série e retorna como `ingestion.Sample` (compat com `detection.Engine`)
@@ -73,7 +73,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
 
 ## Phase 4 — Output
 
-- [ ] **T9 — Report struct + JSON serializer**
+- [x] **T9 — Report struct + JSON serializer**
   - File: `controller/internal/replay/report.go`
   - Tipos: `Report`, `Metadata`, `Totals`, `WorkloadCount`, `TimelineEntry`, `AnomalyEntry`, `ExecutionMetrics`
   - Method `WriteJSON(w io.Writer) error`
@@ -87,7 +87,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
   - Unit test golden file
   - **Depends**: nenhuma estrutural; T7 popula
 
-- [ ] **T10 — Markdown serializer**
+- [x] **T10 — Markdown serializer**
   - File: `controller/internal/replay/report_md.go`
   - Método `WriteMarkdown(w io.Writer) error`
   - Tabelas: totals, top workloads, distribuição por severity/detector, timeline com ASCII sparklines simples (▁▂▃▄▅▆▇█)
@@ -97,7 +97,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
 
 ## Phase 5 — Wire CLI + replay metrics
 
-- [ ] **T11 — CLI flags + dispatch**
+- [x] **T11 — CLI flags + dispatch**
   - File: `controller/cmd/controller/main.go`
   - Adicionar flags: `--replay`, `--from`, `--to`, `--output` (default `./replay-report.json`), `--warmup-fraction` (default 0.2), `--max-range` (default 7d), `--max-anomalies` (default 1000), `--enrich` (placeholder, V2)
   - **NOT adicionar `--ml`** — V1 explicitamente não suporta. Documentar em `--help` que ML é V2.
@@ -107,7 +107,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
   - Loga banner "REPLAY MODE — no side effects" + janela computada + warmup_end no início
   - **Depends**: T6, T7
 
-- [ ] **T12 — Replay-specific metrics (in-memory only)**
+- [x] **T12 — Replay-specific metrics (in-memory only)**
   - File: `controller/internal/replay/metrics.go`
   - Tipos: `ExecutionMetrics` struct (counters acumulados durante o run)
   - Campos: `TicksProcessed`, `TicksSkippedQueryError`, `VMQueriesTotal`, `VMQueryDurationP95`, `LokiQueriesTotal`, `MemoryPeakMB`, `DurationSeconds`

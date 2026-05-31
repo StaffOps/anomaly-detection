@@ -73,7 +73,7 @@ Aggregate anomalies by namespace, run multivariate on `{count_anomalous_pods, di
 
 ## Phase 3 — Operational maturity
 
-### 🚧 P3.1 — Replay mode — **IN PROGRESS (5/16 tasks done)**
+### 🚧 P3.1 — Replay mode — **IN PROGRESS (12/16 tasks done)**
 
 Spec at [`.kiro/specs/replay-mode/`](.kiro/specs/replay-mode/) covering requirements, design, tasks. **Pilot of spec-driven workflow** per `staffops_agent_definition/steering/spec-driven-workflow.md`.
 
@@ -85,12 +85,19 @@ CLI: `controller --replay --from=24h --to=1h --config=cand.yaml --output=report.
 - T3 — Loki range query (`LogsPoller.QueryMetricRange`)
 - T4 — InMemStore baseline (mirrors Welford+EWMA, 7 unit tests)
 - T5 — `baseline.Evaluator` interface (Store and InMemStore both satisfy)
+- T6 — ReplayConfig struct + defaults (`internal/replay/config.go`)
+- T7 — Tick simulator (`engine.go` — 1h chunks, warmup split, SIGINT partial flush, graceful query-error skip)
+- T8 — Range-to-instant adapter (`SamplesAt`, 7 unit tests)
+- T9 — Report struct + JSON serializer (full schema, golden-file test)
+- T10 — Markdown serializer (tables + ASCII sparklines, golden-file test)
+- T11 — CLI flags + dispatch (`--replay`, `--from`, `--to`, `--output`, `--warmup-fraction`, `--max-range`, `--max-anomalies`; pre-flight checks; ML documented as V2)
+- T12 — Replay exec metrics (in-memory only, embedded in JSON `metadata.execution_metrics`)
 
-**Remaining** (T6–T16): ReplayConfig parsing, tick simulator with error handling + `IsWarmingUp` filter, range-to-instant adapter, Report struct + JSON/MD serializers, CLI flags + dispatch, replay-specific in-memory metrics (no Prom exposure V1), integration test, smoke test, README + ROADMAP updates.
+**Remaining** (T13–T16): integration test (docker-compose + synthetic dataset), manual smoke test vs prod, README section, ROADMAP move to Done.
 
 **V1 explicitly excludes**: ground-truth comparison (TPs/FPs/FNs), ML wired, query cache for fast iteration, distributed replay. All scoped as V2.
 
-**Effort remaining**: ~5 days sequential.
+**Effort remaining**: ~2 days sequential.
 
 ### 🎯 P3.2 — Top noisy workloads dashboard / VMRule
 
