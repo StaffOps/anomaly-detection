@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package anomaly;
+
+option go_package = "github.com/staffops/staffops-anomaly-detection/proto";
+
+// WorkerService is the interface between controller and workers.
+// Controller fans out detection jobs; workers execute and return results.
+service WorkerService {
+  // ProcessJobs sends a batch of detection jobs to a worker.
+  rpc ProcessJobs(JobBatch) returns (JobResults);
+
+  // ReportEvents is a server-streaming RPC where workers push K8s events to controller.
+  rpc ReportEvents(EventStreamRequest) returns (stream EventReport);
+}
+
+message JobBatch {
+  repeated DetectionJob jobs = 1;
+}
+
+message DetectionJob {
+  string id = 1;
+  JobType type = 2;
+  string name = 3;
+  string query = 4;
+  repeated string group_by = 5;
+  // For static threshold detection
+  double threshold = 6;
+  string operator = 7;    // ">", "<", ">="
+  string severity = 8;    // "warning", "critical"
+}
+
+enum JobType {
+  JOB_TYPE_UNSPECIFIED = 0;
+  JOB_TYPE_METRICS_STATIC = 1;
+  JOB_TYPE_METRICS_ADAPTIVE = 2;
+  JOB_TYPE_LOGS = 3;
+}
+
+message JobResults {
+  repeated AnomalyResult anomalies = 1;
+  repeated JobError errors = 2;
+}
+
+message AnomalyResult {
+  string job_id = 1;
+  string metric_name = 2;
+  map<string, string> labels = 3;
+  double current_value = 4;
+  double baseline_mean = 5;
+  double baseline_stddev = 6;
+  double anomaly_score = 7;       // Z-Score distance
+  string severity = 8;
+  string signal = 9;              // "metrics", "logs", "events"
+  string detector = 10;           // "static", "adaptive", "pattern"
+  int64 timestamp = 11;
+}
+
+message JobError {
+  string job_id = 1;
+  string error = 2;
+}
+
+message EventStreamRequest {
+  repeated string watch_reasons = 1;  // e.g. ["CrashLoopBackOff", "OOMKilled"]
+}
+
+message EventReport {
+  string reason = 1;
+  string namespace = 2;
+  string pod = 3;
+  string message = 4;
+  int64 timestamp = 5;
+  int32 count = 6;
+}

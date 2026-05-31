@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anomaly-redis
+  namespace: monitoring
+  labels:
+    app: anomaly-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anomaly-redis
+  template:
+    metadata:
+      labels:
+        app: anomaly-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: anomaly-redis
+  namespace: monitoring
+spec:
+  selector:
+    app: anomaly-redis
+  ports:
+    - port: 6379
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: anomaly-detection-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    cluster: REPLACE_ME_CLUSTER_NAME
+
+    redis:
+      addr: anomaly-redis.monitoring:6379
+      db: 0
+      password: ""
+
+    datasources:
+      victoriametrics:
+        url: http://vm-cluster-vmselect.monitoring:8481/select/0/prometheus
+        timeout: 10s
+      loki:
+        url: http://loki-gateway.monitoring:80
+        timeout: 15s
+      alertmanager:
+        url: http://prometheus-alertmanager.monitoring:9093
+
+    ml:
+      endpoint: anomaly-ml.monitoring:50051
+      enabled: false
+      timeout: 5s
+
+    controller:
+      job_interval: 30s
+      correlation_window: 2m
+      cooldown: 5m
+      lease_name: anomaly-controller-leader
+      lease_namespace: monitoring
+      metrics_port: 8080
+      worker_endpoint: "dns:///anomaly-worker.monitoring:50052"
+
+    worker:
+      grpc_port: 50052
+      metrics_port: 8081
+      concurrency: 5
+
+    baseline:
+      window_size: 60
+      ewma_alpha: 0.3
+      zscore_threshold: 3.0
+      warm_up_samples: 60
+      seasonal_min_days: 7
+
+    detection:
+      static_rules:
+        - name: high_cpu
+          query: sum(rate(container_cpu_usage_seconds_total{namespace!="kube-system"}[1m])) by (namespace, pod)
+          threshold: 0.9
+          operator: ">"
+          severity: warning
+        - name: high_restart_rate
+          query: increase(kube_pod_container_status_restarts_total[5m])
+          threshold: 3
+          operator: ">"
+          severity: critical
+
+      adaptive_metrics:
+        - name: cpu_usage
+          query: sum(rate(container_cpu_usage_seconds_total{namespace!="kube-system"}[1m])) by (namespace, pod)
+          group_by: [namespace, pod]
+        - name: error_rate
+          query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[1m])) by (service_name)
+          group_by: [service_name]
+        - name: request_latency_p99
+          query: histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket[5m])) by (le, service_name))
+          group_by: [service_name]
+
+      log_patterns:
+        - name: error_burst
+          query: sum(rate({service_namespace=~".+"} |= "error" [1m])) by (service_namespace)
+          group_by: [service_namespace]
+
+      event_patterns:
+        - CrashLoopBackOff
+        - OOMKilled
+        - Evicted
+        - FailedScheduling
+        - BackOff
+
+    suppression:
+      exclude_namespaces:
+        - kube-system
+        - REPLACE_ME_NAMESPACE

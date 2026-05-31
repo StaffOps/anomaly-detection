@@ -1,0 +1,56 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: anomaly-detection-health
+  namespace: monitoring
+spec:
+  groups:
+    - name: anomaly-detection
+      rules:
+        - alert: AnomalyDetectionNoLeader
+          expr: sum(anomaly_controller_is_leader) == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Anomaly detection sem controller ativo"
+            description: "Nenhum controller é leader há mais de 2 minutos"
+
+        - alert: AnomalyDetectionStalled
+          expr: rate(anomaly_detection_cycles_total[5m]) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Anomaly detection parou de executar ciclos"
+            description: "Nenhum ciclo de detecção executado nos últimos 5 minutos"
+
+        - alert: AnomalyDetectionWorkersDown
+          expr: anomaly_workers_available == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Nenhum worker disponível"
+            description: "Controller não consegue alcançar nenhum worker"
+
+        - alert: AnomalyDetectionHighErrorRate
+          expr: |
+            rate(anomaly_jobs_failed_total[5m])
+            / (rate(anomaly_jobs_dispatched_total[5m]) > 0)
+            > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mais de 50% dos jobs falhando"
+            description: "Taxa de erro nos jobs de detecção está acima de 50%"
+
+        - alert: AnomalyDetectionRedisDown
+          expr: anomaly_worker_redis_errors_total > 0 and rate(anomaly_worker_redis_errors_total[5m]) > 0.1
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis com erros persistentes"
+            description: "Workers reportando erros de Redis continuamente"

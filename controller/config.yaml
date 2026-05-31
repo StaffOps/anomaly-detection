@@ -1,0 +1,143 @@
+# All endpoint URLs, cluster names and other environment-specific values come
+# from environment variables (12-factor: III. Config). The loader expands
+# ${VAR} and ${VAR:default} placeholders BEFORE YAML parsing.
+#
+# See `.env.example` at the repo root for the full list of required vars.
+
+cluster: ${CLUSTER_NAME:unknown}
+
+redis:
+  addr: ${REDIS_ADDR:redis:6379}
+  db: ${REDIS_DB:0}
+  password: ${REDIS_PASSWORD:}
+
+datasources:
+  victoriametrics:
+    url: ${VM_URL}
+    timeout: ${VM_TIMEOUT:30s}
+  loki:
+    url: ${LOKI_URL}
+    timeout: ${LOKI_TIMEOUT:30s}
+  alertmanager:
+    url: ${ALERTMANAGER_URL}
+
+ml:
+  endpoint: ${ML_ENDPOINT:ml:50051}
+  enabled: ${ML_ENABLED:true}
+  timeout: ${ML_TIMEOUT:5s}
+
+controller:
+  job_interval: 30s
+  correlation_window: 2m
+  cooldown: 5m
+  lease_name: anomaly-controller-leader
+  lease_namespace: ${CONTROLLER_LEASE_NAMESPACE:monitoring}
+  metrics_port: 8080
+  worker_endpoint: ${WORKER_ENDPOINT:dns:///worker:50052}
+
+worker:
+  grpc_port: 50052
+  metrics_port: 8081
+  concurrency: 5
+
+baseline:
+  window_size: 60
+  ewma_alpha: 0.3
+  zscore_threshold: 3.0
+  warm_up_samples: 60
+  seasonal_min_days: 7
+
+detection:
+  static_rules:
+    - name: high_cpu_ratio
+      query: max(rate(container_cpu_usage_seconds_total{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}",container!=""}[1m])) by (namespace, pod) / max(kube_pod_container_resource_limits{resource="cpu",namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}"}) by (namespace, pod)
+      threshold: 0.9
+      operator: ">"
+      severity: warning
+    - name: high_restart_rate
+      query: max(increase(kube_pod_container_status_restarts_total{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}"}[5m])) by (namespace, pod)
+      threshold: 3
+      operator: ">"
+      severity: critical
+    - name: high_memory_ratio
+      query: max(container_memory_working_set_bytes{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}",container!=""}) by (namespace, pod) / max(kube_pod_container_resource_limits{resource="memory",namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}"}) by (namespace, pod)
+      threshold: 0.85
+      operator: ">"
+      severity: warning
+
+  adaptive_metrics:
+    - name: cpu_by_workload
+      query: max(rate(container_cpu_usage_seconds_total{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}",container!=""}[1m])) by (namespace, pod)
+      group_by: [namespace, pod]
+    - name: error_rate_by_service
+      query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[1m])) by (service_name)
+      group_by: [service_name]
+    - name: request_rate_by_service
+      query: sum(rate(spanmetrics_apm_calls_total[1m])) by (service_name)
+      group_by: [service_name]
+    - name: latency_p99_by_service
+      query: histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket[5m])) by (le, service_name))
+      group_by: [service_name]
+
+  log_patterns:
+    - name: error_rate_by_namespace
+      query: sum(rate({service_namespace=~".+"} |= "error" [1m])) by (service_namespace)
+      group_by: [service_namespace]
+    - name: log_volume_by_workload
+      query: sum(rate({service_namespace=~".+"}[1m])) by (service_namespace, service_workload)
+      group_by: [service_namespace, service_workload]
+    - name: panic_oom
+      query: '{service_namespace=~".+"} |~ "(?i)(panic|oom|out of memory|fatal)"'
+      type: pattern_match
+
+  event_patterns:
+    - CrashLoopBackOff
+    - OOMKilled
+    - Evicted
+    - FailedScheduling
+    - BackOff
+
+# Suppression: namespaces ignored by detectors. Comma-separated env vars
+# (parsed by config loader). Empty means "no suppression for that bucket".
+suppression:
+  exclude_namespaces_csv: ${EXCLUDE_NAMESPACES_CSV:kube-system}
+  exclude_static_only_csv: ${EXCLUDE_STATIC_ONLY_CSV:}
+
+enrichment:
+  enabled: true
+  cache_ttl: 30s
+  query_timeout: 5s
+  max_concurrent: 5
+
+  pod_bundle:
+    - name: cpu_ratio
+      query: 'max(rate(container_cpu_usage_seconds_total{namespace="$namespace",pod="$pod",container!=""}[1m])) / max(kube_pod_container_resource_limits{resource="cpu",namespace="$namespace",pod="$pod"})'
+    - name: memory_ratio
+      query: 'max(container_memory_working_set_bytes{namespace="$namespace",pod="$pod",container!=""}) / max(kube_pod_container_resource_limits{resource="memory",namespace="$namespace",pod="$pod"})'
+    - name: restarts_5m
+      query: 'max(increase(kube_pod_container_status_restarts_total{namespace="$namespace",pod="$pod"}[5m]))'
+    - name: oom_kills
+      query: 'max(kube_pod_container_status_terminated_reason{namespace="$namespace",pod="$pod",reason="OOMKilled"})'
+    - name: ready_replicas
+      query: 'max(kube_pod_status_ready{namespace="$namespace",pod="$pod",condition="true"})'
+    - name: error_logs_1m
+      source: loki
+      query: 'sum(rate({k8s_namespace_name="$namespace",k8s_pod_name="$pod"} |~ "(?i)(error|panic|fatal)" [1m]))'
+
+  service_bundle:
+    - name: error_rate_1m
+      query: 'sum(rate(spanmetrics_apm_calls_total{service_name="$service_name",status_code="STATUS_CODE_ERROR"}[1m]))'
+    - name: request_rate_1m
+      query: 'sum(rate(spanmetrics_apm_calls_total{service_name="$service_name"}[1m]))'
+    - name: latency_p99_5m
+      query: 'histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket{service_name="$service_name"}[5m])) by (le))'
+
+# All link base URLs come from env vars. Empty value = annotation not emitted.
+links:
+  grafana_base_url: ${GRAFANA_BASE_URL:}
+  tempo_base_url: ${TEMPO_BASE_URL:}
+  loki_base_url: ${LOKI_BASE_URL:}
+  runbook_base_url: ${RUNBOOK_BASE_URL:}
+  grafana_vm_datasource_uid: ${GRAFANA_VM_DATASOURCE_UID:}
+  grafana_tempo_datasource_uid: ${GRAFANA_TEMPO_DATASOURCE_UID:}
+  grafana_loki_datasource_uid: ${GRAFANA_LOKI_DATASOURCE_UID:}

@@ -1,0 +1,53 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+  # external_labels apply on remote_write / federation / Alertmanager. They do
+  # NOT show up on local queries. For a single-Prometheus local stack, add
+  # org-specific labels via per-job `static_configs.labels` below (or
+  # `relabel_configs` for dynamic logic).
+  #
+  # In production with vmagent → vmstorage, the equivalent is `vmagent`
+  # `externalLabels` (preferred per multicluster-label-strategy).
+  external_labels:
+    eks_cluster: local
+    environment: dev
+
+scrape_configs:
+  - job_name: staffops-ad-controller
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['controller:8080']
+        # Per-target labels are added at scrape time and visible on local
+        # queries. The app emits only `cluster` — the rest is enrichment.
+        # Mirror the same labels you'd set in vmagent externalLabels in prod.
+        labels:
+          component: controller
+          eks_cluster: local
+          environment: dev
+
+  - job_name: staffops-ad-worker
+    metrics_path: /metrics
+    static_configs:
+      # docker-compose `worker` service has 3 replicas; resolve all via DNS.
+      # We use static targets pointing at each replica name pattern.
+      # Compose v2 names them <project>-<service>-<replica>, but that's not
+      # DNS-resolvable. Instead we scrape via the service DNS round-robin and
+      # rely on the high scrape interval to hit each replica over time.
+      - targets:
+          - 'scripts-worker-1:8081'
+          - 'scripts-worker-2:8081'
+          - 'scripts-worker-3:8081'
+        labels:
+          component: worker
+          eks_cluster: local
+          environment: dev
+
+  - job_name: staffops-ad-ml
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['ml:8082']
+        labels:
+          component: ml
+          eks_cluster: local
+          environment: dev

@@ -1,0 +1,143 @@
+# Env vars come from `.env` (auto-loaded by docker compose from this directory).
+# Copy `../../.env.example` to `.env` and fill values before starting.
+
+x-app-env: &app-env
+  CLUSTER_NAME: ${CLUSTER_NAME:-unknown}
+  REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
+  REDIS_DB: ${REDIS_DB:-0}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  VM_URL: ${VM_URL:?VM_URL is required}
+  LOKI_URL: ${LOKI_URL:?LOKI_URL is required}
+  ALERTMANAGER_URL: ${ALERTMANAGER_URL:?ALERTMANAGER_URL is required}
+  VM_TIMEOUT: ${VM_TIMEOUT:-30s}
+  LOKI_TIMEOUT: ${LOKI_TIMEOUT:-30s}
+  ML_ENDPOINT: ${ML_ENDPOINT:-ml:50051}
+  ML_ENABLED: ${ML_ENABLED:-true}
+  ML_TIMEOUT: ${ML_TIMEOUT:-5s}
+  CONTROLLER_LEASE_NAMESPACE: ${CONTROLLER_LEASE_NAMESPACE:-monitoring}
+  WORKER_ENDPOINT: ${WORKER_ENDPOINT:-dns:///worker:50052}
+  GRAFANA_BASE_URL: ${GRAFANA_BASE_URL:-}
+  TEMPO_BASE_URL: ${TEMPO_BASE_URL:-}
+  LOKI_BASE_URL: ${LOKI_BASE_URL:-}
+  RUNBOOK_BASE_URL: ${RUNBOOK_BASE_URL:-}
+  GRAFANA_VM_DATASOURCE_UID: ${GRAFANA_VM_DATASOURCE_UID:-}
+  GRAFANA_TEMPO_DATASOURCE_UID: ${GRAFANA_TEMPO_DATASOURCE_UID:-}
+  GRAFANA_LOKI_DATASOURCE_UID: ${GRAFANA_LOKI_DATASOURCE_UID:-}
+  EXCLUDE_NAMESPACES_REGEX: ${EXCLUDE_NAMESPACES_REGEX:-kube-system}
+  EXCLUDE_NAMESPACES_CSV: ${EXCLUDE_NAMESPACES_CSV:-kube-system}
+  EXCLUDE_STATIC_ONLY_CSV: ${EXCLUDE_STATIC_ONLY_CSV:-}
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  worker:
+    image: alpine:3.20
+    environment: *app-env
+    volumes:
+      - ../controller/bin:/app:ro
+      - ../controller/config.yaml:/config/config.yaml:ro
+    command: ["/app/worker", "--config", "/config/config.yaml"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 3
+
+  controller:
+    image: alpine:3.20
+    environment: *app-env
+    volumes:
+      - ../controller/bin:/app:ro
+      - ../controller/config.yaml:/config/config.yaml:ro
+    command: ["/app/controller", "--dry-run", "--config", "/config/config.yaml"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+
+  ml:
+    build: ../ml
+    ports:
+      - "50051:50051"
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch=grpc.insecure_channel('localhost:50051'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- Local observability (dev tooling only) ---
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=24h
+      - --web.enable-lifecycle
+    depends_on:
+      - controller
+      - ml
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+  loki:
+    image: grafana/loki:3.0.0
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      - ./observability/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      # Read docker container logs and metadata
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+
+volumes:
+  redis-data:
+  prom-data:
+  grafana-data:
+  loki-data:

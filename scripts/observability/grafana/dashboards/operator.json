@@ -1,0 +1,257 @@
+{
+  "uid": "staffops-ad-operator",
+  "title": "staffops-ad / Operator",
+  "tags": ["staffops-ad", "operator"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 3,
+  "refresh": "10s",
+  "time": {"from": "now-30m", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Anomalies / min",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "60 * sum(rate(staffops_ad_detection_anomalies_total[5m]))", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 1}},
+      "options": {"colorMode": "value", "graphMode": "area", "textMode": "value_and_name", "justifyMode": "center"}
+    },
+    {
+      "id": 2,
+      "title": "Alerts / min",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0},
+      "targets": [
+        {"expr": "60 * sum(rate(staffops_ad_detection_correlated_total[5m]))", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "decimals": 1}},
+      "options": {"colorMode": "value", "graphMode": "area", "textMode": "value_and_name", "justifyMode": "center"}
+    },
+    {
+      "id": 3,
+      "title": "ML detections (total)",
+      "type": "stat",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0},
+      "targets": [
+        {"expr": "staffops_ad_ml_multivariate_anomalies_total", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "fixed", "fixedColor": "blue"}}},
+      "options": {"colorMode": "value", "graphMode": "area", "textMode": "value_and_name", "justifyMode": "center"}
+    },
+
+    {
+      "id": 5,
+      "title": "🟢 Active alerts (in dedup cooldown — last 5m)",
+      "type": "table",
+      "gridPos": {"h": 12, "w": 24, "x": 0, "y": 6},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {
+          "expr": "sum by (severity, namespace, identity, metric, detector, kind) (count_over_time({service=\"controller\"} | json | msg=\"alert_fired\" [5m]))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "severity": 0,
+              "kind": 1,
+              "namespace": 2,
+              "identity": 3,
+              "metric": 4,
+              "detector": 5,
+              "Value": 6
+            },
+            "renameByName": {
+              "kind": "type",
+              "Value": "fired N×"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left", "filterable": true}},
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "severity"},
+            "properties": [
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "basic"}},
+              {"id": "mappings", "value": [
+                {"type": "value", "options": {"warning": {"color": "yellow", "text": "warning"}, "critical": {"color": "red", "text": "critical"}}}
+              ]},
+              {"id": "custom.width", "value": 90}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "type"},
+            "properties": [
+              {"id": "mappings", "value": [
+                {"type": "value", "options": {"workload": {"color": "purple", "text": "WL"}, "pod": {"color": "blue", "text": "pod"}}}
+              ]},
+              {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+              {"id": "custom.width", "value": 60}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "fired N×"},
+            "properties": [
+              {"id": "custom.width", "value": 80},
+              {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+              {"id": "color", "value": {"mode": "thresholds"}},
+              {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null}, {"color": "yellow", "value": 3}, {"color": "red", "value": 6}
+              ]}}
+            ]
+          }
+        ]
+      },
+      "options": {"showHeader": true, "footer": {"show": true, "reducer": ["count"], "fields": ["severity"]}, "sortBy": [{"displayName": "fired N×", "desc": true}]}
+    },
+
+    {
+      "id": 10,
+      "title": "📜 Recent alerts (history, last 30min)",
+      "type": "table",
+      "gridPos": {"h": 12, "w": 24, "x": 0, "y": 18},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {
+          "expr": "{service=\"controller\"} | json | msg=\"alert_fired\"",
+          "refId": "A",
+          "queryType": "range",
+          "maxLines": 50
+        }
+      ],
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {"source": "labels", "format": "json", "keepTime": false, "replace": false}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true, "labels": true, "tsNs": true, "id": true, "labelTypes": true,
+              "alert_name": true, "cluster": true, "current": true,
+              "baseline": true, "enrichment_cached": true, "dry_run": true,
+              "ml_features": true, "signals": true,
+              "container": true, "level": true, "level_extracted": true,
+              "msg": true, "project": true, "service": true, "service_name": true,
+              "time": true, "TraceID": true, "tsns": true,
+              "current_value": true, "baseline_mean": true,
+              "affected_pods": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "severity": 1,
+              "kind": 2,
+              "namespace": 3,
+              "identity": 4,
+              "metric": 5,
+              "reason": 6,
+              "anomaly_score": 7,
+              "ml_anomaly": 8,
+              "affected_replicas": 9
+            },
+            "renameByName": {
+              "kind": "type",
+              "anomaly_score": "z",
+              "ml_anomaly": "ML",
+              "affected_replicas": "replicas"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left", "filterable": true}},
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "severity"},
+            "properties": [
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "basic"}},
+              {"id": "mappings", "value": [
+                {"type": "value", "options": {"warning": {"color": "yellow", "text": "warning"}, "critical": {"color": "red", "text": "critical"}}}
+              ]},
+              {"id": "custom.width", "value": 90}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "type"},
+            "properties": [
+              {"id": "mappings", "value": [
+                {"type": "value", "options": {"workload": {"color": "purple", "text": "WL"}, "pod": {"color": "blue", "text": "pod"}}}
+              ]},
+              {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+              {"id": "custom.width", "value": 60}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "z"},
+            "properties": [
+              {"id": "decimals", "value": 1},
+              {"id": "custom.width", "value": 70}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "ML"},
+            "properties": [
+              {"id": "custom.width", "value": 50},
+              {"id": "mappings", "value": [
+                {"type": "value", "options": {"true": {"color": "blue", "text": "✓"}, "false": {"color": "transparent", "text": "—"}}}
+              ]}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "replicas"},
+            "properties": [
+              {"id": "custom.width", "value": 70}
+            ]
+          }
+        ]
+      },
+      "options": {"showHeader": true, "footer": {"show": false}, "sortBy": [{"displayName": "Time", "desc": true}]}
+    },
+
+    {
+      "id": 20,
+      "title": "Anomaly rate trend",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 30},
+      "targets": [
+        {"expr": "60 * sum by (severity) (rate(staffops_ad_detection_anomalies_total[1m]))", "legendFormat": "{{severity}}", "refId": "A"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 1, "showPoints": "never", "stacking": {"mode": "none"}}
+        }
+      },
+      "options": {"legend": {"showLegend": true, "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 21,
+      "title": "ML calls (ok/error)",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 30},
+      "targets": [
+        {"expr": "60 * sum by (status) (rate(staffops_ad_controller_ml_calls_total[1m]))", "legendFormat": "{{status}}", "refId": "A"}
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {"drawStyle": "line", "fillOpacity": 20, "lineWidth": 1, "showPoints": "never"}
+        }
+      },
+      "options": {"legend": {"showLegend": true, "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+    }
+  ]
+}

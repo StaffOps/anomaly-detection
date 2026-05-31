@@ -1,0 +1,34 @@
+# Binaries
+controller/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+controller/vendor/
+
+# Python
+ml/__pycache__/
+ml/**/__pycache__/
+ml/*.egg-info/
+ml/.venv/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+redis-data/
+
+# Local env (12-factor — NEVER commit)
+.env
+**/.env
+!.env.example

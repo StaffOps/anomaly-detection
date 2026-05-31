@@ -1,0 +1,141 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "title": "Controller Status",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [{ "expr": "anomaly_controller_is_leader", "legendFormat": "Leader" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" }, "0": { "text": "STANDBY", "color": "yellow" } } }] } }
+    },
+    {
+      "title": "Detection Cycles (rate/min)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "targets": [{ "expr": "rate(anomaly_detection_cycles_total{status=\"success\"}[5m]) * 60", "legendFormat": "cycles/min" }]
+    },
+    {
+      "title": "Anomalies Detected (rate/min)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "targets": [{ "expr": "sum(rate(anomaly_detected_total[5m])) * 60", "legendFormat": "anomalies/min" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "green" }, { "value": 10, "color": "yellow" }, { "value": 50, "color": "red" }] } } }
+    },
+    {
+      "title": "Alerts Fired (rate/min)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(rate(anomaly_alerts_fired_total[5m])) * 60", "legendFormat": "alerts/min" }]
+    },
+    {
+      "title": "Workers Available",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "targets": [{ "expr": "anomaly_workers_available", "legendFormat": "workers" }]
+    },
+    {
+      "title": "Alerts Deduplicated",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "targets": [{ "expr": "rate(anomaly_alerts_deduplicated_total[5m]) * 60", "legendFormat": "dedup/min" }]
+    },
+    {
+      "title": "Anomalies Detected by Signal",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "sum(rate(anomaly_detected_total[5m])) by (signal) * 60", "legendFormat": "{{signal}}" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 20 } } }
+    },
+    {
+      "title": "Anomalies by Severity",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "sum(rate(anomaly_detected_total[5m])) by (severity) * 60", "legendFormat": "{{severity}}" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 20 } }, "overrides": [{ "matcher": { "id": "byName", "options": "critical" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }] }
+    },
+    {
+      "title": "Cycle Duration (P95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(anomaly_detection_cycle_duration_seconds_bucket[5m]))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.50, rate(anomaly_detection_cycle_duration_seconds_bucket[5m]))", "legendFormat": "P50" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Worker Job Duration (P95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(anomaly_worker_job_duration_seconds_bucket[5m])) by (le, type))", "legendFormat": "{{type}} P95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Query Duration by Datasource (P95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(anomaly_worker_query_duration_seconds_bucket[5m])) by (le, datasource))", "legendFormat": "{{datasource}} P95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Query Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        { "expr": "sum(rate(anomaly_worker_query_errors_total[5m])) by (datasource) * 60", "legendFormat": "{{datasource}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "errors/min" } }
+    },
+    {
+      "title": "Baseline Series Tracked",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "targets": [
+        { "expr": "sum(anomaly_worker_baseline_series_tracked)", "legendFormat": "series" }
+      ]
+    },
+    {
+      "title": "Redis Operations & Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "targets": [
+        { "expr": "sum(rate(anomaly_worker_redis_operations_total[5m])) * 60", "legendFormat": "ops/min" },
+        { "expr": "sum(rate(anomaly_worker_redis_errors_total[5m])) * 60", "legendFormat": "errors/min" }
+      ]
+    },
+    {
+      "title": "K8s Events Received",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "targets": [
+        { "expr": "sum(rate(anomaly_worker_events_received_total[5m])) by (reason) * 60", "legendFormat": "{{reason}}" }
+      ]
+    },
+    {
+      "title": "Detections by Detector Type",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "targets": [
+        { "expr": "sum(rate(anomaly_worker_detections_total[5m])) by (detector) * 60", "legendFormat": "{{detector}}" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["anomaly-detection", "observability"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Anomaly Detection — System Health",
+  "uid": "anomaly-detection-health"
+}
