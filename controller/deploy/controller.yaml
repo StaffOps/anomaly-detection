@@ -71,6 +71,19 @@ spec:
           env:
             - name: CLUSTER_NAME
               value: "REPLACE_ME_CLUSTER_NAME"
+            # Downward API: POD_NAME is used as the leader-election identity
+            # so each replica has a unique, stable identity tied to its pod.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Leader election is required when running multiple replicas (HA).
+            - name: LEADER_ELECTION_ENABLED
+              value: "true"
+            - name: CONTROLLER_LEASE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           volumeMounts:
             - name: config
               mountPath: /config

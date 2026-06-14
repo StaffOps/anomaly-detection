@@ -140,7 +140,7 @@ controller --replay \
 
 Window must be ≥ 2.5h (warm-up + detection phase). Output is UTC. Pre-flight checks validate VM/Loki reachability and output writability before processing.
 
-> **Status**: 12/16 tasks done (T1-T12). Integration test, smoke test, and final docs (T13-T16) pending. ML wiring and ground-truth comparison are V2. See [`.kiro/specs/replay-mode/`](../.kiro/specs/replay-mode/).
+> **Status**: Complete (T1-T16). Smoke-tested against production endpoints. ML wiring and ground-truth comparison are V2. See [`.kiro/specs/replay-mode/`](../.kiro/specs/replay-mode/).
 
 ## Status
 

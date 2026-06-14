@@ -28,7 +28,13 @@ Thumbs.db
 # Docker volumes
 redis-data/
 
+# MkDocs build output
+site/
+
 # Local env (12-factor — NEVER commit)
 .env
 **/.env
 !.env.example
+tmp-replay/
+replay-*.json
+replay-*.md

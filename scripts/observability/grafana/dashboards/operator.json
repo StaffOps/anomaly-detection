@@ -252,6 +252,102 @@
         }
       },
       "options": {"legend": {"showLegend": true, "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+    },
+
+    {
+      "id": 30,
+      "title": "🔥 Top noisy workloads (24h)",
+      "description": "Workloads with the most anomalies in the last 24h. Use to tune suppression rules or investigate chronic issues. Uses recording rule `staffops:detection_anomalies_24h:by_workload`.",
+      "type": "table",
+      "gridPos": {"h": 12, "w": 12, "x": 0, "y": 36},
+      "targets": [
+        {
+          "expr": "topk(20, staffops:detection_anomalies_24h:by_workload)",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "__name__": true, "job": true, "instance": true},
+            "indexByName": {"namespace": 0, "workload": 1, "Value": 2},
+            "renameByName": {"Value": "anomalies_24h"}
+          }
+        },
+        {"id": "sortBy", "options": {"fields": {}, "sort": [{"field": "anomalies_24h", "desc": true}]}}
+      ],
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left", "filterable": true}},
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "anomalies_24h"},
+            "properties": [
+              {"id": "decimals", "value": 0},
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
+              {"id": "color", "value": {"mode": "thresholds"}},
+              {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "orange", "value": 100},
+                {"color": "red", "value": 200}
+              ]}},
+              {"id": "custom.width", "value": 140}
+            ]
+          }
+        ]
+      },
+      "options": {"showHeader": true, "footer": {"show": false}}
+    },
+
+    {
+      "id": 31,
+      "title": "📊 Cardinality watch — staffops_ad_*",
+      "description": "Number of unique time series per metric. Spike indicates a label cardinality problem (per `vm-cardinality-management` steering: hard limit 2000/metric).",
+      "type": "table",
+      "gridPos": {"h": 12, "w": 12, "x": 12, "y": 36},
+      "targets": [
+        {
+          "expr": "topk(15, count by (__name__) ({__name__=~\"staffops_ad_.+\"}))",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "job": true, "instance": true},
+            "indexByName": {"__name__": 0, "Value": 1},
+            "renameByName": {"__name__": "metric", "Value": "series_count"}
+          }
+        },
+        {"id": "sortBy", "options": {"fields": {}, "sort": [{"field": "series_count", "desc": true}]}}
+      ],
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left", "filterable": true}},
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "series_count"},
+            "properties": [
+              {"id": "decimals", "value": 0},
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
+              {"id": "color", "value": {"mode": "thresholds"}},
+              {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 500},
+                {"color": "orange", "value": 1000},
+                {"color": "red", "value": 2000}
+              ]}},
+              {"id": "custom.width", "value": 130}
+            ]
+          }
+        ]
+      },
+      "options": {"showHeader": true, "footer": {"show": false}}
     }
   ]
 }

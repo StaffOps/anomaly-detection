@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	otelhelper "github.com/karlipegomes/staffops-otel-libs/go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -24,6 +25,7 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/detection"
 	"github.com/staffops/staffops-anomaly-detection/internal/enrichment"
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
+	"github.com/staffops/staffops-anomaly-detection/internal/leader"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 	"github.com/staffops/staffops-anomaly-detection/internal/ml"
 	"github.com/staffops/staffops-anomaly-detection/internal/readiness"
@@ -54,8 +56,25 @@ func main() {
 		return
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	slog.SetDefault(logger)
+	// OTel SDK: traces + logs via OTLP. Metrics disabled — we use Prometheus registry directly.
+	// OTel SDK: traces + logs via OTLP when collector is configured.
+	// Without endpoint, use plain JSON logger (logs must always go to stdout).
+	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if otelEndpoint != "" {
+		otelShutdown, otelErr := otelhelper.Setup(context.Background(),
+			otelhelper.WithServiceName("staffops-ad-controller"),
+			otelhelper.WithDisabledSignals([]string{"metrics"}),
+		)
+		if otelErr != nil {
+			slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+			slog.Warn("otel setup failed, using plain logger", "error", otelErr)
+		} else {
+			defer otelShutdown(context.Background())
+			slog.SetDefault(otelhelper.NewLogger(otelhelper.LOCAL, os.Getenv("OTEL_HELPER_DEBUG_LEVEL") == "true"))
+		}
+	} else {
+		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -107,6 +126,8 @@ func main() {
 		cfg.Controller.WorkerEndpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
+		grpc.WithUnaryInterceptor(otelhelper.UnaryClientInterceptor()),
+		grpc.WithStreamInterceptor(otelhelper.StreamClientInterceptor()),
 	)
 	if err != nil {
 		slog.Error("failed to connect to workers", "error", err)
@@ -130,13 +151,13 @@ func main() {
 	metricsSrv.AddReadinessCheck(readiness.MLChecker(mlClient))
 
 	metricsSrv.SetReady(true)
-	metrics.IsLeader.Set(1) // TODO: K8s Lease leader election
 	metrics.BuildInfo.WithLabelValues(version.Version).Set(1)
 	slog.Info("controller started",
 		"version", version.Version,
 		"metrics_port", cfg.Controller.MetricsPort,
 		"worker_endpoint", cfg.Controller.WorkerEndpoint,
 		"dry_run", *dryRun,
+		"leader_election", cfg.Controller.LeaderElection.Enabled,
 	)
 
 	// Config hot-reload
@@ -152,31 +173,66 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	ticker := time.NewTicker(cfg.Controller.JobInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// Update workers_available gauge based on gRPC connection state.
-			// Ready/Idle = at least one worker reachable. Connecting/TransientFailure/Shutdown = none.
-			// (Idle means no active RPC but the channel is healthy — still reachable.)
-			if state := workerConn.GetState(); state == connectivity.Ready || state == connectivity.Idle {
-				metrics.WorkersAvailable.Set(1)
-			} else {
-				metrics.WorkersAvailable.Set(0)
+	// runCycleLoop runs the detection cycle ticker until its context is cancelled.
+	// Extracted as a closure so leader election (if enabled) can gate it: the
+	// callback receives a leaderCtx that's cancelled on lease loss.
+	runCycleLoop := func(loopCtx context.Context) {
+		ticker := time.NewTicker(cfg.Controller.JobInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				// Update workers_available gauge based on gRPC connection state.
+				if state := workerConn.GetState(); state == connectivity.Ready || state == connectivity.Idle {
+					metrics.WorkersAvailable.Set(1)
+				} else {
+					metrics.WorkersAvailable.Set(0)
+				}
+				runCycle(loopCtx, cfg, workerClient, mlClient, correlator, dispatcher)
+			case <-loopCtx.Done():
+				return
 			}
-			runCycle(ctx, cfg, workerClient, mlClient, correlator, dispatcher)
-		case sig := <-sigCh:
-			slog.Info("received signal, shutting down", "signal", sig)
-			cancel()
-			metricsSrv.Shutdown(ctx)
-			slog.Info("controller stopped")
-			return
-		case <-ctx.Done():
-			return
 		}
 	}
+
+	// Wire shutdown signal into ctx so leader election + cycle both stop cleanly.
+	go func() {
+		sig := <-sigCh
+		slog.Info("received signal, shutting down", "signal", sig)
+		cancel()
+	}()
+
+	if cfg.Controller.LeaderElection.Enabled {
+		// HA mode: only the leader runs detection cycles. Followers wait.
+		// On lease loss, leaderCtx is cancelled and the cycle loop exits;
+		// leaderelection.RunOrDie keeps trying to re-acquire.
+		err := leader.Run(ctx, leader.Config{
+			Namespace:     cfg.Controller.LeaseNamespace,
+			Name:          cfg.Controller.LeaseName,
+			Identity:      cfg.Controller.LeaderElection.Identity,
+			LeaseDuration: cfg.Controller.LeaderElection.LeaseDuration,
+			RenewDeadline: cfg.Controller.LeaderElection.RenewDeadline,
+			RetryPeriod:   cfg.Controller.LeaderElection.RetryPeriod,
+			Kubeconfig:    cfg.Kubeconfig,
+		}, leader.Callbacks{
+			OnStartedLeading: runCycleLoop,
+			OnStoppedLeading: func() {
+				// runCycleLoop's ctx is already cancelled by the leaderelection
+				// machinery — no extra action needed. Followers don't run cycles.
+			},
+		})
+		if err != nil {
+			slog.Error("leader election failed", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		// Single-replica mode (local docker-compose, dev): act as if always leader.
+		metrics.IsLeader.Set(1)
+		runCycleLoop(ctx)
+	}
+
+	metricsSrv.Shutdown(ctx)
+	slog.Info("controller stopped")
 }
 
 func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceClient, mlClient *ml.Client, correlator *correlation.Correlator, dispatcher *alert.Dispatcher) {
@@ -193,7 +249,7 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 	metrics.JobsDispatched.WithLabelValues("metrics").Add(float64(len(batch.Jobs)))
 
 	// Fan-out to workers via gRPC (round_robin distributes across workers)
-	callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
 	results, err := client.ProcessJobs(callCtx, batch)
@@ -214,6 +270,26 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 	// so the feature vector includes contextual signals not just the triggering metric).
 	for _, a := range results.Anomalies {
 		metrics.AnomalyDetected.WithLabelValues(a.Severity, a.Signal).Inc()
+
+		// AnomalyByWorkload: bounded labels for dashboards (top noisy workloads).
+		// Extracts deployment/statefulset/daemonset name from pod, falls back to
+		// service_name for service-level anomalies. Empty values normalized to
+		// "unknown" to keep cardinality bounded even on degenerate inputs.
+		ns := a.Labels["namespace"]
+		if ns == "" {
+			ns = "unknown"
+		}
+		workload := "unknown"
+		if pod := a.Labels["pod"]; pod != "" {
+			if w := correlation.ExtractWorkload(pod); w != "" {
+				workload = w
+			} else {
+				workload = pod // bounded fallback for unparseable pod names
+			}
+		} else if svc := a.Labels["service_name"]; svc != "" {
+			workload = svc
+		}
+		metrics.AnomalyByWorkload.WithLabelValues(ns, workload, a.Severity).Inc()
 
 		// Log each anomaly for visibility
 		slog.Info("anomaly_detected",

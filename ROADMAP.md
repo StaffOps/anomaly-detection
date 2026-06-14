@@ -73,46 +73,32 @@ Aggregate anomalies by namespace, run multivariate on `{count_anomalous_pods, di
 
 ## Phase 3 — Operational maturity
 
-### 🚧 P3.1 — Replay mode — **IN PROGRESS (12/16 tasks done)**
+### ✅ ~~P3.1 — Replay mode~~ — **DONE**
 
-Spec at [`.kiro/specs/replay-mode/`](.kiro/specs/replay-mode/) covering requirements, design, tasks. **Pilot of spec-driven workflow** per `staffops_agent_definition/steering/spec-driven-workflow.md`.
+Spec at [`.kiro/specs/replay-mode/`](.kiro/specs/replay-mode/). All 16 tasks complete.
 
 CLI: `controller --replay --from=24h --to=1h --config=cand.yaml --output=report.json` simulates detection over historical metrics/logs without side effects (no Redis writes, no Alertmanager dispatches, no gRPC fan-out).
 
-**Done so far** (controller branch, not yet merged):
-- T1 — Window parser (`internal/replay/window.go`, 22 sub-tests passing)
-- T2 — VM range query (`MetricsPoller.QueryRange` + `TimeSeries`/`Point` types)
-- T3 — Loki range query (`LogsPoller.QueryMetricRange`)
-- T4 — InMemStore baseline (mirrors Welford+EWMA, 7 unit tests)
-- T5 — `baseline.Evaluator` interface (Store and InMemStore both satisfy)
-- T6 — ReplayConfig struct + defaults (`internal/replay/config.go`)
-- T7 — Tick simulator (`engine.go` — 1h chunks, warmup split, SIGINT partial flush, graceful query-error skip)
-- T8 — Range-to-instant adapter (`SamplesAt`, 7 unit tests)
-- T9 — Report struct + JSON serializer (full schema, golden-file test)
-- T10 — Markdown serializer (tables + ASCII sparklines, golden-file test)
-- T11 — CLI flags + dispatch (`--replay`, `--from`, `--to`, `--output`, `--warmup-fraction`, `--max-range`, `--max-anomalies`; pre-flight checks; ML documented as V2)
-- T12 — Replay exec metrics (in-memory only, embedded in JSON `metadata.execution_metrics`)
+**Smoke test result** (2026-05-31): Ran against production endpoints (VM bdc.app.br, Loki bdc.app.br). Pre-flight OK, engine processed ticks correctly, graceful partial flush on SIGINT. JSON schema valid, Markdown readable. VM queries p95 ~1s. Zero side effects confirmed.
 
-**Remaining** (T13–T16): integration test (docker-compose + synthetic dataset), manual smoke test vs prod, README section, ROADMAP move to Done.
+**V1 excludes**: ground-truth comparison (TPs/FPs/FNs), ML wired, query cache, distributed replay. All scoped as V2.
 
-**V1 explicitly excludes**: ground-truth comparison (TPs/FPs/FNs), ML wired, query cache for fast iteration, distributed replay. All scoped as V2.
+### ✅ ~~P3.2 — Top noisy workloads dashboard / VMRule~~ — **DONE**
 
-**Effort remaining**: ~2 days sequential.
+New metric `staffops_ad_detection_anomalies_by_workload_total{namespace, workload, severity}` (bounded labels: workload extracted via `correlation.ExtractWorkload`, falls back to `service_name`, empty values normalized to `unknown`).
 
-### 🎯 P3.2 — Top noisy workloads dashboard / VMRule
+Recording rules in `controller/deploy/vmrules.yaml`:
+- `staffops:detection_anomalies_24h:by_workload` — 24h aggregate for top-N panels
+- `staffops:detection_anomalies_24h:by_workload_severity` — sliced by severity
+- `staffops:detection_anomalies_1h:by_workload` — short window for "currently noisy"
 
-Recording rule + Grafana panel showing top-N workloads by anomaly count over 24h. Operator uses to:
-- Tune suppression rules
-- Identify chronically broken workloads
-- Catch detection drift
+Operator dashboard panels added (`scripts/observability/grafana/dashboards/operator.json`):
+- 🔥 Top noisy workloads (24h) — table with topk(20), color-graded
+- 📊 Cardinality watch — monitors series count per `staffops_ad_*` metric with thresholds at 500/1000/2000 (steering hard limit)
 
-```promql
-topk(20, sum by (namespace, workload) (
-  increase(staffops_ad_detection_anomalies_total[24h])
-))
-```
+VMRule alert `StaffOpsADWorkloadChronicallyNoisy` fires (info severity) when a workload exceeds 100 anomalies in 24h — operator hint to add suppression or investigate.
 
-**Effort**: small (recording rule + dashboard panel). Depends on P4.A.2 cardinality cleanup (use `workload` label, not `pod`).
+Cardinality justified: severity(3) × namespace(~50) × workload(~30/ns avg) ≈ 4500 series — bounded growth via deployment count, not pod count.
 
 ### 🎯 P3.3 — Feedback loop
 
@@ -141,86 +127,61 @@ Load SLO state (from VMRules or config). Adjust severity dynamically:
 
 Established 2026-05-30 after observability advisor review (drawing on `vm-cardinality-management`, `multicluster-label-strategy`, `grafana-cross-signal-correlation` skills). All items below are **prerequisites for any cluster deploy** (Phase 5) — without them we either ship broken instrumentation or a cardinality bomb.
 
-### 🎯 P4.A.1 — Fix instrumentation bugs
+### ✅ ~~P4.A.1 — Fix instrumentation bugs~~ — **DONE in controller 0.7.0**
 
-Bugs documented in `ALARMs.md` causing dashboards to lie:
+All three bugs documented in `ALARMs.md` were fixed during the 0.7.0 implementation:
 
-| Bug | Fix | Risk |
-|-----|-----|------|
-| `alerts_fired_total=0` em dry-run | Move `metrics.AlertsFiredTotal.Inc()` to BEFORE `if !d.dryRun` block in `dispatcher.go`. Counter mede intent, não delivery. | low |
-| `workers_available=0` always | Gauge nunca é setado — wire em `runCycle` no controller, refletir health real dos workers via gRPC ping | low |
-| `cycle_duration_seconds` clip 10s | Adicionar `Buckets: []float64{1, 2.5, 5, 10, 20, 30, 60}` na registration do histogram | low |
+- `alerts_fired_total`: Counter incremented BEFORE `if d.dryRun` in `dispatcher.go` — measures intent, not delivery.
+- `workers_available`: Gauge set on every tick in `main.go` via `workerConn.GetState()` (connectivity.Ready/Idle → 1, else → 0).
+- `cycle_duration_seconds`: Custom buckets `[1, 2.5, 5, 10, 20, 30, 60]` defined in `metrics.go`.
 
-**Effort**: ~30min. Test via docker-compose: counters incrementam, gauge reflete fleet, histogram p99 não clipa.
+### ✅ ~~P4.A.2 — Cardinality cleanup~~ — **DONE in controller 0.7.0**
 
-### 🎯 P4.A.2 — Cardinality cleanup (`identity` label removal)
+No `identity` label exists on any counter/histogram. `AlertsFired` uses only `[severity]`. Full pod identity goes to Alertmanager **annotations** (not indexed labels) and structured logs. The `workload` label in AM alerts uses bounded extraction via `correlation.ExtractWorkload()`.
 
-⚠️ **Steering-critical** per `vm-cardinality-management`: nunca usar labels unbounded. Hoje:
+### ✅ ~~P4.A.3 — Multi-cluster constant labels~~ — **DONE in controller 0.7.0**
 
-- `staffops_ad_alert_alerts_fired_total{namespace, identity, severity, kind, ...}` — `identity` é pod name em alertas pod-level → unbounded
-- Em prod com 1000 pods × restarts ao longo de meses → 100k+ séries só desse contador
-- Steering hard-limit: 2000 séries por metric
+`main.go` wraps the registry with `prometheus.WrapRegistererWith(constLabels{cluster: cfg.Cluster}, ControllerRegistry)`. The `eks_cluster` label was deliberately excluded from app code — per `observability-principles.md` steering, environment-specific labels belong at the scrape layer (vmagent `externalLabels` in prod, `static_configs.labels` in local dev). Documented in `controller/README.md` "Multi-cluster labels" section.
 
-**Solução**:
-- Remover `identity` de todos counters/histograms em `internal/metrics/`
-- Substituir por `workload` (extraído via `correlation.ExtractWorkload`, bounded ≈ deployment count)
-- Manter `identity` em **logs** (Loki) — alta cardinalidade aceitável lá
-- Manter `kind` (pod vs workload) — bounded, 2 valores
+### ✅ ~~P4.A.4 — Dashboard refresh pós P4.A.1+P4.A.2~~ — **DONE**
 
-**Effort**: ~1h. Audit todos os points de increment, refactor labels, atualizar dashboards que dependiam de `identity`.
+`controller/deploy/dashboard.json` rewritten (18 panels, uid `staffops-ad-system-health`):
 
-### 🎯 P4.A.3 — Multi-cluster constant labels
+- ✅ All queries use `staffops_ad_*` taxonomy (zero old `anomaly_*` references)
+- ✅ Alerts Fired/min: `sum(rate(staffops_ad_alert_fired_total[5m])) * 60` (Prometheus, replaces Loki `count_over_time`)
+- ✅ Workers Available: stat panel with value mapping (1=UP/green, 0=DOWN/red)
+- ✅ Cardinality Watch: `topk(15, count by (__name__) ({__name__=~"staffops_ad_.+"}))` — table with color thresholds at 500/1000/2000
+- ✅ Recent Alerts (Loki): preserved as ground truth (`{service="controller"} | json | msg="alert_fired"`)
+- ✅ Full system health: cycles, anomalies by signal/severity, cycle/job/query duration histograms, baselines, Redis ops, K8s events, detector breakdown
 
-Per `multicluster-label-strategy` steering: `cluster` (k8s name) **e** `eks_cluster` (env) precisam estar em todas as séries antes de qualquer multi-cluster deploy.
+### ✅ ~~P4.A.5 — OTel SDK adoption~~ — **DONE**
 
-Hoje:
-- `cluster` em `build_info` apenas, e em alertas Alertmanager
-- `eks_cluster` em lugar nenhum
+Integrated `github.com/staffops/otel-helper-go` (corporate OTel lib):
 
-**Solução**: constant labels no `prometheus.NewRegistry()`:
+- Controller + Worker: `otelhelper.Setup()` with traces + logs (metrics disabled — Prometheus client_golang used directly)
+- Controller: `UnaryClientInterceptor` + `StreamClientInterceptor` on gRPC dial to workers
+- Worker: `UnaryServerInterceptor` + `StreamServerInterceptor` on gRPC server
+- Logger: `otelhelper.NewLogger()` bridges slog → OTel logs (trace_id/span_id auto-injected)
+- Graceful fallback: when `OTEL_EXPORTER_OTLP_ENDPOINT` is empty/unreachable, falls back to plain JSON slog (no crash)
+- Health check RPCs filtered from traces by interceptors
 
-```go
-constLabels := prometheus.Labels{
-    "cluster":     os.Getenv("CLUSTER_NAME"),
-    "eks_cluster": os.Getenv("EKS_CLUSTER"),
-}
-prometheus.WrapRegistererWith(constLabels, registry)
-```
-
-`EKS_CLUSTER` env var precisa ser adicionada em `config.yaml` + `compose.yaml` + `.env.example`. Já tem `CLUSTER_NAME`.
-
-**Effort**: ~30min.
-
-### 🎯 P4.A.4 — Dashboard refresh pós P4.A.1+P4.A.2
-
-Após bug fixes e cardinality cleanup estarem em prod ≥30min observando:
-
-- 🟢 Active alerts: trocar query Loki `count_over_time` por Prom counter rate (`rate(staffops_ad_alert_alerts_fired_total[5m])`) — mais rápido e previsível
-- ➕ Adicionar painel **Workers up**: `staffops_ad_controller_workers_available`
-- ➕ Adicionar painel **Cardinality watch**: `count by (__name__) ({__name__=~"staffops_ad_.+"})` — alerta visual se algum metric explodir
-- ✅ Manter Recent alerts (Loki json) — é o ground truth detalhado
-
-**Effort**: ~30min.
-
-### 📌 P4.A.5 — OTel SDK adoption (defer pra Phase 6)
-
-Skill `grafana-cross-signal-correlation` recomenda Loki `derivedFields` com regex pra `traceID=(\w+)`. Hoje controller usa `slog` standalone — sem OTel SDK, sem traceID nos logs. Wiring de OTel SDK é escopo grande (~3h+) e fora do MVP.
-
-**Defer pra Phase 6** (Self-monitoring) — não bloqueia deploy.
+When an OTel Collector is deployed alongside (P5.2), logs gain `traceID` enabling Loki `derivedFields` → Tempo trace navigation in Grafana.
 
 ---
 
 ## Phase 5 — Cluster readiness (was Phase 4)
 
-Pré-requisito: P4.A.1 a P4.A.4 (P4.A.5 não bloqueia).
+Pré-requisito: ~~P4.A.1 a P4.A.4~~ ✅ all done. P4.A.5 (OTel SDK) deferred to P6, não bloqueia.
 
-### 🎯 P5.1 — K8s Lease leader election (was P4.1)
+### ✅ ~~P5.1 — K8s Lease leader election~~ — **DONE**
 
-Multi-replica controller with K8s Lease-based leader election. Required for cluster HA.
+`internal/leader/` package wraps `k8s.io/client-go/tools/leaderelection`. Configurable via `controller.leader_election.enabled` in config.yaml (default false for local dev). When enabled, only the lease holder runs detection cycles; followers stay warm and take over within ~17s on lease loss (LeaseDuration 15s + RetryPeriod 2s).
 
-**Status**: pending since v0.5.0. Code pre-wired (`metrics.IsLeader`, `LeaderTransitions`, config has `lease_name`/`lease_namespace`).
+**Identity** defaults to `POD_NAME` (downward API), falls back to hostname. Updates `staffops_ad_controller_is_leader` gauge and `staffops_ad_controller_leader_transitions_total` counter automatically.
 
-**Effort**: small (use `k8s.io/client-go/tools/leaderelection`). Candidato a spec próprio se for combinado com Phase 5 todo em `.kiro/specs/production-readiness/`.
+**RBAC**: Role grants `coordination.k8s.io/leases` get/create/update in the controller's namespace (already in `controller/deploy/controller.yaml`).
+
+**Tests**: 7 unit tests covering validation errors, identity resolution, kubeconfig handling. Cluster integration validation in P5.2.
 
 ### 🎯 P5.2 — Deploy to cluster (was P4.2)
 
@@ -243,6 +204,27 @@ End-to-end test: anomaly → Alertmanager → Slack channel. Currently always dr
 Self-protection: if `staffops_ad_worker_baseline_series_tracked` > N (configurable, default 10k), workers stop creating new baselines and emit alert. Prevents Redis OOM if label cardinality explodes.
 
 **Effort**: small.
+
+### 🎯 P5.5 — Agent API Integration (staffops-chaitops)
+
+Invoke staffops-chaitops Agent API on high-confidence anomalies to trigger automated squad investigation. Fire-and-forget with circuit breaker, bounded concurrency (max 5), deduplication.
+
+**Trigger conditions**: severity ≥ warning AND (ml_score ≥ 0.7 OR correlation_group_size ≥ 3)
+
+**Pre-req**: P5.3 (controller out of dry-run, real alerts flowing) + P2.4 prod-validated (workload patterns confirmed).
+
+**Key components**:
+- `internal/agentapi/` — HTTP client with circuit breaker (3-state: closed/open/half-open)
+- `internal/agentapi/dedup.go` — Redis-backed dedup (same correlation group → 1 squad, not N)
+- Bounded concurrency: semaphore max 5 concurrent calls
+- Fire-and-forget: does NOT wait for squad result; controller continues detection cycle
+- Graceful degradation: if Agent API unavailable, normal Alertmanager flow continues
+
+**Spec**: `.kiro/specs/agent-api-integration/`
+
+**Effort**: 22 tasks (6 core + 6 integration/observability + 7 tests + 3 docs)
+
+**Status**: spec complete (2026-06-02), implementation blocked on P5.3.
 
 ---
 
@@ -270,11 +252,9 @@ Already have `deploy/dashboard.json` but needs update for new `staffops_ad_*` ta
 
 **Effort**: small (refactor existing dashboard).
 
-### 🎯 P6.3 — OTel SDK adoption (was P4.A.5)
+### ✅ ~~P6.3 — OTel SDK adoption~~ — **DONE (via P4.A.5)**
 
-Wire OTel SDK into controller + workers + ML for traceID-correlated logs. Then re-add Loki `derivedFields` per `grafana-cross-signal-correlation` skill, enabling log → trace navigation in Grafana.
-
-**Effort**: ~3h. Cross-signal correlation only matters when there's enough multi-component activity to correlate — defer until cluster deploy proves stable.
+Completed as P4.A.5 using `github.com/staffops/otel-helper-go`. Traces + logs enabled via OTLP, gRPC interceptors provide distributed tracing across controller ↔ worker communication.
 
 ---
 

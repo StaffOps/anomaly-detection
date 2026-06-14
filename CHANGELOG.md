@@ -12,6 +12,34 @@ Work landed after controller 0.7.0, not yet released (still pre-production, no c
 
 ### controller
 
+**Added — OTel SDK integration (P4.A.5)**
+- Integrated `github.com/karlipegomes/staffops-otel-libs/go` — traces + logs via OTLP
+- gRPC interceptors on controller→worker calls (distributed tracing)
+- Graceful fallback: when `OTEL_EXPORTER_OTLP_ENDPOINT` is empty, uses plain JSON slog (no crash)
+
+**Added — Dashboard refresh (P4.A.4)**
+- `controller/deploy/dashboard.json` rewritten: 18 panels, all `staffops_ad_*` taxonomy
+- Alerts Fired uses Prometheus rate (was Loki count_over_time)
+- Workers Available stat panel, Cardinality Watch table
+
+**Changed — Detection rules overhaul**
+- Removed static CPU/memory ratio rules (duplicated VMAlert, caused 82% noise)
+- Added: istio 5xx rate, kestrel queued requests, .NET threadpool saturation, http client queue time, otel collector dropping spans, rollout stuck
+- Added adaptive: istio error rate by workload, .NET GC pause/heap growth, http_client active requests, queue depth/fails, hikari/go_sql pool saturation, otel collector queue, karpenter scheduling
+- Exclude namespaces expanded: +monitoring, istio-system, scaleops-system
+
+**Changed — Performance tuning**
+- `job_interval`: 30s → 60s (reduce VM load)
+- VM rate limiter: 100/s → 20/s per worker
+- Enrichment concurrency: 5 → 2
+- gRPC call timeout: 30s → 90s (handles slow VM)
+- VM query timeout: 30s → 60s
+
+**⚠️ PENDING VALIDATION** (blocked by VM/Loki degradation 2026-06-14 evening):
+- [ ] Replay with new rules against stable window (confirm spanmetrics/istio/.NET signals produce detections)
+- [ ] Live observation for ≥1h with healthy backends (confirm alert quality, dedup, workload correlation)
+- [ ] Verify enrichment bundles work with new rule labels (service_name vs namespace/pod)
+
 **Fixed**
 - `correlator.go`: `workloadKey()` now falls back to `service_name` when the pod label is empty. Service-level anomalies (latency/error-rate by service) no longer collapse into a single `/` group (was 348 anomalies in one bucket).
 

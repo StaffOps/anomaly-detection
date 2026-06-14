@@ -58,6 +58,26 @@ type Controller struct {
 	MetricsPort               int           `yaml:"metrics_port"`
 	WorkerEndpoint            string        `yaml:"worker_endpoint"`
 	WorkloadPatternMinPods    int           `yaml:"workload_pattern_min_pods"`
+	LeaderElection            LeaderElection `yaml:"leader_election"`
+}
+
+// LeaderElection controls K8s Lease-based leader election for HA.
+//
+// When Enabled=false (default for local docker-compose), the controller acts
+// as if it's always the leader — single-replica behavior. When Enabled=true
+// (cluster deploy), N replicas race for the Lease and only the holder runs
+// the detection cycle. Followers stay warm and take over on lease expiry.
+//
+// Identity defaults to POD_NAME env var (set via downward API) or hostname.
+// The default lease/lock parameters follow Kubernetes controller-manager
+// conventions: 15s lease duration, 10s renew deadline, 2s retry period —
+// gives a ~17s worst-case failover window.
+type LeaderElection struct {
+	Enabled       bool          `yaml:"enabled"`
+	Identity      string        `yaml:"identity"`        // defaults to POD_NAME or hostname
+	LeaseDuration time.Duration `yaml:"lease_duration"`  // default 15s
+	RenewDeadline time.Duration `yaml:"renew_deadline"`  // default 10s
+	RetryPeriod   time.Duration `yaml:"retry_period"`    // default 2s
 }
 
 type Worker struct {
@@ -231,6 +251,23 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Controller.WorkloadPatternMinPods == 0 {
 		cfg.Controller.WorkloadPatternMinPods = 3
+	}
+	// Leader election timing defaults match k8s controller-manager conventions.
+	// Worst-case failover ≈ LeaseDuration + RetryPeriod (15s + 2s = 17s).
+	if cfg.Controller.LeaderElection.LeaseDuration == 0 {
+		cfg.Controller.LeaderElection.LeaseDuration = 15 * time.Second
+	}
+	if cfg.Controller.LeaderElection.RenewDeadline == 0 {
+		cfg.Controller.LeaderElection.RenewDeadline = 10 * time.Second
+	}
+	if cfg.Controller.LeaderElection.RetryPeriod == 0 {
+		cfg.Controller.LeaderElection.RetryPeriod = 2 * time.Second
+	}
+	if cfg.Controller.LeaseName == "" {
+		cfg.Controller.LeaseName = "staffops-ad-controller"
+	}
+	if cfg.Controller.LeaseNamespace == "" {
+		cfg.Controller.LeaseNamespace = "monitoring"
 	}
 	if cfg.Worker.GRPCPort == 0 {
 		cfg.Worker.GRPCPort = 50052

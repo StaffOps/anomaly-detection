@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/grpc"
 	"github.com/prometheus/client_golang/prometheus"
+	otelhelper "github.com/karlipegomes/staffops-otel-libs/go"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -32,8 +33,23 @@ func main() {
 	configPath := flag.String("config", "config/config.local.yaml", "path to config file")
 	flag.Parse()
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	slog.SetDefault(logger)
+	// OTel SDK: traces + logs via OTLP when collector is configured.
+	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if otelEndpoint != "" {
+		otelShutdown, otelErr := otelhelper.Setup(context.Background(),
+			otelhelper.WithServiceName("staffops-ad-worker"),
+			otelhelper.WithDisabledSignals([]string{"metrics"}),
+		)
+		if otelErr != nil {
+			slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+			slog.Warn("otel setup failed, using plain logger", "error", otelErr)
+		} else {
+			defer otelShutdown(context.Background())
+			slog.SetDefault(otelhelper.NewLogger(otelhelper.LOCAL, os.Getenv("OTEL_HELPER_DEBUG_LEVEL") == "true"))
+		}
+	} else {
+		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -75,7 +91,7 @@ func main() {
 	suppressionFilter := suppression.NewFilter(cfg.Suppression)
 
 	// Rate limiters
-	vmLimiter := ratelimit.New(100)  // 100 queries/s to VM
+	vmLimiter := ratelimit.New(20)  // 20 queries/s to VM (conservative to avoid overloading vmselect)
 	lokiLimiter := ratelimit.New(50) // 50 queries/s to Loki
 
 	// Ingestion
@@ -103,7 +119,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(otelhelper.UnaryServerInterceptor()),
+		grpc.StreamInterceptor(otelhelper.StreamServerInterceptor()),
+	)
 	srv := &workerServer{
 		cfg:           cfg,
 		engine:        engine,

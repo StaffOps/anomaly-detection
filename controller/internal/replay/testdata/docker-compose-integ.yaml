@@ -1,0 +1,26 @@
+# Minimal stack for replay integration tests.
+# Usage: docker compose -f testdata/docker-compose-integ.yaml up -d
+services:
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:v1.101.0
+    ports:
+      - "8428:8428"
+    command:
+      - -retentionPeriod=1d
+      - -search.latencyOffset=0s
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8428/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  loki:
+    image: grafana/loki:3.0.0
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 10

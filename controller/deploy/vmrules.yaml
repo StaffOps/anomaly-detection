@@ -1,56 +1,146 @@
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMRule
 metadata:
-  name: anomaly-detection-health
+  name: staffops-ad-recording
   namespace: monitoring
+  labels:
+    app.kubernetes.io/name: staffops-ad
+    app.kubernetes.io/component: recording-rules
 spec:
   groups:
-    - name: anomaly-detection
+    # Recording rules — pre-aggregated for fast dashboard queries.
+    # The 24h windows are expensive to compute on every panel render;
+    # recording rules cache them once per evaluation interval.
+    - name: staffops-ad.recording
+      interval: 1m
       rules:
-        - alert: AnomalyDetectionNoLeader
-          expr: sum(anomaly_controller_is_leader) == 0
+        # Top noisy workloads — used by operator dashboards to identify
+        # which workloads to suppress, debug, or tune.
+        - record: staffops:detection_anomalies_24h:by_workload
+          expr: |
+            sum by (cluster, namespace, workload) (
+              increase(staffops_ad_detection_anomalies_by_workload_total[24h])
+            )
+
+        # Same, sliced by severity (for stacked bar charts).
+        - record: staffops:detection_anomalies_24h:by_workload_severity
+          expr: |
+            sum by (cluster, namespace, workload, severity) (
+              increase(staffops_ad_detection_anomalies_by_workload_total[24h])
+            )
+
+        # 1h short-window for "currently noisy" detection.
+        - record: staffops:detection_anomalies_1h:by_workload
+          expr: |
+            sum by (cluster, namespace, workload) (
+              increase(staffops_ad_detection_anomalies_by_workload_total[1h])
+            )
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: staffops-ad-health
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: staffops-ad
+    app.kubernetes.io/component: alerts
+spec:
+  groups:
+    # Health alerts — meta-monitoring of the anomaly detection system itself.
+    # Updated to the staffops_ad_* taxonomy (was anomaly_* in 0.6.0).
+    - name: staffops-ad.health
+      rules:
+        - alert: StaffOpsADNoLeader
+          expr: sum(staffops_ad_controller_is_leader) == 0
           for: 2m
           labels:
             severity: critical
           annotations:
-            summary: "Anomaly detection sem controller ativo"
-            description: "Nenhum controller é leader há mais de 2 minutos"
+            summary: "Anomaly detection has no active controller"
+            description: "No controller has been leader for over 2 minutes."
 
-        - alert: AnomalyDetectionStalled
-          expr: rate(anomaly_detection_cycles_total[5m]) == 0
+        - alert: StaffOpsADStalled
+          expr: rate(staffops_ad_controller_cycles_total[5m]) == 0
           for: 5m
           labels:
             severity: critical
           annotations:
-            summary: "Anomaly detection parou de executar ciclos"
-            description: "Nenhum ciclo de detecção executado nos últimos 5 minutos"
+            summary: "Anomaly detection cycles stopped"
+            description: "No detection cycles executed in the last 5 minutes."
 
-        - alert: AnomalyDetectionWorkersDown
-          expr: anomaly_workers_available == 0
+        - alert: StaffOpsADWorkersDown
+          expr: staffops_ad_controller_workers_available == 0
           for: 1m
           labels:
             severity: critical
           annotations:
-            summary: "Nenhum worker disponível"
-            description: "Controller não consegue alcançar nenhum worker"
+            summary: "No workers reachable"
+            description: "Controller cannot reach any worker via gRPC."
 
-        - alert: AnomalyDetectionHighErrorRate
+        - alert: StaffOpsADHighJobErrorRate
           expr: |
-            rate(anomaly_jobs_failed_total[5m])
-            / (rate(anomaly_jobs_dispatched_total[5m]) > 0)
-            > 0.5
+            (
+              rate(staffops_ad_controller_jobs_failed_total[5m])
+              /
+              (rate(staffops_ad_controller_jobs_dispatched_total[5m]) > 0)
+            ) > 0.5
           for: 5m
           labels:
             severity: warning
           annotations:
-            summary: "Mais de 50% dos jobs falhando"
-            description: "Taxa de erro nos jobs de detecção está acima de 50%"
+            summary: "More than 50% of jobs failing"
+            description: "Detection job error rate is above 50%."
 
-        - alert: AnomalyDetectionRedisDown
-          expr: anomaly_worker_redis_errors_total > 0 and rate(anomaly_worker_redis_errors_total[5m]) > 0.1
+        - alert: StaffOpsADRedisErrors
+          expr: rate(staffops_ad_worker_redis_errors_total[5m]) > 0.1
           for: 2m
           labels:
             severity: warning
           annotations:
-            summary: "Redis com erros persistentes"
-            description: "Workers reportando erros de Redis continuamente"
+            summary: "Redis errors persistent"
+            description: "Workers reporting Redis errors continuously."
+
+        - alert: StaffOpsADCycleSlow
+          expr: |
+            histogram_quantile(0.99,
+              rate(staffops_ad_controller_cycle_duration_seconds_bucket[5m])
+            ) > 30
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Detection cycle p99 over 30s"
+            description: "Cycle duration p99 exceeded 30s for 10 minutes — backend latency or workload growth."
+
+        - alert: StaffOpsADMLErrorRate
+          expr: |
+            (
+              rate(staffops_ad_controller_ml_calls_total{status="error"}[5m])
+              /
+              (rate(staffops_ad_controller_ml_calls_total[5m]) > 0)
+            ) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ML service error rate > 10%"
+            description: "ML multivariate detection calls failing — service degraded or feature mismatch."
+
+    # Notification when a workload becomes chronically noisy — likely needs
+    # suppression rule or operator attention. Threshold tuned conservatively;
+    # adjust after observing baseline noise.
+    - name: staffops-ad.noisy-workloads
+      rules:
+        - alert: StaffOpsADWorkloadChronicallyNoisy
+          expr: staffops:detection_anomalies_24h:by_workload > 100
+          for: 1h
+          labels:
+            severity: info
+          annotations:
+            summary: "Workload {{ $labels.namespace }}/{{ $labels.workload }} is chronically noisy"
+            description: |
+              Workload {{ $labels.namespace }}/{{ $labels.workload }} produced
+              {{ $value | humanize }} anomalies in the last 24h. Consider:
+              - Adding namespace to EXCLUDE_STATIC_ONLY_CSV (if batch/cron)
+              - Tuning Z-Score threshold for the affected metrics
+              - Investigating if there's a real recurring issue

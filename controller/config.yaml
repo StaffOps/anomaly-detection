@@ -27,7 +27,7 @@ ml:
   timeout: ${ML_TIMEOUT:5s}
 
 controller:
-  job_interval: 30s
+  job_interval: 60s
   correlation_window: 2m
   cooldown: 5m
   lease_name: anomaly-controller-leader
@@ -35,10 +35,25 @@ controller:
   metrics_port: 8080
   worker_endpoint: ${WORKER_ENDPOINT:dns:///worker:50052}
 
+  # K8s Lease-based leader election (HA). Required when running multiple
+  # controller replicas in a cluster — only the leader runs detection cycles
+  # to avoid duplicate alerts and split correlation state.
+  #
+  # When enabled=false (local dev / docker-compose), the controller acts as
+  # if always leader.
+  leader_election:
+    enabled: ${LEADER_ELECTION_ENABLED:false}
+    # identity defaults to POD_NAME env var (set via downward API) or hostname.
+    # Override only for testing — must be unique per replica.
+    identity: ${POD_NAME:}
+    lease_duration: 15s    # how long a non-leader waits to take over
+    renew_deadline: 10s    # must be < lease_duration
+    retry_period: 2s       # candidate retry interval
+
 worker:
   grpc_port: 50052
   metrics_port: 8081
-  concurrency: 5
+  concurrency: 2
 
 baseline:
   window_size: 60
@@ -48,36 +63,113 @@ baseline:
   seasonal_min_days: 7
 
 detection:
+  # --- STATIC RULES ---
+  # Only truly critical thresholds that need immediate attention.
+  # CPU/memory ratio removed — duplicates VMAlert, generates noise.
   static_rules:
-    - name: high_cpu_ratio
-      query: max(rate(container_cpu_usage_seconds_total{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}",container!=""}[1m])) by (namespace, pod) / max(kube_pod_container_resource_limits{resource="cpu",namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}"}) by (namespace, pod)
-      threshold: 0.9
-      operator: ">"
-      severity: warning
     - name: high_restart_rate
       query: max(increase(kube_pod_container_status_restarts_total{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}"}[5m])) by (namespace, pod)
       threshold: 3
       operator: ">"
       severity: critical
-    - name: high_memory_ratio
-      query: max(container_memory_working_set_bytes{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}",container!=""}) by (namespace, pod) / max(kube_pod_container_resource_limits{resource="memory",namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}"}) by (namespace, pod)
-      threshold: 0.85
+
+    - name: istio_5xx_rate_high
+      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[5m])) by (destination_workload, destination_workload_namespace) / sum(rate(istio_requests_total{destination_workload!=""}[5m])) by (destination_workload, destination_workload_namespace) > 0.05
+      threshold: 0.05
       operator: ">"
       severity: warning
 
+    - name: kestrel_queued_requests_high
+      query: max(kestrel_queued_requests) by (namespace, pod)
+      threshold: 50
+      operator: ">"
+      severity: warning
+
+    - name: dotnet_threadpool_saturated
+      query: max(dotnet_thread_pool_queue_length_total) by (namespace, pod) > 0 or max(process_runtime_dotnet_thread_pool_queue_length) by (namespace, pod) > 0
+      threshold: 100
+      operator: ">"
+      severity: warning
+
+    - name: http_client_queue_time_high
+      query: histogram_quantile(0.99, sum(rate(http_client_request_time_in_queue_seconds_bucket[5m])) by (le, namespace, pod))
+      threshold: 2.0
+      operator: ">"
+      severity: warning
+
+    - name: otel_collector_dropping_spans
+      query: sum(rate(otelcol_exporter_enqueue_failed_spans_total[5m])) by (service_name)
+      threshold: 0
+      operator: ">"
+      severity: critical
+
+    - name: rollout_stuck
+      query: max(rollout_info_replicas_unavailable) by (namespace, rollout)
+      threshold: 0
+      operator: ">"
+      severity: warning
+
+  # --- ADAPTIVE RULES (Z-Score) ---
+  # These learn baseline per series and alert on deviations.
   adaptive_metrics:
-    - name: cpu_by_workload
-      query: max(rate(container_cpu_usage_seconds_total{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}",container!=""}[1m])) by (namespace, pod)
-      group_by: [namespace, pod]
+    # RED metrics from spanmetrics (30+ services)
     - name: error_rate_by_service
       query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[1m])) by (service_name)
       group_by: [service_name]
+
     - name: request_rate_by_service
       query: sum(rate(spanmetrics_apm_calls_total[1m])) by (service_name)
       group_by: [service_name]
+
     - name: latency_p99_by_service
       query: histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket[5m])) by (le, service_name))
       group_by: [service_name]
+
+    # Istio mesh — service-to-service error rate
+    - name: istio_error_rate_by_workload
+      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[1m])) by (destination_workload, destination_workload_namespace)
+      group_by: [destination_workload, destination_workload_namespace]
+
+    # .NET saturation signals (leading indicators)
+    - name: dotnet_gc_pause_rate
+      query: sum(rate(dotnet_gc_pause_time_seconds_total[1m])) by (namespace, pod)
+      group_by: [namespace, pod]
+
+    - name: dotnet_heap_growth
+      query: max(process_runtime_dotnet_gc_heap_size_bytes) by (namespace, pod)
+      group_by: [namespace, pod]
+
+    - name: http_client_active_requests
+      query: max(http_client_active_requests) by (namespace, pod)
+      group_by: [namespace, pod]
+
+    # Queue depth (SQS-backed and Kestrel)
+    - name: queue_depth
+      query: max(queue_depth_messages) by (namespace, pod)
+      group_by: [namespace, pod]
+
+    - name: queue_failed_rate
+      query: sum(rate(queue_messages_failed_total[1m])) by (namespace, pod)
+      group_by: [namespace, pod]
+
+    # DB connection pool saturation
+    - name: hikari_pool_pending
+      query: max(hikaricp_connections_pending) by (namespace, pod)
+      group_by: [namespace, pod]
+
+    - name: go_sql_waiting
+      query: max(go_sql_stats_connections_waited_for_total) by (namespace, pod)
+      group_by: [namespace, pod]
+
+    # OTel Collector pipeline health
+    - name: otel_collector_queue_size
+      query: max(otelcol_exporter_queue_size) by (service_name)
+      group_by: [service_name]
+
+    # Karpenter scheduling
+    - name: karpenter_scheduling_duration
+      query: histogram_quantile(0.99, sum(rate(karpenter_provisioner_scheduling_duration_seconds_bucket[5m])) by (le))
+      group_by: []
 
   log_patterns:
     - name: error_rate_by_namespace
@@ -107,7 +199,7 @@ enrichment:
   enabled: true
   cache_ttl: 30s
   query_timeout: 5s
-  max_concurrent: 5
+  max_concurrent: 2
 
   pod_bundle:
     - name: cpu_ratio

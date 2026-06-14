@@ -1,0 +1,99 @@
+site_name: StaffOps Anomaly Detection
+site_description: Distributed anomaly detection system for Kubernetes clusters
+site_author: StaffOps Team
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - navigation.indexes
+    - navigation.instant
+    - navigation.path
+    - navigation.sections
+    - navigation.top
+    - navigation.tabs
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  language: en
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+      primary: deep purple
+      accent: amber
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to light mode
+      primary: deep purple
+      accent: amber
+
+nav:
+  - Home:
+      - index.md
+      - Roadmap: roadmap.md
+  - Architecture:
+      - architecture/index.md
+      - Components: architecture/components.md
+      - Data Flow: architecture/data-flow.md
+      - Decisions: architecture/decisions.md
+  - Detection:
+      - detection/index.md
+      - Static Thresholds: detection/static.md
+      - Adaptive Z-Score: detection/adaptive.md
+      - Log Patterns: detection/logs.md
+      - ML Integration: detection/ml.md
+      - Correlation: detection/correlation.md
+  - Configuration:
+      - configuration/index.md
+      - Detection Rules: configuration/rules.md
+      - Suppression: configuration/suppression.md
+      - Enrichment: configuration/enrichment.md
+  - Operations:
+      - operations/index.md
+      - Quick Start: operations/quickstart.md
+      - Replay Mode: operations/replay.md
+      - Monitoring: operations/monitoring.md
+      - Troubleshooting: operations/troubleshooting.md
+  - Development:
+      - development/index.md
+      - Building: development/building.md
+      - Testing: development/testing.md
+      - Contributing: development/contributing.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra_javascript:
+  - https://unpkg.com/mermaid/dist/mermaid.min.js

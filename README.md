@@ -140,7 +140,7 @@ All endpoints, cluster names and namespace lists come from env vars. See `.env.e
 - Operational scripts (start, stop, monitor TUIs)
 
 ### 🚧 In Progress
-- [ ] Replay mode for historical data validation — **12/16 tasks** (offline `--replay` CLI functional; see `controller/README.md`)
+- [ ] Replay mode for historical data validation — **complete** (offline `--replay` CLI; see `controller/README.md`)
 
 ### 🔜 Next
 - [ ] Wire ML Forecast (Prophet) into cycle (needs baseline time-series export from Redis)
@@ -148,6 +148,7 @@ All endpoints, cluster names and namespace lists come from env vars. See `.env.e
 - [ ] Remove `--dry-run` and validate real alerts via Alertmanager → Slack
 - [ ] Deploy to cluster (K8s manifests in `deploy/`)
 - [ ] Feedback loop (mark false positives to adjust baselines)
+- [ ] Agent API integration — invoke staffops-chaitops squad on high-confidence anomalies (spec: `.kiro/specs/agent-api-integration/`)
 
 ## Development
 

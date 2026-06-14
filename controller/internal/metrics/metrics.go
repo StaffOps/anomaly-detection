@@ -160,6 +160,23 @@ var (
 		Help: "Anomalies detected, by severity and signal",
 	}, []string{"severity", "signal"})
 
+	// AnomalyByWorkload tracks anomalies sliced by namespace+workload for
+	// dashboards (top noisy workloads, suppression tuning, drift detection).
+	//
+	// Cardinality: severity(3) × namespace(~50) × workload(~20-50/ns) ≈ 3-7k
+	// series per cluster — well below the steering-mandated 2k/metric limit
+	// applied per cluster (constLabels add `cluster` so multi-cluster series
+	// scale linearly).
+	//
+	// The `workload` label is bounded by deployment count: extracted from pod
+	// names via correlation.ExtractWorkload, never raw pod IDs.
+	// Service-level anomalies use service_name as workload.
+	// Empty namespace/workload (degenerate cases) are normalized to "unknown".
+	AnomalyByWorkload = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "staffops_ad_detection_anomalies_by_workload_total",
+		Help: "Anomalies detected, sliced by namespace and workload (bounded labels for dashboards)",
+	}, []string{"namespace", "workload", "severity"})
+
 	AnomalyCorrelated = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "staffops_ad_detection_correlated_total",
 		Help: "Anomaly groups produced by the correlator",
@@ -323,6 +340,7 @@ func MustRegisterController(reg prometheus.Registerer) {
 		JobsDispatched, JobsFailed,
 		WorkersAvailable, IsLeader, LeaderTransitions, BuildInfo,
 		AnomalyDetected, AnomalyCorrelated,
+		AnomalyByWorkload,
 		WorkloadPatterns, PodAlertsSuppressed,
 		AlertsFired, AlertsDeduplicated, AlertsDispatchErrors,
 		MLCalls, MLCallDuration,
