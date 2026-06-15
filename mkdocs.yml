@@ -41,6 +41,10 @@ nav:
       - Components: architecture/components.md
       - Data Flow: architecture/data-flow.md
       - Decisions: architecture/decisions.md
+      - Degradation Model: architecture/degradation-model.md
+      - Threat Model & Limitations: threat-model-and-limitations.md
+      - Evaluation Scorecard: evaluation-scorecard.md
+      - Product Hypothesis (gated): hypothesis-causal-origination.md
   - Detection:
       - detection/index.md
       - Static Thresholds: detection/static.md

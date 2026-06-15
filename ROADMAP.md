@@ -4,6 +4,47 @@ Planned improvements for `staffops-anomaly-detection`. Ordered by priority — i
 
 ---
 
+## Phase 0 — Strategic gates (BLOCKS algorithm work)
+
+Established 2026-06-14 after a four-round adversarial design review. Conclusion: the
+per-series univariate z-score detector is **commodity** (see `docs/architecture/decisions.md`
+Decision 8). Whether there is a defensible product — **causal incident origination for
+.NET/Python/Go** — is a **gated hypothesis** (`docs/hypothesis-causal-origination.md`),
+not yet decided.
+
+**These gates block any detector-core change (Holt-Winters, multivariate, etc.).**
+Swapping the engine without measurement is re-shipping a detector you can't evaluate.
+
+### 🎯 P0.1 — Measurement gate (synthetic fault injection on replay)
+
+Inject synthetic latency/error faults over known-clean replay windows → produces a
+recall lower-bound and FP upper-bound **without** needing labeled historical incidents.
+Infra already exists (replay mode). This is the cheapest, highest-value item and the
+prerequisite for everything algorithmic. **Without numbers, every detector swap is faith.**
+
+### 🎯 P0.2 — Competitive teardown experiment
+
+Time-boxed (days, not a slide): try to reproduce the surviving value as (a)
+`predict_linear` rules in the existing `vmrules.yaml` and (b) a Robusta playbook.
+Ports cheaply → it was config, ship that and stop. Resists → the causal core is found
+empirically. This decides whether there is a product to build at all.
+
+### 🎯 P0.3 — Validate the degradation model
+
+Confirm the causal chains in `docs/architecture/degradation-model.md` against real
+incidents via replay (walk each chain backwards from symptom, check leading→lagging
+ordering). Until done, the model is a written hypothesis, not ground truth.
+
+### 🎯 P0.4 — FDR (Benjamini-Hochberg) over per-cycle series
+
+Independent of which thesis wins: ~400 adaptive series at fixed z>3 ≈ ~1000+ FP/day
+from multiple comparisons alone. Apply FDR control before dispatch. Cheap, attacks the
+largest FP source. **Read as diagnostic**: that the best detector fix is a generic
+statistical correction unrelated to .NET/k8s/trace confirms the value was never in the
+detector.
+
+---
+
 ## Phase 1 — Detection quality & UX
 
 ### ✅ ~~P1.1 — Label-based pivot (anomaly enrichment)~~ — **DONE in controller 0.7.0**
@@ -53,6 +94,37 @@ Mapear como anomalias em um workload se propagam pra outros — request flows, b
 
 **Por que escopo grande**: requer Tempo integration, possível storage de correlation matrices, modelos de causalidade. Fase 3+ provavelmente. Candidato a spec próprio em `.kiro/specs/cross-workload-dependency-mapping/`.
 
+### 🎯 P2.7 — Falco integration (runtime security signal)
+
+Adicionar Falco como **nova fonte de sinal** ao lado de métricas (VM), logs (Loki) e eventos do K8s. Falco detecta comportamento suspeito em runtime via eBPF (syscalls): shell em container, escrita em path sensível, escalação de privilégio, conexão de rede inesperada, mudança de binário. Esses eventos são ortogonais às anomalias de recurso/latência atuais e enriquecem a correlação com contexto de **segurança**.
+
+**Valor**: hoje o controller vê "pod X com CPU/erro anômalo". Com Falco, pode cruzar "pod X anômalo **E** Falco disparou `Terminal shell in container` no mesmo pod no mesmo período" → eleva severidade e muda a natureza do alerta (possível comprometimento, não só saturação).
+
+**Caminho de ingestão** (a decidir no design — respeitar `observability-principles.md`, sem export direto pra backend):
+- **Opção A (preferida)**: Falco → Falcosidekick → saída para sink que o controller consome. Duas sub-opções:
+  - Falco events como **logs** via OTel Collector → Loki, e o controller consulta via LogQL (reusa o pipeline de log rate já existente). Menor acoplamento.
+  - Falcosidekick → webhook/HTTP receiver no controller (`internal/falco/`), tratado como detector `detector="falco"`.
+- **Opção B**: Falco gRPC Outputs API consumida diretamente pelo controller (streaming). Mais acoplado, mais tempo-real.
+
+**Componentes prováveis**:
+- `internal/falco/` — ingestão + normalização de eventos (mapear `priority`/`rule`/`output_fields` para identidade pod/namespace/workload, reusando `correlation.ExtractWorkload`)
+- Correlator passa a aceitar sinal `security` e a cruzar com janela temporal das anomalias existentes
+- Enriquecimento: anotações `falco_rule`, `falco_priority`, link pra investigação
+- Cardinalidade: **nunca** usar `rule`/`output` como label de métrica (alta cardinalidade — ver steering); só severidade/namespace/workload bounded; detalhe vai pra annotations/logs
+
+**Decisões em aberto** (resolver na spec antes de implementar):
+- Falco já está deployado nos clusters alvo? (se não, é pré-req de infra — delegar a `gitops`/`security`)
+- Ingestão via Loki (pull) vs webhook/gRPC (push)?
+- Falco apenas enriquece anomalia existente, ou pode disparar alerta sozinho? (escopo: começar só enriquecendo, evitar duplicar o alerting nativo do Falco)
+
+**Pré-req**: Falco + Falcosidekick deployados no cluster (validar com `gitops`/`security`). Decisão de arquitetura de ingestão antes de codar.
+
+**Effort**: large. Candidato a spec próprio em `.kiro/specs/falco-integration/`.
+
+**Spec**: [`.kiro/specs/falco-integration/`](.kiro/specs/falco-integration/) — requirements + design (4ª fonte de ingestão `Signal="security"`, ingestão Loki-pull default / webhook opt-in, enrich-not-alert v1, janela de correlação assimétrica) + tasks (Phase 0 pré-reqs de infra → core `internal/falco/` → correlator → testes → review sre/security).
+
+**Status**: spec criada (2026-06-14) — bloqueada em Phase 0 (confirmar Falco/Falcosidekick deployados + decisão de ingestão A vs B). SRE/Security review pendente antes de implementar.
+
 ### 🎯 P2.2 — Wire ML Forecast (Prophet)
 
 Client method `Forecast` exists but isn't called. Needs:
@@ -68,6 +140,42 @@ Client method `Forecast` exists but isn't called. Needs:
 Detect if **multiple services in same namespace** are simultaneously anomalous → indicates shared-dependency issue (DB, cache, network).
 
 Aggregate anomalies by namespace, run multivariate on `{count_anomalous_pods, distinct_services_affected, aggregate_severity}`.
+
+### Baseline robustness (from threat-model review, 2026-06-14)
+
+Three independent gaps surfaced by [`docs/threat-model-and-limitations.md`](docs/threat-model-and-limitations.md). They degrade the **reliability** product, not just any future security framing — so they belong here, not in a security-only phase. All three are code-grounded (verified against `internal/baseline/store.go`).
+
+#### 🎯 P2.8 — Workload-identity baseline keying
+
+`baselineKey()` hashes the raw sorted label set. If `pod` is in the labels, the baseline **dies on every pod restart** (pods are cattle, ephemeral UIDs) → cold-start blindness on every rollout. `correlation.ExtractWorkload()` already exists (Deployment/StatefulSet/DaemonSet from pod name) but is used in correlation, **not** in the baseline key.
+
+**Fix**: derive a stable entity key (workload, not pod) for baselining. Normalize the label set through `ExtractWorkload` before hashing; drop `pod`/ephemeral labels from the key.
+
+**Watch-out**: legitimately per-pod signals (e.g. a specific replica leaking) would be smoothed — confirm the workload-level baseline still catches single-replica outliers, or keep a two-tier baseline (workload + per-replica deviation from siblings).
+
+**Effort**: medium. Touches baseline key + warm-up semantics + tests.
+
+#### 🎯 P2.9 — Outlier rejection before baseline update (anti-poisoning)
+
+`Store.Evaluate()` updates EWMA/mean/stddev **unconditionally** on every sample, including anomalous ones. Consequences:
+- **Benign**: a slow organic ramp is absorbed and stops alerting.
+- **Adversarial**: low-and-slow activity drags the baseline until malicious load reads as normal (baseline poisoning).
+
+**Fix**: gate the baseline update — e.g. skip (or down-weight) the update when the sample is already flagged anomalous beyond a hard multiple of stddev; optionally a "frozen baseline" window after a confirmed anomaly.
+
+**Watch-out**: don't freeze so aggressively that genuine regime changes (intentional capacity increase) never re-baseline — pair with a slow-path acceptance after N sustained samples.
+
+**Effort**: small-medium. Localized to `Evaluate()` + tests for the poisoning scenario.
+
+#### 🎯 P2.10 — Absence-of-signal ("dead man's switch") detection
+
+`/readyz` checks the detector's **own** dependencies, not whether an *expected* signal went silent. "This workload always emits N logs/min and stopped" raises nothing today. Misses both adversarial pipeline-blinding and genuine reliability events (a crashed exporter looks like calm).
+
+**Fix**: track expected emission rate per workload/series; alert when a previously-active series goes silent for > threshold. Reuses the baseline store (a series with history that drops to zero samples is the signal).
+
+**Watch-out**: legitimate scale-to-zero (KEDA, cronjobs idle) must not page — needs the same suppression/seasonality awareness as the positive-direction detectors. Cardinality: bound by tracked-series count, same guard as P5.4.
+
+**Effort**: medium. New detector mode + careful FP control.
 
 ---
 

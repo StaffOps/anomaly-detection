@@ -127,3 +127,73 @@ Key architectural decisions and their rationale.
 
 - Local dev: `static_configs.labels` per scrape job in `prometheus.yml`
 - Production: `vmagent externalLabels` on remote_write
+
+---
+
+## Decision 8: The detector is commodity; the product is causal incident origination
+
+**Status**: the *first* half below is a **decision** (proven, code-grounded). The
+*second* half is a **gated hypothesis**, not a decision — it does not become an ADR
+until its kill criteria pass. See `docs/hypothesis-causal-origination.md`.
+
+**Decided (proven)**: per-series univariate z-score over EWMA is **commodity** and
+cannot be the differentiator. Established across four review rounds at code level:
+
+1. The market does point-wise anomaly detection better (burn-rate for anything with an
+   SLO; mature multivariate elsewhere).
+2. The dispatch path is literally Alertmanager (`dispatcher.go` POSTs to
+   `/api/v2/alerts`); the horizontal workload-collapse is replicable with Alertmanager
+   `group_by: [workload]`; enrichment+dedup is what Robusta/Keep already do.
+3. The "exclusive niche" of leading saturation signals (`queue_depth`,
+   `hikaricp_pending`, `heap_growth`) mostly dissolves into one-line `predict_linear`
+   recording rules — saturation toward a known ceiling is *predictable*, not anomalous.
+4. The univariate Z-score also has a severe own-goal: with `ewma_alpha=0.3` the EWMA
+   center *chases the ramp*, so the detector goes blind during the rising edge of an
+   incident — exactly when it matters.
+
+**Consequence**: do not invest in improving the univariate detector as the product.
+Treat it as one commodity input. Generic capabilities (detection, grouping, dispatch,
+enrichment) should be delegated to / consumed from existing tools, not rebuilt.
+
+**Hypothesis (NOT yet decided — gated)**: the defensible product is **causal incident
+origination for the .NET + Python + Go stack** — explaining *what caused* an incident
+and *what it will affect next* (the causal chain), grounded in a per-language
+**degradation model** (`docs/architecture/degradation-model.md`). The candidate
+irreducible moat is the **intra-runtime** causality (e.g. .NET threadpool starvation →
+queue → latency → errors) that edge-level RCA tools (Causely, APM-native RCA) do not
+see.
+
+**Kill criteria for the hypothesis** (must pass *before* it becomes an ADR or before
+building on it):
+
+1. **Measurement gate** — synthetic fault injection over replay produces a real
+   recall lower-bound and FP upper-bound. Without numbers, any detector swap is faith.
+2. **Competitive teardown as experiment** (not a slide) — time-boxed attempt to
+   reproduce the surviving value as (a) `predict_linear` rules in the existing
+   `vmrules.yaml` and (b) a Robusta playbook. If it ports cheaply → it was config, and
+   there is no product. If the *causal model* resists fitting into a playbook → the
+   core is found empirically.
+3. **Degradation model validated** — chains in `degradation-model.md` confirmed
+   against real incidents via replay, not just asserted by mechanism.
+
+**Open sub-decisions deferred** (not decided here):
+
+- **Seam**: whether to re-cut the `baseline.Evaluator` interface (currently
+  `Evaluate(series, scalar)` — univariate by construction) to accept a vector for
+  low-dimensional, topology-aware multivariate detection — or freeze the detector as
+  terminal commodity and build the causal layer above it.
+- **Topology ingestion**: causal/vertical correlation needs service-graph (edge-level)
+  data. **Correction to an earlier assumption**: this is *not* currently ingested —
+  grep confirms zero `service_graph` references in the repo. The system ingests
+  node-level RED (`spanmetrics ... by (service_name)`), not edges. So topology is a
+  *new ingestion path*, not a fized wire.
+- **FDR (Benjamini-Hochberg)**: worth doing early regardless of which thesis wins
+  (cheap, attacks the largest FP source — ~400 series at fixed z>3). Read as a
+  *diagnostic*: that the best concrete detector improvement is a generic statistical
+  correction unrelated to .NET/k8s/trace is itself evidence the value was never in the
+  detector.
+
+**When the decided half would be wrong**: if a measurement (gate 1) showed the
+univariate detector achieving competitive precision/recall on the curated golden
+signals — then "commodity" would be too harsh. Considered unlikely given the
+multiple-comparisons math, but it is the falsifier.
