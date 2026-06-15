@@ -22,12 +22,16 @@ recall lower-bound and FP upper-bound **without** needing labeled historical inc
 Infra already exists (replay mode). This is the cheapest, highest-value item and the
 prerequisite for everything algorithmic. **Without numbers, every detector swap is faith.**
 
+**Spec**: [`.kiro/specs/synthetic-injection/`](.kiro/specs/synthetic-injection/) — spec ready, not executed.
+
 ### 🎯 P0.2 — Competitive teardown experiment
 
 Time-boxed (days, not a slide): try to reproduce the surviving value as (a)
 `predict_linear` rules in the existing `vmrules.yaml` and (b) a Robusta playbook.
 Ports cheaply → it was config, ship that and stop. Resists → the causal core is found
 empirically. This decides whether there is a product to build at all.
+
+**Spec**: [`.kiro/specs/competitive-teardown/`](.kiro/specs/competitive-teardown/) — spec ready, not executed.
 
 ### 🎯 P0.3 — Validate the degradation model
 
