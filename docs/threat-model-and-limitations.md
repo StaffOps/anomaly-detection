@@ -202,16 +202,108 @@ These limitations map to concrete roadmap items (see `ROADMAP.md`):
   independent of any security goal.
 - **Falco integration** (closes part of the source ceiling) — P2.7,
   `.kiro/specs/falco-integration/`. Enrichment-only in v1.
-- **Least-privilege RBAC + IRSA** (weakness #6) — P5.2.
+- **Least-privilege RBAC + IRSA** (weakness #6) — P5.2, plus the broader hardening
+  bundle in [Phase 5 Pre-Reqs](../ROADMAP.md#phase-5-pre-reqs--production-hardening-blocks-phase-5-deploy)
+  (PH.1, PH.21, PH.22, PH.23).
 - **Ground-truth eval set on replay** — replay-mode V2.
+
+---
+
+## Additional concerns from independent security review (2026-06-16)
+
+The original document was written by the orchestrator reading source. A subsequent
+review by the `security` specialist subagent corroborated all 11 scorecard axes
+**and** surfaced three concerns that the original framing missed. They are not
+weaknesses of the algorithm — they are weaknesses of the **detector as a deployed
+system**, and they belong here because each one would be exploitable without anyone
+touching the EWMA math.
+
+### A. Supply chain of the detector itself
+
+The original threat-model discusses data-plane attacks (poisoning the baseline,
+blinding the pipeline) but **does not address attacks on the detector's own image
+and dependencies**. Concrete gaps observed in `controller/Dockerfile`,
+`ml/Dockerfile`, and `go.mod`:
+
+- Base images are `golang:1.22-alpine`, `alpine:3.20`, `python:3.11-slim` — **not
+  golden apko-built and not cosign-signed**. A compromised upstream image (or its
+  registry) ships malicious code into every replica.
+- `go.mod` imports `github.com/karlipegomes/staffops-otel-libs/go` at a
+  pseudo-version — a personal GitHub repository. Single account compromise →
+  every consumer inherits the payload. There is no Harbor proxy mitigation
+  because the dep is not in the org repo.
+- The ML image keeps `gcc/g++` in the runtime layer (single-stage). A compromised
+  pod has an in-container compiler — convenient for staging additional payloads.
+- `grpcio==1.62.1` carries CVE-2024-7246 (DoS, fixed in 1.63). No
+  vulnerability-scanning gate exists.
+
+**Mitigation**: items PH.3 (golden bases + cosign), PH.5 (multi-stage ML), PH.13
+(org rename for the Go dep), PH.24 (grpcio bump) in Phase 5 Pre-Reqs.
+
+### B. Redis as a single point of failure for state integrity
+
+`weakness #2` covers slow-and-low EWMA poisoning. It does **not** cover the more
+direct attack: **flushing Redis**. With `REDIS_PASSWORD=""` (the default in
+`config.yaml` and `.env.example`) and the namespace open to any pod, a foothold
+anywhere in `monitoring` namespace can:
+
+- `FLUSHDB` → wipe all baselines → mass cold-start blindness across every
+  monitored series for `warm_up_samples` (60) cycles ≈ 30 minutes of pipeline
+  blindness.
+- Overwrite individual baseline keys to set arbitrary mean/stddev → tailored
+  blindness on chosen workloads.
+- Manipulate dedup TTLs to suppress alerts that *would have* fired.
+
+This is mass blindness via state tampering, achievable without any algorithm
+knowledge.
+
+**Mitigation**: PH.4 (Redis AUTH + file-mounted secret), PH.21 (NetworkPolicy
+limiting Redis ingress to controller+worker), and a roadmap candidate not yet
+written: integrity protection (HMAC on baseline values, anomaly on impossible
+state transitions).
+
+### C. gRPC plaintext between controller, worker, and ML
+
+The controller↔worker and controller↔ML paths are gRPC over plaintext. The
+manifests label the namespace `istio.io/dataplane-mode: ambient`, which would
+provide ztunnel mTLS — but:
+
+- Ambient enrollment is unverified in deploy. If the namespace is not actually in
+  the mesh, the gRPC traffic is plaintext on the cluster network.
+- The OTel SDK is wired with gRPC interceptors but no client auth (no JWT, no
+  mTLS handshake at the application layer) — the security model is entirely
+  delegated to the network plane.
+
+**Mitigation**: explicit verification that ambient is active in the target
+namespace; otherwise add `Istio AuthorizationPolicy` or an application-level auth
+token. Tracked under broader Phase 5 Pre-Reqs deploy verification (not a separate
+PH.x — it is part of validating the deploy itself).
+
+### D. Roadmap items P2.8 / P2.9 / P2.10 — coverage validation
+
+The independent reviewer agreed that the three roadmap items address weaknesses
+#1, #2, and #3 with adequate scope. Two refinements were noted:
+
+- **P2.9** should specify whether the frozen-baseline window persists across
+  controller restarts (Redis key TTL semantics). Otherwise an attacker times
+  their drift across known restart windows.
+- **P2.10** should define what "expected cadence" means concretely — last-seen
+  timestamp, declared SLO, or both. Without precision the detector reads benign
+  KEDA scale-to-zero as silence.
+
+These are spec-level refinements when each item is implemented, not new roadmap
+entries.
 
 ---
 
 ## A note on how this document was produced
 
-This was written by the orchestrator reading the source directly, **not** via the
-specialist subagent fan-out (the subagent tool is recorded as non-functional in this
-environment — see `ROADMAP.md` decision log, 2026-05-30). The MITRE mapping and the
-poisoning/silence findings would benefit from independent review by `security` and
-`sre` specialists once that tooling is available; treat the scorecard as a
-first-pass, code-grounded baseline, not an audited verdict.
+This was originally written by the orchestrator reading the source directly. On
+**2026-06-16** the `security` specialist subagent reviewed it independently. The
+review corroborated all 11 scorecard axes (no inflation detected) and surfaced the
+three additional concerns documented in
+[Additional concerns from independent security review](#additional-concerns-from-independent-security-review-2026-06-16)
+above — supply chain of the detector itself, Redis state integrity, and gRPC
+plaintext between components. Treat the scorecard as a code-grounded baseline that
+has now received one independent pass; further review by `sre` and a real red team
+remains valuable but is out of scope for the current pre-deploy phase.

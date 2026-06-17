@@ -138,15 +138,29 @@ All endpoints, cluster names and namespace lists come from env vars. See `.env.e
 - docker-compose stack (controller + 3 workers + redis + ML)
 - Monorepo consolidation (controller + ml in single repo)
 - Operational scripts (start, stop, monitor TUIs)
+- Replay mode for historical data validation (CLI complete; smoke-tested)
 
-### 🚧 In Progress
-- [ ] Replay mode for historical data validation — **complete** (offline `--replay` CLI; see `controller/README.md`)
+### 🚧 Pre-production blockers (must clear before any cluster deploy)
 
-### 🔜 Next
+**Established 2026-06-16 by multi-specialist evaluation.** Two parallel tracks:
+
+1. **Phase 0 — Strategic gates** (decides if there is a product at all):
+   `synthetic-injection`, `competitive-teardown`, degradation-model validation. See
+   [`ROADMAP.md` → Phase 0](./ROADMAP.md#phase-0--strategic-gates-blocks-algorithm-work).
+
+2. **Phase 5 Pre-Reqs — Production Hardening** (mechanical, no architecture):
+   25 tracked items (PH.1–PH.25) covering Kyverno admission hard-fails (no
+   `securityContext`, `:latest` tag, non-golden bases, Redis no-auth, ML compiler
+   in prod image, missing labels, no `preStop`, no ML manifest), test & CI gates
+   (Go 35 % → ≥ 90 %, ML 0 % → ≥ 90 %, failing test, missing CI), Helm + ArgoCD
+   migration, NetworkPolicy + IRSA, dependency hygiene. See
+   [`ROADMAP.md` → Phase 5 Pre-Reqs](./ROADMAP.md#phase-5-pre-reqs--production-hardening-blocks-phase-5-deploy)
+   and the spec at [`.kiro/specs/production-hardening/`](./.kiro/specs/production-hardening/).
+
+### 🔜 Next (after blockers)
 - [ ] Wire ML Forecast (Prophet) into cycle (needs baseline time-series export from Redis)
-- [ ] K8s Lease leader election (multi-replica controller HA)
 - [ ] Remove `--dry-run` and validate real alerts via Alertmanager → Slack
-- [ ] Deploy to cluster (K8s manifests in `deploy/`)
+- [ ] Deploy to cluster (K8s manifests in `controller/deploy/`)
 - [ ] Feedback loop (mark false positives to adjust baselines)
 - [ ] Agent API integration — invoke staffops-chaitops squad on high-confidence anomalies (spec: `.kiro/specs/agent-api-integration/`)
 

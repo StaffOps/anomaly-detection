@@ -281,9 +281,96 @@ When an OTel Collector is deployed alongside (P5.2), logs gain `traceID` enablin
 
 ---
 
+## Phase 5 Pre-Reqs — Production Hardening (BLOCKS Phase 5 deploy)
+
+Established 2026-06-16 after multi-specialist evaluation (`dev`, `security`, `gitops`,
+`anomaly-detection` reviewed in parallel). Conclusion: the project is intellectually
+mature (the threat-model and Decision 8 stand up to independent review) and the
+algorithmic backlog is correctly framed by Phase 0 — but **production engineering is
+behind** the steering gates. The items below are **template work, not architecture**;
+all eleven block any cluster deploy and have nothing to do with the Phase 0 strategic
+gates. They can be executed in parallel with Phase 0.
+
+> Why a dedicated section: the original roadmap implied this was scoped inside P5.2
+> ("Deploy to cluster"), but the evaluation surfaced eleven **distinct hard-fails**
+> that would each be rejected by Kyverno admission. Bundling them inside one bullet
+> hid both the blast radius and the effort.
+
+Spec: [`.kiro/specs/production-hardening/`](.kiro/specs/production-hardening/) —
+requirements + tasks. No `design.md` because there is no architectural decision; this
+is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-security.md`,
+`12-factor-app.md`, `dev-environment.md`).
+
+### Hard-fails (Kyverno admission blockers)
+
+| # | Item | Source review |
+|---|------|---------------|
+| PH.1 | Add `securityContext` (runAsNonRoot, readOnlyRootFilesystem, drop:[ALL], allowPrivilegeEscalation:false) to controller, worker, redis, ML pods | security, gitops |
+| PH.2 | Replace `:latest` tag and `REPLACE_ME_REGISTRY` placeholder with CI-driven SHA tags pulled through Harbor proxy | security, gitops |
+| PH.3 | Migrate base images to BDC golden (apko-built, cosign-signed): `golang`, `alpine`, `redis`, `python` | security |
+| PH.4 | Enable Redis AUTH; mount password as file-secret via External Secrets Operator (12-factor IV) | security |
+| PH.5 | Multi-stage ML Dockerfile — drop `gcc`/`g++` from runtime image | security |
+| PH.6 | Add mandatory labels (`CostCenter`, `Environment`, `app.kubernetes.io/version`) to all pod templates | gitops, security |
+| PH.7 | Add `preStop` hook (`sleep 5`) and `terminationGracePeriodSeconds: 30` to all deployments | gitops |
+| PH.8 | Create K8s manifest for the ML service (today exists only in `docker-compose`) | gitops |
+
+### Test & CI gates (steering `dev-environment.md` ≥90%)
+
+| # | Item | Source review |
+|---|------|---------------|
+| PH.9 | Bring Go controller coverage from **35% → ≥90%**: tests for `dispatcher`, `correlator`, `enrichment`, `suppression`, `redis`, `ratelimit`, `baseline`, `ml/client`, `config/Load`, `config/watcher` | dev |
+| PH.10 | Bring ML service coverage from **0% → ≥90%**: `ml/tests/` is currently empty (`__init__.py` 0 bytes). Need unit + gRPC integration tests for forecaster, multivariate, server | dev |
+| PH.11 | Fix the failing `replay/window_test.go` `TestParseWindow_MixedDurationAndTimestamp` — build is currently red | dev |
+| PH.12 | Add `.gitlab-ci.yml` with `unit-test → build-dev → demo` stages enforcing the `≥90%` gate (`go test -coverprofile`, `pytest --cov-fail-under=90`) | dev |
+
+### Org-neutrality completion (continuation of 2026-05-30 rename)
+
+| # | Item | Source review |
+|---|------|---------------|
+| PH.13 | Move `github.com/karlipegomes/staffops-otel-libs/go` (personal repo, pseudo-version) to org repo with proper release tagging — `karli` username in import path is the same anti-pattern as the earlier `bigdatacorp` rename | security, dev |
+| PH.14 | Move BDC-specific URLs out of `controller/deploy/redis.yaml` ConfigMap (`vm-cluster-vmselect.monitoring:8481`, `loki-gateway.monitoring:80`) into Helm values | gitops |
+
+### Helm chart + GitOps (move from raw YAML to ApplicationSet)
+
+Currently rated **GitOps maturity 1.5/5**. To unblock cluster deploy:
+
+| # | Item | Source review |
+|---|------|---------------|
+| PH.15 | Create `helm-charts/anomaly-detection/` with `templates/` + `values.yaml` + per-env overrides; covers controller, worker, redis (with PVC), ML, RBAC, VMRule, VMServiceScrape, PDB | gitops |
+| PH.16 | Create ArgoCD `ApplicationSet` (matrix: cluster × env) targeting the Helm chart | gitops |
+| PH.17 | Add `argocd.argoproj.io/sync-wave` annotations so Redis comes up before controller/worker | gitops |
+| PH.18 | Add `PodDisruptionBudget` (`minAvailable: 1` controller leader, `minAvailable: 2` workers) | gitops |
+| PH.19 | Replace `prometheus.io/scrape` annotations with `VMServiceScrape` CRDs | gitops |
+| PH.20 | Remove explicit CPU limits from controller/worker (ScaleOps manages; throttling risk on the 60s detection cycle is real) | gitops |
+
+### Network & secrets
+
+| # | Item | Source review |
+|---|------|---------------|
+| PH.21 | Add `NetworkPolicy`: redis ← only controller+worker; worker gRPC ← only controller; ML gRPC ← only controller | security |
+| PH.22 | Pre-provision a zero-permission IRSA role for the controller ServiceAccount (`eks.amazonaws.com/role-arn` annotation). Scoped policies added later when ML S3 model storage lands | security, gitops |
+| PH.23 | Worker RBAC: drop `events list/watch` (only the controller uses `EventWatcher`; this is a copy-paste from controller RBAC) | security |
+
+### Dependency hygiene
+
+| # | Item | Source review |
+|---|------|---------------|
+| PH.24 | Bump `grpcio` 1.62.1 → 1.65.x (CVE-2024-7246 DoS, fixed in 1.63) | security |
+| PH.25 | Resolve duplicate dependency pinning in `ml/Dockerfile` (versions hardcoded in `RUN pip install` AND `pyproject.toml` — drift risk) | dev, security |
+
+**Effort estimate**: 1-2 sprints focused work. None of these are research — they are
+mechanical application of existing steering. They can be parallelized with Phase 0
+(strategic gates) since the two paths don't conflict.
+
+---
+
 ## Phase 5 — Cluster readiness (was Phase 4)
 
 Pré-requisito: ~~P4.A.1 a P4.A.4~~ ✅ all done. P4.A.5 (OTel SDK) deferred to P6, não bloqueia.
+
+**Additional pre-req added 2026-06-16**: ALL items in [Phase 5 Pre-Reqs](#phase-5-pre-reqs--production-hardening-blocks-phase-5-deploy)
+above. P5.2 cannot proceed until those land — Kyverno admission alone rejects the
+current manifests on at least 6 controls.
 
 ### ✅ ~~P5.1 — K8s Lease leader election~~ — **DONE**
 
@@ -424,3 +511,15 @@ Single consolidated milestone covering a day of iteration. See `CHANGELOG.md` fo
 - **2026-05-30**: Subagent tool (Kiro CLI parallel execution) verified non-functional in this environment (3 consecutive `No result` returns including minimal `summary`-only ping). Falling back to serial implementation by main agent. Will retry when environment changes.
 - **2026-05-30**: `eks_cluster` BDC-specific label removed from app code (was added briefly during P4.A.3, then reverted). Per `observability-principles.md` steering: app emits only `service.name` (here, `cluster`); environment-specific labels (`eks_cluster`, `environment`, `team`, `region`) belong at the scrape layer. Implemented via `static_configs.labels` per scrape job in `scripts/observability/prometheus.yml` for local dev; production uses `vmagent externalLabels`. Documented in `controller/README.md` "Multi-cluster labels" section. App stays org-agnostic — same as the `bigdatacorp` rename earlier.
 - **2026-05-30**: Created `code-review` subagent — rigorous quality-gate persona that reviews diffs against 7 gates (correctness, steering, idiomatic, readability, tests, performance, security). Does not implement; only reviews. Total subagent count now 10. Subagent tool spawning still broken in this env, but main agent can adopt the persona by reading the prompt directly.
+- **2026-06-16**: Multi-specialist evaluation executed (`dev`, `security`, `gitops`,
+  `anomaly-detection` in parallel via the now-functional subagent tool). Findings:
+  GitOps maturity 1.5/5; Go controller coverage **35%** vs steering gate **≥90%**;
+  ML service coverage **0%** (`ml/tests/` empty); 5 Kyverno hard-fails on the deploy
+  manifests (no securityContext, `:latest` tag, redis no auth, ML compiler in prod
+  image, non-golden bases); Threat-model scorecard corroborated 11/11 axes (7/22 total)
+  by independent security review; `anomaly-detection` reviewer reaffirmed Decision 8
+  (detector is commodity) and recommended P0.2 competitive teardown before any further
+  algorithmic investment. Result: created **Phase 5 Pre-Reqs** section above (PH.1–PH.25)
+  capturing the eleven hard-fails as explicit blockers, and `.kiro/specs/production-hardening/`
+  spec to track execution. The original P5.2 ("Deploy to cluster") was the bullet that
+  hid all this — making it explicit prevents the same compression in the next pass.

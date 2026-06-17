@@ -10,6 +10,14 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
 
+### docs
+
+**Added — Multi-specialist evaluation (2026-06-16)**
+- Independent review by `dev`, `security`, `gitops`, `anomaly-detection` subagents in parallel.
+- ROADMAP `Phase 5 Pre-Reqs (Production Hardening)` section added with 25 tracked items (PH.1–PH.25) covering: Kyverno admission hard-fails (no securityContext, `:latest` tag, non-golden bases, Redis no auth, ML compiler in prod image, missing labels, no preStop, no ML manifest), test & CI gates (Go 35 % → ≥ 90 %, ML 0 % → ≥ 90 %, failing test, missing CI), org-neutrality completion (`karlipegomes/staffops-otel-libs` rename, BDC URLs out of in-repo ConfigMap), Helm + ArgoCD migration, NetworkPolicy + IRSA + worker RBAC trim, dependency hygiene (`grpcio` CVE-2024-7246).
+- New spec `.kiro/specs/production-hardening/` (requirements + tasks; no `design.md` — pure template work).
+- `docs/threat-model-and-limitations.md` extended with three concerns surfaced by independent security review (supply chain of the detector itself, Redis state-integrity tampering, gRPC plaintext between components) and refinements to P2.8/P2.9/P2.10 scope.
+
 ### controller
 
 **Added — OTel SDK integration (P4.A.5)**
