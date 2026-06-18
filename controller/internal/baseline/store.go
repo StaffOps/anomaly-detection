@@ -12,7 +12,6 @@ import (
 
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
-	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 )
 
 // Stats holds the baseline statistics for a single series.
@@ -48,16 +47,23 @@ type Evaluator interface {
 	Evaluate(ctx context.Context, metric string, labels map[string]string, value float64) (*Result, error)
 }
 
+// hashStore is the minimal Redis interface needed for baseline persistence.
+// Extracted as an interface so tests can substitute a fake without a real Redis.
+type hashStore interface {
+	HSet(ctx context.Context, key string, values map[string]interface{}) error
+	HGetAll(ctx context.Context, key string) (map[string]string, error)
+}
+
 // Store manages baselines in Redis.
 type Store struct {
-	redis  *redisclient.Client
-	cfg    config.Baseline
+	redis hashStore
+	cfg   config.Baseline
 }
 
 // Compile-time check that Store satisfies Evaluator.
 var _ Evaluator = (*Store)(nil)
 
-func NewStore(redis *redisclient.Client, cfg config.Baseline) *Store {
+func NewStore(redis hashStore, cfg config.Baseline) *Store {
 	return &Store{redis: redis, cfg: cfg}
 }
 

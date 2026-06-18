@@ -8,13 +8,12 @@ import (
 	"time"
 
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
-	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 )
 
 // SeasonalProfile tracks per-hour-of-day, per-day-of-week baselines.
 type SeasonalProfile struct {
-	redis   *redisclient.Client
-	cfg     config.Baseline
+	redis hashStore
+	cfg   config.Baseline
 }
 
 // SeasonalStats holds the seasonal baseline for a specific time slot.
@@ -24,7 +23,7 @@ type SeasonalStats struct {
 	Samples int64
 }
 
-func NewSeasonalProfile(redis *redisclient.Client, cfg config.Baseline) *SeasonalProfile {
+func NewSeasonalProfile(redis hashStore, cfg config.Baseline) *SeasonalProfile {
 	return &SeasonalProfile{redis: redis, cfg: cfg}
 }
 

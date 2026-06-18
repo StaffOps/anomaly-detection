@@ -20,8 +20,23 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
-	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 )
+
+// vmQuerier is the minimal interface for instant PromQL queries (satisfied by *ingestion.MetricsPoller).
+type vmQuerier interface {
+	Query(ctx context.Context, query string) ([]ingestion.Sample, error)
+}
+
+// lokiQuerier is the minimal interface for instant LogQL metric queries (satisfied by *ingestion.LogsPoller).
+type lokiQuerier interface {
+	QueryMetric(ctx context.Context, query string) ([]ingestion.Sample, error)
+}
+
+// enrichCache is the minimal Redis interface for caching enrichment bundles.
+type enrichCache interface {
+	Get(ctx context.Context, key string) (string, error)
+	SetWithTTL(ctx context.Context, key, value string, ttl time.Duration) error
+}
 
 // Result is the outcome of one enrichment query.
 type Result struct {
@@ -34,27 +49,27 @@ type Result struct {
 
 // Bundle is the full enrichment context for an alert.
 type Bundle struct {
-	Identity Identity  `json:"identity"`
-	Results  []Result  `json:"results"`
-	Cached   bool      `json:"cached"`
+	Identity Identity      `json:"identity"`
+	Results  []Result      `json:"results"`
+	Cached   bool          `json:"cached"`
 	Took     time.Duration `json:"took_ms"`
 }
 
 // Engine runs enrichment bundles when alerts fire.
 type Engine struct {
-	cfg     config.Enrichment
-	vmPoll  *ingestion.MetricsPoller
-	lokiPoll *ingestion.LogsPoller
-	redis   *redisclient.Client
+	cfg      config.Enrichment
+	vmPoll   vmQuerier
+	lokiPoll lokiQuerier
+	redis    enrichCache
 }
 
-// NewEngine constructs an Engine. Loki poller may be nil if not configured.
-func NewEngine(cfg config.Enrichment, vm *ingestion.MetricsPoller, loki *ingestion.LogsPoller, r *redisclient.Client) *Engine {
+// NewEngine constructs an Engine. Loki poller and redis may be nil if not configured.
+func NewEngine(cfg config.Enrichment, vm vmQuerier, loki lokiQuerier, r enrichCache) *Engine {
 	return &Engine{
-		cfg:     cfg,
-		vmPoll:  vm,
+		cfg:      cfg,
+		vmPoll:   vm,
 		lokiPoll: loki,
-		redis:   r,
+		redis:    r,
 	}
 }
 

@@ -60,10 +60,11 @@ func TestParseWindow_AbsoluteTimestamps(t *testing.T) {
 }
 
 func TestParseWindow_MixedDurationAndTimestamp(t *testing.T) {
-	// from absolute, to relative
-	_, _, err := ParseWindow("2026-05-29T00:00:00Z", "1h", 0)
-	if err != nil && !strings.Contains(err.Error(), "in the future") {
-		t.Errorf("unexpected error for mixed input: %v", err)
+	// from absolute (4h ago), to relative (1h ago) — valid 3h window > MinWindow (2.5h)
+	from := time.Now().UTC().Add(-4 * time.Hour).Format(time.RFC3339)
+	_, _, err := ParseWindow(from, "1h", 0)
+	if err != nil {
+		t.Errorf("unexpected error for mixed absolute-from + relative-to: %v", err)
 	}
 }
 

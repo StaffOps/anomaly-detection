@@ -13,7 +13,6 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/detection"
 	"github.com/staffops/staffops-anomaly-detection/internal/enrichment"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
-	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 )
 
 // Enricher is the contract the correlator uses to fetch enrichment bundles.
@@ -31,6 +30,13 @@ const (
 	KindWorkload Kind = "workload"
 )
 
+// dedupStore is the minimal Redis interface needed for deduplication.
+// Extracted as an interface so tests can substitute a fake without a real Redis.
+type dedupStore interface {
+	Exists(ctx context.Context, key string) (bool, error)
+	SetWithTTL(ctx context.Context, key, value string, ttl time.Duration) error
+}
+
 // Correlator groups anomalies by workload within a time window,
 // deduplicates via Redis TTL, and escalates severity.
 //
@@ -45,11 +51,11 @@ const (
 //
 // The pod->workload mapping is derived via regex on pod names (see workload.go).
 type Correlator struct {
-	redis            *redisclient.Client
-	enricher         Enricher
-	window           time.Duration
-	cooldown         time.Duration
-	workloadMinPods  int
+	redis           dedupStore
+	enricher        Enricher
+	window          time.Duration
+	cooldown        time.Duration
+	workloadMinPods int
 
 	mu      sync.Mutex
 	pending map[string]*group // key: namespace/pod
@@ -89,7 +95,7 @@ type MLDetection struct {
 
 // NewCorrelator builds a Correlator. Pass enricher = nil to disable enrichment.
 // workloadMinPods sets the threshold for workload-pattern detection (≥3 typical).
-func NewCorrelator(redis *redisclient.Client, enricher Enricher, window, cooldown time.Duration, workloadMinPods int) *Correlator {
+func NewCorrelator(redis dedupStore, enricher Enricher, window, cooldown time.Duration, workloadMinPods int) *Correlator {
 	if workloadMinPods < 2 {
 		workloadMinPods = 3 // sane default
 	}
