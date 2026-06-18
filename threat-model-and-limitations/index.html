@@ -1,0 +1,2945 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Distributed anomaly detection for Kubernetes clusters">
+      
+      
+      
+        <link rel="canonical" href="https://staffops.github.io/staffops-anomaly-detection/threat-model-and-limitations/">
+      
+      
+        <link rel="prev" href="../architecture/degradation-model/">
+      
+      
+        <link rel="next" href="../evaluation-scorecard/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Threat Model & Limitations - Anomaly Detection — StaffOps</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#threat-model-limitations" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Anomaly Detection — StaffOps" class="md-header__button md-logo" aria-label="Anomaly Detection — StaffOps" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Anomaly Detection — StaffOps
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Threat Model & Limitations
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StaffOps/staffops-anomaly-detection" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StaffOps/anomaly-detection
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href=".." class="md-tabs__link">
+          
+  
+  
+    
+  
+  Home
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../detection/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Detection
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../development/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Deploy
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/helm/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Anomaly Detection — StaffOps" class="md-nav__button md-logo" aria-label="Anomaly Detection — StaffOps" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Anomaly Detection — StaffOps
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StaffOps/staffops-anomaly-detection" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StaffOps/anomaly-detection
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href=".." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_1" id="__nav_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Home
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../architecture/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/components/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Components
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/data-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/decisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/degradation-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Degradation Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model & Limitations
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model & Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-system-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this system is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-system-is-structurally-incapable-of-seeing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this system is structurally incapable of seeing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mitre-attck-for-containers-coverage-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MITRE ATT&amp;CK for Containers — coverage map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-weaknesses-within-the-current-sre-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known weaknesses within the current (SRE) scope
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known weaknesses within the current (SRE) scope">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-baseline-is-keyed-on-raw-labels-not-workload-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Baseline is keyed on raw labels, not workload identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-ewma-baseline-poisoning-low-and-slow-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. EWMA baseline poisoning (low-and-slow drift)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-no-absence-of-signal-dead-mans-switch-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. No absence-of-signal ("dead man's switch") detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-no-source-confidence-tiering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. No source-confidence tiering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-no-clock-skew-handling-in-correlation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. No clock-skew handling in correlation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-the-detector-is-a-cluster-wide-read-attack-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The detector is a cluster-wide-read attack surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does-not-do-on-purpose-these-are-strengths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it does not do, on purpose (these are strengths)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ground-truth-how-we-know-if-it-works-we-mostly-dont-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ground truth: how we know if it works (we mostly don't, yet)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluation-scorecard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluation scorecard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roadmap-implications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Roadmap implications
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#additional-concerns-from-independent-security-review-2026-06-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additional concerns from independent security review (2026-06-16)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Additional concerns from independent security review (2026-06-16)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-supply-chain-of-the-detector-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A. Supply chain of the detector itself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-redis-as-a-single-point-of-failure-for-state-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B. Redis as a single point of failure for state integrity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-grpc-plaintext-between-controller-worker-and-ml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C. gRPC plaintext between controller, worker, and ML
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-roadmap-items-p28-p29-p210-coverage-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D. Roadmap items P2.8 / P2.9 / P2.10 — coverage validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluation-scorecard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation Scorecard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hypothesis-causal-origination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Product Hypothesis (gated)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../detection/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detection
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Detection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../detection/static/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Static Thresholds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../detection/adaptive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adaptive Z-Score
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../detection/logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Log Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../detection/ml/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../detection/correlation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correlation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../configuration/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detection Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/suppression/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Suppression
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/enrichment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enrichment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/replay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Replay Mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../development/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/building/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploy
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Deploy
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/helm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helm Values
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/alert-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alert Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-system-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this system is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-system-is-structurally-incapable-of-seeing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this system is structurally incapable of seeing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mitre-attck-for-containers-coverage-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MITRE ATT&amp;CK for Containers — coverage map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-weaknesses-within-the-current-sre-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known weaknesses within the current (SRE) scope
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known weaknesses within the current (SRE) scope">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-baseline-is-keyed-on-raw-labels-not-workload-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Baseline is keyed on raw labels, not workload identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-ewma-baseline-poisoning-low-and-slow-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. EWMA baseline poisoning (low-and-slow drift)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-no-absence-of-signal-dead-mans-switch-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. No absence-of-signal ("dead man's switch") detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-no-source-confidence-tiering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. No source-confidence tiering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-no-clock-skew-handling-in-correlation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. No clock-skew handling in correlation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-the-detector-is-a-cluster-wide-read-attack-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The detector is a cluster-wide-read attack surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does-not-do-on-purpose-these-are-strengths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it does not do, on purpose (these are strengths)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ground-truth-how-we-know-if-it-works-we-mostly-dont-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ground truth: how we know if it works (we mostly don't, yet)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluation-scorecard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluation scorecard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roadmap-implications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Roadmap implications
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#additional-concerns-from-independent-security-review-2026-06-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additional concerns from independent security review (2026-06-16)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Additional concerns from independent security review (2026-06-16)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-supply-chain-of-the-detector-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A. Supply chain of the detector itself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-redis-as-a-single-point-of-failure-for-state-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B. Redis as a single point of failure for state integrity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-grpc-plaintext-between-controller-worker-and-ml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C. gRPC plaintext between controller, worker, and ML
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-roadmap-items-p28-p29-p210-coverage-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D. Roadmap items P2.8 / P2.9 / P2.10 — coverage validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="threat-model-limitations">Threat Model &amp; Limitations<a class="headerlink" href="#threat-model-limitations" title="Permanent link">&para;</a></h1>
+<p>This document states <strong>what this system can and cannot see</strong>, honestly. It exists
+because "anomaly detection" with no threat model is a science fair project — and
+because anyone evaluating this system deserves to know its structural blind spots
+before trusting it.</p>
+<blockquote>
+<p><strong>One-line classification</strong>: this is a <strong>reliability anomaly detector</strong> (SRE
+tooling), <strong>not</strong> a runtime security product. It detects workloads deviating from
+their historical baseline. It does <strong>not</strong> detect adversaries, and several of its
+mechanisms are defeatable by an attacker who knows they exist.</p>
+</blockquote>
+<p>All claims below were verified against the source (<code>internal/baseline/store.go</code>,
+<code>internal/baseline/seasonal.go</code>, <code>internal/detection/</code>, <code>internal/ingestion/</code>,
+<code>internal/correlation/</code>, <code>internal/suppression/</code>, <code>internal/readiness/</code>) as of
+controller 0.7.0. Where a capability does not exist, this document says so rather
+than implying it.</p>
+<hr />
+<h2 id="what-this-system-is">What this system is<a class="headerlink" href="#what-this-system-is" title="Permanent link">&para;</a></h2>
+<p>A distributed detector that ingests <strong>three signals</strong> today and flags series that
+deviate from a learned per-series baseline:</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Source</th>
+<th>Detector</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metrics</code></td>
+<td>VictoriaMetrics (PromQL)</td>
+<td>static thresholds + adaptive EWMA/Z-score</td>
+</tr>
+<tr>
+<td><code>logs</code></td>
+<td>Loki (LogQL)</td>
+<td>log-rate patterns</td>
+</tr>
+<tr>
+<td><code>events</code></td>
+<td>K8s API (<code>Events("").Watch</code>)</td>
+<td>event-reason patterns</td>
+</tr>
+</tbody>
+</table>
+<p>A fourth signal — <code>security</code> via <strong>Falco</strong> — is <strong>specced but not implemented</strong>
+(see <code>.kiro/specs/falco-integration/</code>, roadmap P2.7). Even when shipped, its v1 is
+<strong>enrichment-only</strong>: it annotates an already-existing resource anomaly, it does not
+raise security alerts on its own.</p>
+<p>Audit logs are <strong>not</strong> ingested at all.</p>
+<hr />
+<h2 id="what-this-system-is-structurally-incapable-of-seeing">What this system is structurally incapable of seeing<a class="headerlink" href="#what-this-system-is-structurally-incapable-of-seeing" title="Permanent link">&para;</a></h2>
+<p>These are not bugs to be fixed incrementally — they are <strong>ceilings imposed by the
+signal sources</strong>. No amount of tuning changes them.</p>
+<table>
+<thead>
+<tr>
+<th>Blind spot</th>
+<th>Why it's invisible</th>
+<th>Would require</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Syscall-level activity</td>
+<td>Not a metric/log/event</td>
+<td>eBPF sensor (Falco/Tetragon)</td>
+</tr>
+<tr>
+<td>In-memory-only attacks</td>
+<td>Leaves no persistent signal</td>
+<td>Runtime memory inspection</td>
+</tr>
+<tr>
+<td>Kernel exploits / container escape (clean)</td>
+<td>No resource/log footprint</td>
+<td>Runtime security sensor</td>
+</tr>
+<tr>
+<td>East-west L3/L4 traffic</td>
+<td>Not collected</td>
+<td>CNI flow logs (Cilium/Hubble)</td>
+</tr>
+<tr>
+<td>Sequences of individually-normal actions</td>
+<td>Detector is point-wise, not sequence-aware</td>
+<td>Behavioral/graph model</td>
+</tr>
+<tr>
+<td>Anything the workload chooses not to emit</td>
+<td>Self-reported logs are forgeable</td>
+<td>Control-plane-level source</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bottom line for the security framing</strong>: a competent attacker using only legitimate
+primitives (<code>kubectl exec</code>, a valid service-account token, legitimate API calls) is
+invisible to this system, because each action in isolation is within baseline and the
+detector has no notion of sequence.</p>
+<hr />
+<h2 id="mitre-attck-for-containers-coverage-map">MITRE ATT&amp;CK for Containers — coverage map<a class="headerlink" href="#mitre-attck-for-containers-coverage-map" title="Permanent link">&para;</a></h2>
+<p>Honest mapping. "Partial" means <em>only if the technique happens to move a resource
+metric or log rate enough to breach baseline</em> — i.e. incidental, not designed-for.</p>
+<table>
+<thead>
+<tr>
+<th>Tactic / Technique</th>
+<th>Coverage</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Resource Hijacking (T1496, e.g. cryptomining)</td>
+<td><strong>Partial</strong></td>
+<td>Only via CPU/memory anomaly after the fact; the <em>cause</em> is unseen</td>
+</tr>
+<tr>
+<td>Container Escape (T1611)</td>
+<td><strong>None</strong></td>
+<td>No syscall/runtime visibility</td>
+</tr>
+<tr>
+<td>Valid Accounts / token abuse (T1078)</td>
+<td><strong>None</strong></td>
+<td>No audit ingestion</td>
+</tr>
+<tr>
+<td>Exec into Container (T1609)</td>
+<td><strong>None today</strong></td>
+<td>Falco would see it (P2.7), not current sources</td>
+</tr>
+<tr>
+<td>Lateral Movement</td>
+<td><strong>None</strong></td>
+<td>No east-west visibility</td>
+</tr>
+<tr>
+<td>Exfiltration</td>
+<td><strong>None</strong></td>
+<td>No network/data-flow signal</td>
+</tr>
+<tr>
+<td>Defense Evasion via killing the collector</td>
+<td><strong>None</strong></td>
+<td>No absence-of-signal detection (see below)</td>
+</tr>
+<tr>
+<td>Application-layer DoS surfacing as latency/error spike</td>
+<td><strong>Partial</strong></td>
+<td>Detected as a reliability anomaly, not attributed to an adversary</td>
+</tr>
+</tbody>
+</table>
+<p>This map should be revisited every time a new signal source is added.</p>
+<hr />
+<h2 id="known-weaknesses-within-the-current-sre-scope">Known weaknesses within the current (SRE) scope<a class="headerlink" href="#known-weaknesses-within-the-current-sre-scope" title="Permanent link">&para;</a></h2>
+<p>These matter <strong>even if you never call this a security tool</strong> — they degrade the
+reliability product itself.</p>
+<h3 id="1-baseline-is-keyed-on-raw-labels-not-workload-identity">1. Baseline is keyed on raw labels, not workload identity<a class="headerlink" href="#1-baseline-is-keyed-on-raw-labels-not-workload-identity" title="Permanent link">&para;</a></h3>
+<p><code>baselineKey()</code> hashes the sorted label set. If <code>pod</code> is among the labels, the
+baseline <strong>dies on every pod restart</strong> — pods are cattle, UIDs are ephemeral. The
+codebase <em>has</em> <code>correlation.ExtractWorkload()</code> (Deployment/StatefulSet/DaemonSet from
+pod name), but it is used in <strong>correlation</strong>, not in the <strong>baseline key</strong>. The stable
+entity exists in the code and is not used where it matters most.</p>
+<p><strong>Impact</strong>: cold-start blindness on every rollout for pod-keyed series.</p>
+<h3 id="2-ewma-baseline-poisoning-low-and-slow-drift">2. EWMA baseline poisoning (low-and-slow drift)<a class="headerlink" href="#2-ewma-baseline-poisoning-low-and-slow-drift" title="Permanent link">&para;</a></h3>
+<p><code>Evaluate()</code> updates the EWMA <strong>unconditionally</strong> on every sample, including
+anomalous ones (<code>newEWMA = alpha*value + (1-alpha)*EWMA</code>). There is no outlier
+rejection before the update, no frozen baseline, no suspect-sample quarantine.</p>
+<p><strong>Impact (benign)</strong>: a slow organic traffic ramp is absorbed and stops alerting.
+<strong>Impact (adversarial)</strong>: an attacker who ramps activity slowly drags the baseline
+until malicious load reads as normal. Fatal in a security context.</p>
+<h3 id="3-no-absence-of-signal-dead-mans-switch-detection">3. No absence-of-signal ("dead man's switch") detection<a class="headerlink" href="#3-no-absence-of-signal-dead-mans-switch-detection" title="Permanent link">&para;</a></h3>
+<p><code>/readyz</code> probes check the <strong>detector's own dependencies</strong> (VM, Loki, Alertmanager,
+ML). There is <strong>no</strong> detection of an <em>expected</em> signal going silent — "this workload
+always emits N logs/min and stopped" raises nothing. Blinding the pipeline (killing
+the collector, filling the disk) is silent.</p>
+<p><strong>Impact</strong>: first move of any competent adversary is undetected; also misses genuine
+reliability events (a crashed exporter looks like calm).</p>
+<h3 id="4-no-source-confidence-tiering">4. No source-confidence tiering<a class="headerlink" href="#4-no-source-confidence-tiering" title="Permanent link">&para;</a></h3>
+<p>Container logs (forgeable by the workload) and K8s events are weighted the same as
+everything else. K8s events are best-effort (1h TTL, deduplicated, dropped under
+load) yet detection is built directly on event reasons (<code>PatternDetector</code>). Building
+on events is building on sand, undiscounted.</p>
+<h3 id="5-no-clock-skew-handling-in-correlation">5. No clock-skew handling in correlation<a class="headerlink" href="#5-no-clock-skew-handling-in-correlation" title="Permanent link">&para;</a></h3>
+<p>Correlation groups by <code>namespace/pod</code> within a time window using timestamps as-is.
+Node clock skew (event-time vs ingestion-time) degrades grouping; no mitigation.</p>
+<h3 id="6-the-detector-is-a-cluster-wide-read-attack-surface">6. The detector is a cluster-wide-read attack surface<a class="headerlink" href="#6-the-detector-is-a-cluster-wide-read-attack-surface" title="Permanent link">&para;</a></h3>
+<p><code>EventWatcher</code> runs <code>Events("").Watch</code> — cluster-wide read across all namespaces. No
+IRSA / least-privilege RBAC split yet (roadmap P5.2). No privilege separation between
+the observing plane and the observed plane: root the cluster, tamper the detector.</p>
+<hr />
+<h2 id="what-it-does-not-do-on-purpose-these-are-strengths">What it does <em>not</em> do, on purpose (these are strengths)<a class="headerlink" href="#what-it-does-not-do-on-purpose-these-are-strengths" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Why it's deliberate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>No automated response</strong> (no pod kill/quarantine)</td>
+<td>Explicit anti-goal. A false positive can never turn the detector into a self-DoS. Blast radius of automated action = zero, because there is none.</td>
+</tr>
+<tr>
+<td><strong>Dry-run by default</strong> (no real alerts yet, P5.3)</td>
+<td>Avoids alert flooding before FP rate is understood.</td>
+</tr>
+<tr>
+<td><strong>Complementary, not a replacement</strong> for VMAlert/Falcosidekick</td>
+<td>Ships signal to existing tools; does not duplicate native alerting.</td>
+</tr>
+<tr>
+<td><strong>Namespace suppression + workload collapse</strong></td>
+<td>≥3 sibling pods anomalous → 1 workload alert, not N. Reduces fatigue structurally.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="ground-truth-how-we-know-if-it-works-we-mostly-dont-yet">Ground truth: how we know if it works (we mostly don't, yet)<a class="headerlink" href="#ground-truth-how-we-know-if-it-works-we-mostly-dont-yet" title="Permanent link">&para;</a></h2>
+<p>There is <strong>no eval set, no labeled incidents, no red team, no synthetic injection</strong>.
+No precision/recall figures exist, and none should be invented.</p>
+<p>What <em>does</em> exist: <strong>replay mode</strong> (<code>internal/replay/</code>) runs detection over
+historical data with zero side effects — the substrate for building an eval set. But
+ground-truth comparison (TP/FP/FN scoring) is explicitly <strong>V2, out of scope</strong> in the
+replay spec. So: the harness to measure exists; the measurement does not.</p>
+<p>"Anomalous" is also not separated from "malicious" or even "bad": a node drain and a
+deploy are both anomalous and benign. The current mitigation is suppression +
+workload collapse, <strong>not</strong> semantic distinction.</p>
+<hr />
+<h2 id="evaluation-scorecard">Evaluation scorecard<a class="headerlink" href="#evaluation-scorecard" title="Permanent link">&para;</a></h2>
+<p>Use this to score this system — or any "AI-powered" detector someone tries to sell
+you. A vendor-neutral, reusable version of this scorecard (with the full question set
+per axis) lives in <a href="../evaluation-scorecard/"><code>evaluation-scorecard.md</code></a>. The scoring
+below applies it to this system.</p>
+<p>Each axis: <strong>0 = absent/hand-waved, 1 = partial, 2 = solid with evidence.</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Axis</th>
+<th>Question</th>
+<th>This system (0.7.0)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Threat model</td>
+<td>What exactly are you trying to catch? MITRE mapping?</td>
+<td><strong>0</strong> — none; reliability framing only</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Source ceiling</td>
+<td>What can you <em>structurally</em> not see?</td>
+<td><strong>2</strong> — stated honestly (this doc)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Ground truth</td>
+<td>Eval set? Precision @ recall on imbalanced data?</td>
+<td><strong>0</strong> — replay harness exists, no labels</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Non-stationarity</td>
+<td>Drift without alerting on every deploy? Cold start? Stable baseline entity?</td>
+<td><strong>1</strong> — seasonal profile yes; workload-keying + cold-start gap no</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Poisoning resistance</td>
+<td>Low-and-slow baseline drag prevented?</td>
+<td><strong>0</strong> — unconditional EWMA update</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Evasion</td>
+<td>Sequence detection? Absence-of-signal detection?</td>
+<td><strong>0</strong> — point-wise only, no silence detection</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Entity resolution</td>
+<td>Join audit+metric+log on one ephemeral pod? Clock skew?</td>
+<td><strong>1</strong> — window+regex; no owner-ref, no skew handling</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Source trust tiering</td>
+<td>Forgeable logs vs control-plane treated differently?</td>
+<td><strong>0</strong> — single bucket</td>
+</tr>
+<tr>
+<td>9</td>
+<td>FP budget</td>
+<td>Quantified alert budget for a large cluster?</td>
+<td><strong>1</strong> — dry-run + suppression, but no number</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Automated-response blast radius</td>
+<td>Can a FP cause harm?</td>
+<td><strong>2</strong> — no automated action by design</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Detector as attack surface</td>
+<td>Least privilege? Observer/observed separation?</td>
+<td><strong>0</strong> — cluster-wide read, RBAC split is roadmap</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Opening question worth more than the rest</strong> (axes 2 + 6 combined): <em>"List what your
+system is structurally incapable of seeing, and explain how you catch an attacker who
+only does individually-normal things."</em> If a vendor answers axis 2 with a feature
+list and can't answer axis 6, they packaged thresholds and wrote "AI-powered" in the
+README.</p>
+<hr />
+<h2 id="roadmap-implications">Roadmap implications<a class="headerlink" href="#roadmap-implications" title="Permanent link">&para;</a></h2>
+<p>These limitations map to concrete roadmap items (see <code>ROADMAP.md</code>):</p>
+<ul>
+<li><strong>Workload-identity baseline keying</strong> (weakness #1) — <strong>P2.8</strong>.</li>
+<li><strong>Outlier rejection before baseline update</strong> (weakness #2) — <strong>P2.9</strong>.</li>
+<li><strong>Absence-of-signal detection</strong> (weakness #3) — <strong>P2.10</strong>, high-value for SRE
+  independent of any security goal.</li>
+<li><strong>Falco integration</strong> (closes part of the source ceiling) — P2.7,
+  <code>.kiro/specs/falco-integration/</code>. Enrichment-only in v1.</li>
+<li><strong>Least-privilege RBAC + IRSA</strong> (weakness #6) — P5.2, plus the broader hardening
+  bundle in <a href="../ROADMAP.md#phase-5-pre-reqs--production-hardening-blocks-phase-5-deploy">Phase 5 Pre-Reqs</a>
+  (PH.1, PH.21, PH.22, PH.23).</li>
+<li><strong>Ground-truth eval set on replay</strong> — replay-mode V2.</li>
+</ul>
+<hr />
+<h2 id="additional-concerns-from-independent-security-review-2026-06-16">Additional concerns from independent security review (2026-06-16)<a class="headerlink" href="#additional-concerns-from-independent-security-review-2026-06-16" title="Permanent link">&para;</a></h2>
+<p>The original document was written by the orchestrator reading source. A subsequent
+review by the <code>security</code> specialist subagent corroborated all 11 scorecard axes
+<strong>and</strong> surfaced three concerns that the original framing missed. They are not
+weaknesses of the algorithm — they are weaknesses of the <strong>detector as a deployed
+system</strong>, and they belong here because each one would be exploitable without anyone
+touching the EWMA math.</p>
+<h3 id="a-supply-chain-of-the-detector-itself">A. Supply chain of the detector itself<a class="headerlink" href="#a-supply-chain-of-the-detector-itself" title="Permanent link">&para;</a></h3>
+<p>The original threat-model discusses data-plane attacks (poisoning the baseline,
+blinding the pipeline) but <strong>does not address attacks on the detector's own image
+and dependencies</strong>. Concrete gaps observed in <code>controller/Dockerfile</code>,
+<code>ml/Dockerfile</code>, and <code>go.mod</code>:</p>
+<ul>
+<li>Base images are <code>golang:1.22-alpine</code>, <code>alpine:3.20</code>, <code>python:3.11-slim</code> — <strong>not
+  golden apko-built and not cosign-signed</strong>. A compromised upstream image (or its
+  registry) ships malicious code into every replica.</li>
+<li><code>go.mod</code> imports <code>github.com/karlipegomes/staffops-otel-libs/go</code> at a
+  pseudo-version — a personal GitHub repository. Single account compromise →
+  every consumer inherits the payload. There is no Harbor proxy mitigation
+  because the dep is not in the org repo.</li>
+<li>The ML image keeps <code>gcc/g++</code> in the runtime layer (single-stage). A compromised
+  pod has an in-container compiler — convenient for staging additional payloads.</li>
+<li><code>grpcio==1.62.1</code> carries CVE-2024-7246 (DoS, fixed in 1.63). No
+  vulnerability-scanning gate exists.</li>
+</ul>
+<p><strong>Mitigation</strong>: items PH.3 (golden bases + cosign), PH.5 (multi-stage ML), PH.13
+(org rename for the Go dep), PH.24 (grpcio bump) in Phase 5 Pre-Reqs.</p>
+<h3 id="b-redis-as-a-single-point-of-failure-for-state-integrity">B. Redis as a single point of failure for state integrity<a class="headerlink" href="#b-redis-as-a-single-point-of-failure-for-state-integrity" title="Permanent link">&para;</a></h3>
+<p><code>weakness #2</code> covers slow-and-low EWMA poisoning. It does <strong>not</strong> cover the more
+direct attack: <strong>flushing Redis</strong>. With <code>REDIS_PASSWORD=""</code> (the default in
+<code>config.yaml</code> and <code>.env.example</code>) and the namespace open to any pod, a foothold
+anywhere in <code>monitoring</code> namespace can:</p>
+<ul>
+<li><code>FLUSHDB</code> → wipe all baselines → mass cold-start blindness across every
+  monitored series for <code>warm_up_samples</code> (60) cycles ≈ 30 minutes of pipeline
+  blindness.</li>
+<li>Overwrite individual baseline keys to set arbitrary mean/stddev → tailored
+  blindness on chosen workloads.</li>
+<li>Manipulate dedup TTLs to suppress alerts that <em>would have</em> fired.</li>
+</ul>
+<p>This is mass blindness via state tampering, achievable without any algorithm
+knowledge.</p>
+<p><strong>Mitigation</strong>: PH.4 (Redis AUTH + file-mounted secret), PH.21 (NetworkPolicy
+limiting Redis ingress to controller+worker), and a roadmap candidate not yet
+written: integrity protection (HMAC on baseline values, anomaly on impossible
+state transitions).</p>
+<h3 id="c-grpc-plaintext-between-controller-worker-and-ml">C. gRPC plaintext between controller, worker, and ML<a class="headerlink" href="#c-grpc-plaintext-between-controller-worker-and-ml" title="Permanent link">&para;</a></h3>
+<p>The controller↔worker and controller↔ML paths are gRPC over plaintext. The
+manifests label the namespace <code>istio.io/dataplane-mode: ambient</code>, which would
+provide ztunnel mTLS — but:</p>
+<ul>
+<li>Ambient enrollment is unverified in deploy. If the namespace is not actually in
+  the mesh, the gRPC traffic is plaintext on the cluster network.</li>
+<li>The OTel SDK is wired with gRPC interceptors but no client auth (no JWT, no
+  mTLS handshake at the application layer) — the security model is entirely
+  delegated to the network plane.</li>
+</ul>
+<p><strong>Mitigation</strong>: explicit verification that ambient is active in the target
+namespace; otherwise add <code>Istio AuthorizationPolicy</code> or an application-level auth
+token. Tracked under broader Phase 5 Pre-Reqs deploy verification (not a separate
+PH.x — it is part of validating the deploy itself).</p>
+<h3 id="d-roadmap-items-p28-p29-p210-coverage-validation">D. Roadmap items P2.8 / P2.9 / P2.10 — coverage validation<a class="headerlink" href="#d-roadmap-items-p28-p29-p210-coverage-validation" title="Permanent link">&para;</a></h3>
+<p>The independent reviewer agreed that the three roadmap items address weaknesses</p>
+<h1 id="1-2-and-3-with-adequate-scope-two-refinements-were-noted">1, #2, and #3 with adequate scope. Two refinements were noted:<a class="headerlink" href="#1-2-and-3-with-adequate-scope-two-refinements-were-noted" title="Permanent link">&para;</a></h1>
+<ul>
+<li><strong>P2.9</strong> should specify whether the frozen-baseline window persists across
+  controller restarts (Redis key TTL semantics). Otherwise an attacker times
+  their drift across known restart windows.</li>
+<li><strong>P2.10</strong> should define what "expected cadence" means concretely — last-seen
+  timestamp, declared SLO, or both. Without precision the detector reads benign
+  KEDA scale-to-zero as silence.</li>
+</ul>
+<p>These are spec-level refinements when each item is implemented, not new roadmap
+entries.</p>
+<hr />
+<h2 id="a-note-on-how-this-document-was-produced">A note on how this document was produced<a class="headerlink" href="#a-note-on-how-this-document-was-produced" title="Permanent link">&para;</a></h2>
+<p>This was originally written by the orchestrator reading the source directly. On
+<strong>2026-06-16</strong> the <code>security</code> specialist subagent reviewed it independently. The
+review corroborated all 11 scorecard axes (no inflation detected) and surfaced the
+three additional concerns documented in
+<a href="#additional-concerns-from-independent-security-review-2026-06-16">Additional concerns from independent security review</a>
+above — supply chain of the detector itself, Redis state integrity, and gRPC
+plaintext between components. Treat the scorecard as a code-grounded baseline that
+has now received one independent pass; further review by <code>sre</code> and a real red team
+remains valuable but is out of scope for the current pre-deploy phase.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../architecture/degradation-model/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Degradation Model">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Degradation Model
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../evaluation-scorecard/" class="md-footer__link md-footer__link--next" aria-label="Next: Evaluation Scorecard">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Evaluation Scorecard
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; StaffOps Contributors — Apache 2.0
+    </div>
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/StaffOps" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "content.code.annotate", "content.tabs.link", "navigation.indexes", "navigation.instant", "navigation.path", "navigation.sections", "navigation.top", "navigation.tabs", "navigation.tabs.sticky", "navigation.footer", "search.suggest", "search.highlight", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>

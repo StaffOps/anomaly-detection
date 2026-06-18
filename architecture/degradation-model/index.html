@@ -1,0 +1,2980 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Distributed anomaly detection for Kubernetes clusters">
+      
+      
+      
+        <link rel="canonical" href="https://staffops.github.io/staffops-anomaly-detection/architecture/degradation-model/">
+      
+      
+        <link rel="prev" href="../decisions/">
+      
+      
+        <link rel="next" href="../../threat-model-and-limitations/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Degradation Model - Anomaly Detection — StaffOps</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#degradation-model-net-python-go" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Anomaly Detection — StaffOps" class="md-header__button md-logo" aria-label="Anomaly Detection — StaffOps" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Anomaly Detection — StaffOps
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Degradation Model
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StaffOps/staffops-anomaly-detection" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StaffOps/anomaly-detection
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../.." class="md-tabs__link">
+          
+  
+  
+    
+  
+  Home
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../detection/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Detection
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../development/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Deploy
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/helm/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Anomaly Detection — StaffOps" class="md-nav__button md-logo" aria-label="Anomaly Detection — StaffOps" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Anomaly Detection — StaffOps
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StaffOps/staffops-anomaly-detection" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StaffOps/anomaly-detection
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../.." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_1" id="__nav_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Home
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../components/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Components
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../decisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Degradation Model
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Degradation Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-read-this-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to read this document
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#net" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .NET
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=".NET">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chain-n1-threadpool-starvation-latency-errors-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain N1 — Threadpool starvation → latency → errors (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-n2-gc-pressure-pause-latency-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain N2 — GC pressure → pause → latency (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-n3-downstream-dependency-slow-connection-pool-exhaustion-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain N3 — Downstream dependency slow → connection pool exhaustion (🟡 plausible)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Python">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chain-p1-blocked-event-loop-asyncio-connection-pileup-timeouts-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain P1 — Blocked event loop (asyncio) → connection pileup → timeouts (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-p2-gil-contention-cpu-saturation-latency-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain P2 — GIL contention / CPU saturation → latency (🟡 plausible)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-p3-memory-growth-oomkill-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain P3 — Memory growth → OOMKill (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Go
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Go">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chain-g1-goroutine-leak-memory-growth-oomkill-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain G1 — Goroutine leak → memory growth → OOMKill (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-g2-gc-pressure-high-allocation-cpu-latency-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain G2 — GC pressure / high allocation → CPU + latency (🟡 plausible)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-g3-connection-pool-db-saturation-latency-errors-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain G3 — Connection pool / DB saturation → latency → errors (🟡 plausible)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-language-patterns-the-reusable-shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-language patterns (the reusable shapes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-observability-gaps-surfaced-by-writing-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known observability gaps (surfaced by writing this)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-validation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status &amp; validation plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../threat-model-and-limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model & Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation-scorecard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation Scorecard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hypothesis-causal-origination/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Product Hypothesis (gated)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../detection/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detection
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Detection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../detection/static/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Static Thresholds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../detection/adaptive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adaptive Z-Score
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../detection/logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Log Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../detection/ml/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../detection/correlation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correlation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../configuration/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detection Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/suppression/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Suppression
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/enrichment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enrichment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/replay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Replay Mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../development/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/building/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploy
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Deploy
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/helm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helm Values
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/alert-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alert Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-read-this-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to read this document
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#net" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .NET
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=".NET">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chain-n1-threadpool-starvation-latency-errors-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain N1 — Threadpool starvation → latency → errors (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-n2-gc-pressure-pause-latency-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain N2 — GC pressure → pause → latency (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-n3-downstream-dependency-slow-connection-pool-exhaustion-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain N3 — Downstream dependency slow → connection pool exhaustion (🟡 plausible)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Python">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chain-p1-blocked-event-loop-asyncio-connection-pileup-timeouts-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain P1 — Blocked event loop (asyncio) → connection pileup → timeouts (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-p2-gil-contention-cpu-saturation-latency-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain P2 — GIL contention / CPU saturation → latency (🟡 plausible)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-p3-memory-growth-oomkill-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain P3 — Memory growth → OOMKill (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Go
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Go">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chain-g1-goroutine-leak-memory-growth-oomkill-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain G1 — Goroutine leak → memory growth → OOMKill (🟢 established)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-g2-gc-pressure-high-allocation-cpu-latency-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain G2 — GC pressure / high allocation → CPU + latency (🟡 plausible)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chain-g3-connection-pool-db-saturation-latency-errors-plausible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chain G3 — Connection pool / DB saturation → latency → errors (🟡 plausible)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-language-patterns-the-reusable-shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-language patterns (the reusable shapes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-observability-gaps-surfaced-by-writing-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known observability gaps (surfaced by writing this)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-validation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status &amp; validation plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="degradation-model-net-python-go">Degradation Model — .NET, Python, Go<a class="headerlink" href="#degradation-model-net-python-go" title="Permanent link">&para;</a></h1>
+<p>This document encodes <strong>how services fail, as causal chains</strong> — not as a list of
+metrics, but as ordered sequences of "X causes Y causes Z". It is the core asset of
+this system: the difference between <em>listing symptoms</em> and <em>explaining an incident</em>.</p>
+<blockquote>
+<p><strong>Why this exists</strong>: generic AIOps/RCA tools operate at the <em>edge between services</em>
+(service A calls service B). They do <strong>not</strong> know the <strong>intra-runtime</strong> causality —
+how a .NET threadpool, a Go GC, or a Python event loop degrades <em>inside a single
+process</em>, in a specific order. That ordered, language-specific knowledge is the
+defensible core. Everything else (detection, grouping, dispatch, enrichment) is
+commodity.</p>
+</blockquote>
+<hr />
+<h2 id="how-to-read-this-document">How to read this document<a class="headerlink" href="#how-to-read-this-document" title="Permanent link">&para;</a></h2>
+<p>Each degradation chain has:</p>
+<ul>
+<li><strong>Trigger</strong> — what starts it.</li>
+<li><strong>Causal sequence</strong> — the ordered steps, each with the <strong>observable signal</strong> (metric
+  that rises/falls) and, where it exists, the <strong>exact metric already collected</strong> by
+  this system (see <code>controller/config.yaml</code>).</li>
+<li><strong>Leading vs lagging</strong> — which signal moves <em>first</em> (the early-warning signal) and
+  which moves <em>last</em> (the user-visible symptom). Alerting on the leading signal is the
+  whole point.</li>
+<li><strong>Confidence</strong> — how well-established the chain is:</li>
+<li>🟢 <strong>established</strong> — textbook runtime behavior, broadly documented.</li>
+<li>🟡 <strong>plausible</strong> — generally true, but ordering/thresholds vary by workload.</li>
+<li>🔴 <strong>to validate</strong> — specific to this environment; confirm against real data.</li>
+<li><strong>Validation hook</strong> — how to confirm the chain empirically using metrics this system
+  already has + replay mode. <strong>No chain here is "true" until validated this way.</strong></li>
+</ul>
+<blockquote>
+<p>Confidence markers are honest labels, not decoration. A 🟢 means the <em>mechanism</em> is
+well-understood; it does <strong>not</strong> mean it was measured in <em>your</em> clusters yet. The
+validation hook is how 🟢/🟡/🔴 all become "confirmed here".</p>
+</blockquote>
+<hr />
+<h2 id="net">.NET<a class="headerlink" href="#net" title="Permanent link">&para;</a></h2>
+<h3 id="chain-n1-threadpool-starvation-latency-errors-established">Chain N1 — Threadpool starvation → latency → errors (🟢 established)<a class="headerlink" href="#chain-n1-threadpool-starvation-latency-errors-established" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: inbound request rate exceeds the rate the threadpool can process
+(or threads are blocked on sync-over-async calls, starving the pool).</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Threadpool can't keep up</td>
+<td>threadpool queue grows</td>
+<td><code>dotnet_threadpool_queue_length</code> / <code>kestrel_queued_requests</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Requests wait in queue</td>
+<td>inbound request latency rises (p99 first, then p95)</td>
+<td><code>latency_p99_by_service</code> (spanmetrics)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Waiting requests exceed timeout</td>
+<td>error rate rises</td>
+<td><code>error_rate_by_service</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Clients retry on timeout</td>
+<td>inbound rate rises further → snowball</td>
+<td><code>request_rate_by_service</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Leading signal</strong>: threadpool queue length (step 1). <strong>Lagging</strong>: error rate (step 3).
+The queue fills <em>before</em> latency rises, and latency rises <em>before</em> errors. That order
+is the early-warning window.</p>
+<p><strong>Validation hook</strong>: in replay, find a window where <code>error_rate_by_service</code> spiked.
+Walk backwards — did <code>threadpool_queue_length</code> rise first, then <code>latency_p99</code>, then
+errors? If the order holds across several incidents → chain confirmed.</p>
+<hr />
+<h3 id="chain-n2-gc-pressure-pause-latency-established">Chain N2 — GC pressure → pause → latency (🟢 established)<a class="headerlink" href="#chain-n2-gc-pressure-pause-latency-established" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: high allocation rate or a memory leak grows the managed heap.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Heap grows</td>
+<td>heap size climbs (often monotonic = leak)</td>
+<td><code>dotnet_heap_growth</code> (<code>process_runtime_dotnet_gc_heap_size_bytes</code>)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>GC runs more often / longer</td>
+<td>GC pause time rises</td>
+<td><code>dotnet_gc_pause_rate</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>App threads pause during GC</td>
+<td>latency rises in bursts (saw-tooth)</td>
+<td><code>latency_p99_by_service</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>(if leak) heap hits limit</td>
+<td>OOMKilled → pod restart</td>
+<td><code>restarts_5m</code>, <code>oom_kills</code> (enrichment)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Leading signal</strong>: heap growth (step 1) for leaks; GC pause rate (step 2) for
+allocation spikes. <strong>Lagging</strong>: OOMKill/restart (step 4).</p>
+<p><strong>Distinguishing leak vs spike</strong>: a <em>leak</em> shows monotonic heap growth over hours
+ending in OOMKill; an <em>allocation spike</em> shows GC pause correlated with request rate,
+heap stable. Same metrics, different shape — the model must tell them apart because
+the fix differs (leak = code bug; spike = capacity/tuning).</p>
+<p><strong>Validation hook</strong>: replay a window ending in an <code>OOMKilled</code> event. Was heap growth
+monotonic beforehand (leak) or correlated with request rate (spike)?</p>
+<hr />
+<h3 id="chain-n3-downstream-dependency-slow-connection-pool-exhaustion-plausible">Chain N3 — Downstream dependency slow → connection pool exhaustion (🟡 plausible)<a class="headerlink" href="#chain-n3-downstream-dependency-slow-connection-pool-exhaustion-plausible" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: a downstream dependency (DB, HTTP API) slows down.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Dependency responds slower</td>
+<td>outbound call duration rises</td>
+<td><code>http_client_active_requests</code> rises (calls in-flight longer)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Connections held longer</td>
+<td>connection pool / DB pool saturates</td>
+<td><code>hikaricp_pending</code> (DB pool wait)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>New requests wait for a connection</td>
+<td>inbound latency rises</td>
+<td><code>latency_p99_by_service</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Waits exceed timeout</td>
+<td>errors rise</td>
+<td><code>error_rate_by_service</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Leading signal</strong>: outbound call duration / active requests (step 1). This is the key
+distinguisher from N1: in N1 the <em>threadpool</em> is the bottleneck (self-inflicted); in
+N3 a <em>dependency</em> is (external). The model must separate them — the fix is in a
+different place.</p>
+<p><strong>Validation hook</strong>: when latency rises, check whether <code>http_client_active_requests</code>
+rose first (→ N3, dependency) or <code>threadpool_queue</code> rose first (→ N1, self). This is
+exactly the kind of disambiguation that makes "explain cause" &gt; "list symptoms".</p>
+<hr />
+<h2 id="python">Python<a class="headerlink" href="#python" title="Permanent link">&para;</a></h2>
+<h3 id="chain-p1-blocked-event-loop-asyncio-connection-pileup-timeouts-established">Chain P1 — Blocked event loop (asyncio) → connection pileup → timeouts (🟢 established)<a class="headerlink" href="#chain-p1-blocked-event-loop-asyncio-connection-pileup-timeouts-established" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: synchronous/CPU-bound work runs on the asyncio event loop (the cardinal
+sin of async Python), blocking it.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Event loop blocked by sync work</td>
+<td>event loop lag rises</td>
+<td><em>not collected yet</em> (gap — see below)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Loop can't accept/progress connections</td>
+<td>in-flight requests pile up</td>
+<td><code>http.server.active_requests</code> (OTel default)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Pending work accumulates</td>
+<td>inbound latency rises across <em>all</em> endpoints at once</td>
+<td><code>latency_p99_by_service</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Clients time out</td>
+<td>errors rise</td>
+<td><code>error_rate_by_service</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Distinguishing mark</strong>: a blocked event loop degrades <strong>every endpoint
+simultaneously</strong> (one loop serves all), unlike a slow DB query that hits one path.
+That "everything got slow at once, on one pod" signature is the fingerprint.</p>
+<p><strong>Leading signal</strong>: event loop lag — <strong>but this system does not collect it today</strong>.
+That's a concrete gap: P1 is only <em>partially</em> observable now (you'd see steps 2-4 but
+not the root at step 1). Adding an event-loop-lag metric is a candidate roadmap item.</p>
+<p><strong>Validation hook</strong>: when a Python pod shows latency rising on <em>all</em> routes at once
+with CPU near a core's limit → consistent with P1. Confirm with <code>system.cpu.utilization</code>.</p>
+<hr />
+<h3 id="chain-p2-gil-contention-cpu-saturation-latency-plausible">Chain P2 — GIL contention / CPU saturation → latency (🟡 plausible)<a class="headerlink" href="#chain-p2-gil-contention-cpu-saturation-latency-plausible" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: CPU-bound load on a single Python process (GIL serializes CPU work).</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>CPU-bound work saturates one core</td>
+<td>CPU utilization approaches 100% of a core</td>
+<td><code>system.cpu.utilization</code> (OTel)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>GIL serializes; requests can't parallelize</td>
+<td>latency rises despite "spare" CPU on other cores</td>
+<td><code>latency_p99_by_service</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Throughput plateaus</td>
+<td>request rate flattens even as demand grows</td>
+<td><code>request_rate_by_service</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Distinguishing mark</strong>: CPU pegged at ~1 core (not all cores) + latency up =
+GIL-bound. The "one core maxed, others idle" shape distinguishes it from genuine
+whole-machine CPU exhaustion.</p>
+<p><strong>Validation hook</strong>: replay a latency spike on a Python service; check if CPU was
+saturated on ~1 core while latency rose and throughput plateaued.</p>
+<hr />
+<h3 id="chain-p3-memory-growth-oomkill-established">Chain P3 — Memory growth → OOMKill (🟢 established)<a class="headerlink" href="#chain-p3-memory-growth-oomkill-established" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: leak (unbounded cache, accumulating references) or genuine high memory
+demand.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>RSS grows</td>
+<td>memory utilization climbs</td>
+<td><code>system.memory.utilization</code> / <code>process.runtime.cpython.memory</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Approaches container limit</td>
+<td>memory ratio → 1.0</td>
+<td><code>memory_ratio</code> (enrichment)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Hits limit</td>
+<td>OOMKilled → restart</td>
+<td><code>oom_kills</code>, <code>restarts_5m</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Leading</strong>: memory growth slope (step 1). <strong>Lagging</strong>: OOMKill (step 3). Same
+leak-vs-demand distinction as .NET N2: monotonic slope = leak; correlated-with-load =
+demand.</p>
+<p><strong>Validation hook</strong>: same as N2 — shape of the memory curve before an OOMKill.</p>
+<hr />
+<h2 id="go">Go<a class="headerlink" href="#go" title="Permanent link">&para;</a></h2>
+<h3 id="chain-g1-goroutine-leak-memory-growth-oomkill-established">Chain G1 — Goroutine leak → memory growth → OOMKill (🟢 established)<a class="headerlink" href="#chain-g1-goroutine-leak-memory-growth-oomkill-established" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: goroutines that block forever (unbuffered channel with no receiver,
+missing context cancellation) accumulate.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Goroutines accumulate</td>
+<td>goroutine count climbs monotonically</td>
+<td><em>not collected yet</em> (gap)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Each holds stack + referenced memory</td>
+<td>heap/RSS grows</td>
+<td><code>memory_ratio</code> (enrichment)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Approaches limit</td>
+<td>OOMKilled → restart</td>
+<td><code>oom_kills</code>, <code>restarts_5m</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Distinguishing mark</strong>: goroutine count rising <em>without</em> a matching rise in request
+rate = leak (goroutines not being released). If goroutines track request rate, it's
+normal load.</p>
+<p><strong>Leading signal</strong>: goroutine count — <strong>not collected today</strong> (gap, like Python's loop
+lag). Without it, G1 looks identical to "generic memory growth" until OOMKill. Adding
+<code>go_goroutines</code> is a high-value, cheap candidate.</p>
+<p><strong>Validation hook</strong>: instrument <code>go_goroutines</code>; in replay, check if it rose
+independently of <code>request_rate</code> before an OOMKill.</p>
+<hr />
+<h3 id="chain-g2-gc-pressure-high-allocation-cpu-latency-plausible">Chain G2 — GC pressure / high allocation → CPU + latency (🟡 plausible)<a class="headerlink" href="#chain-g2-gc-pressure-high-allocation-cpu-latency-plausible" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: high allocation rate drives frequent GC.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Allocation rate high</td>
+<td>GC runs frequently</td>
+<td><em>Go runtime GC metrics — partial</em></td>
+</tr>
+<tr>
+<td>2</td>
+<td>GC consumes CPU (concurrent, but steals cycles)</td>
+<td>CPU rises, GC CPU fraction rises</td>
+<td><code>system.cpu.utilization</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>GC assist slows allocating goroutines</td>
+<td>latency rises</td>
+<td><code>latency_p99_by_service</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Note</strong>: Go's GC is concurrent (low pause vs .NET historically), so the symptom is
+more <em>CPU cost</em> than <em>pause time</em>. The model must not blindly copy the .NET GC chain —
+the signature differs by runtime. (This is exactly why one generic model fails and a
+per-language model wins.)</p>
+<p><strong>Validation hook</strong>: correlate GC CPU fraction with latency on a Go service under load.</p>
+<hr />
+<h3 id="chain-g3-connection-pool-db-saturation-latency-errors-plausible">Chain G3 — Connection pool / DB saturation → latency → errors (🟡 plausible)<a class="headerlink" href="#chain-g3-connection-pool-db-saturation-latency-errors-plausible" title="Permanent link">&para;</a></h3>
+<p><strong>Trigger</strong>: downstream DB slows or connection pool undersized.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Observable signal</th>
+<th>Metric already collected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>DB slow or pool too small</td>
+<td>connections wait</td>
+<td><code>go_sql_waiting</code> (<code>go_sql_stats_connections_waited_for_total</code>)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Requests block on a connection</td>
+<td>latency rises</td>
+<td><code>latency_p99_by_service</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Waits exceed timeout</td>
+<td>errors rise</td>
+<td><code>error_rate_by_service</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Leading signal</strong>: <code>go_sql_waiting</code> (step 1) — directly collected, good coverage.
+Structurally the same as .NET N3, different metric name.</p>
+<p><strong>Validation hook</strong>: when a Go service's latency rises, did <code>go_sql_waiting</code> rise
+first? If yes → DB/pool root, not the service itself.</p>
+<hr />
+<h2 id="cross-language-patterns-the-reusable-shapes">Cross-language patterns (the reusable shapes)<a class="headerlink" href="#cross-language-patterns-the-reusable-shapes" title="Permanent link">&para;</a></h2>
+<p>Stepping back, the chains collapse into a few <strong>archetypes</strong> that repeat across
+languages with different metric names:</p>
+<table>
+<thead>
+<tr>
+<th>Archetype</th>
+<th>.NET</th>
+<th>Python</th>
+<th>Go</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Saturation of the work executor</strong></td>
+<td>threadpool (N1)</td>
+<td>event loop (P1)</td>
+<td>— (goroutines cheap; rarely the bottleneck)</td>
+</tr>
+<tr>
+<td><strong>CPU/serialization limit</strong></td>
+<td>—</td>
+<td>GIL (P2)</td>
+<td>GC CPU (G2)</td>
+</tr>
+<tr>
+<td><strong>Memory growth → OOMKill</strong></td>
+<td>heap leak (N2)</td>
+<td>RSS leak (P3)</td>
+<td>goroutine leak (G1)</td>
+</tr>
+<tr>
+<td><strong>Dependency / pool saturation</strong></td>
+<td>HikariCP (N3)</td>
+<td>(DB driver)</td>
+<td>database/sql (G3)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why this matters for the build</strong>: the <em>archetype</em> is shared, so the correlation
+engine can be generic; the <em>signals and ordering</em> are language-specific, so the
+knowledge lives here, per language. This split is the architecture: generic engine,
+language-specific causal knowledge.</p>
+<hr />
+<h2 id="known-observability-gaps-surfaced-by-writing-this">Known observability gaps (surfaced by writing this)<a class="headerlink" href="#known-observability-gaps-surfaced-by-writing-this" title="Permanent link">&para;</a></h2>
+<p>Writing the model exposed signals the system <strong>should</strong> collect but doesn't — each is
+a leading (root-cause) signal currently invisible:</p>
+<table>
+<thead>
+<tr>
+<th>Gap</th>
+<th>Language</th>
+<th>Why it matters</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Event loop lag</td>
+<td>Python</td>
+<td>Root of P1; without it, P1 is only half-visible</td>
+<td>Low (OTel metric)</td>
+</tr>
+<tr>
+<td><code>go_goroutines</code></td>
+<td>Go</td>
+<td>Root of G1; without it, leak looks like generic memory growth</td>
+<td>Low (one gauge)</td>
+</tr>
+<tr>
+<td>GC CPU fraction</td>
+<td>Go</td>
+<td>Distinguishes G2 from generic CPU</td>
+<td>Low</td>
+</tr>
+</tbody>
+</table>
+<p>These are concrete, cheap roadmap candidates — and they matter <em>because the causal
+model says so</em>, which is the model already earning its keep.</p>
+<hr />
+<h2 id="status-validation-plan">Status &amp; validation plan<a class="headerlink" href="#status-validation-plan" title="Permanent link">&para;</a></h2>
+<p><strong>Every chain above is currently 🟢/🟡/🔴 by mechanism, not yet confirmed in BDC
+clusters.</strong> The honest next step (gate before building on this model) is:</p>
+<ol>
+<li>Use <strong>replay mode</strong> over historical windows containing known incidents.</li>
+<li>For each incident, walk the chain <strong>backwards</strong> from the symptom and check the
+   predicted ordering of leading→lagging signals.</li>
+<li>Mark each chain <strong>confirmed / refuted / inconclusive</strong> with the evidence.</li>
+<li>Where a leading signal is a "gap" (not collected), note that the chain can't be
+   fully validated until the metric is added.</li>
+</ol>
+<p>Until step 3 is done for a chain, this document is a <strong>hypothesis written down</strong> — which
+is already far more than a list of metric names, but is not yet ground truth.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../decisions/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Decisions">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Decisions
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../threat-model-and-limitations/" class="md-footer__link md-footer__link--next" aria-label="Next: Threat Model &amp; Limitations">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Threat Model & Limitations
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; StaffOps Contributors — Apache 2.0
+    </div>
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/StaffOps" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.annotate", "content.tabs.link", "navigation.indexes", "navigation.instant", "navigation.path", "navigation.sections", "navigation.top", "navigation.tabs", "navigation.tabs.sticky", "navigation.footer", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>
