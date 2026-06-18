@@ -11,8 +11,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,10 +26,12 @@ jobs:
       - name: Build docs
         run: mkdocs build --site-dir site
 
-      - name: Deploy to gh-pages
+      - name: Deploy to staffops.github.io/anomaly-detection/
         uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          personal_token: ${{ secrets.DOCS_DEPLOY_TOKEN }}
+          external_repository: StaffOps/staffops.github.io
           publish_branch: gh-pages
           publish_dir: ./site
+          destination_dir: anomaly-detection
           keep_files: true
