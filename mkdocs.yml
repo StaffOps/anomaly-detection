@@ -1,4 +1,4 @@
-site_name: Anomaly Detection — StaffOps
+site_name: StaffOps — Anomaly Detection
 site_description: Distributed anomaly detection for Kubernetes clusters
 site_url: https://staffops.github.io/staffops-anomaly-detection/
 repo_url: https://github.com/StaffOps/staffops-anomaly-detection
@@ -7,6 +7,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  logo: assets/logo.png
+  favicon: assets/logo.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
