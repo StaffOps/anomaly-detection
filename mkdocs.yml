@@ -1,12 +1,27 @@
 site_name: Anomaly Detection — StaffOps
 site_description: Distributed anomaly detection for Kubernetes clusters
-site_url: https://staffops.github.io/anomaly-detection/
+site_url: https://staffops.github.io/staffops-anomaly-detection/
 repo_url: https://github.com/StaffOps/staffops-anomaly-detection
 repo_name: StaffOps/anomaly-detection
 edit_uri: edit/main/docs/
 
 theme:
   name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
   features:
     - content.code.copy
     - content.code.annotate
@@ -17,23 +32,14 @@ theme:
     - navigation.sections
     - navigation.top
     - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.footer
     - search.suggest
     - search.highlight
     - toc.follow
+  icon:
+    repo: fontawesome/brands/github
   language: en
-  palette:
-    - scheme: default
-      toggle:
-        icon: material/toggle-switch
-        name: Switch to dark mode
-      primary: deep purple
-      accent: amber
-    - scheme: slate
-      toggle:
-        icon: material/toggle-switch-off-outline
-        name: Switch to light mode
-      primary: deep purple
-      accent: amber
 
 nav:
   - Home:
@@ -106,6 +112,12 @@ markdown_extensions:
 plugins:
   - search
 
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - https://unpkg.com/mermaid/dist/mermaid.min.js
+
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -113,6 +125,3 @@ extra:
   generator: false
 
 copyright: Copyright &copy; StaffOps Contributors — Apache 2.0
-
-extra_javascript:
-  - https://unpkg.com/mermaid/dist/mermaid.min.js
