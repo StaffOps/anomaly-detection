@@ -1,6 +1,9 @@
-site_name: StaffOps Anomaly Detection
-site_description: Distributed anomaly detection system for Kubernetes clusters
-site_author: StaffOps Team
+site_name: Anomaly Detection — StaffOps
+site_description: Distributed anomaly detection for Kubernetes clusters
+site_url: https://staffops.github.io/anomaly-detection/
+repo_url: https://github.com/StaffOps/staffops-anomaly-detection
+repo_name: StaffOps/anomaly-detection
+edit_uri: edit/main/docs/
 
 theme:
   name: material
@@ -68,6 +71,13 @@ nav:
       - Building: development/building.md
       - Testing: development/testing.md
       - Contributing: development/contributing.md
+  - Deploy:
+      - Getting Started: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+  - Reference:
+      - Helm Values: reference/helm.md
+      - Metrics: reference/metrics.md
+      - Alert Rules: reference/alert-rules.md
 
 markdown_extensions:
   - admonition
@@ -75,9 +85,6 @@ markdown_extensions:
   - def_list
   - md_in_html
   - pymdownx.details
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -98,6 +105,14 @@ markdown_extensions:
 
 plugins:
   - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/StaffOps
+  generator: false
+
+copyright: Copyright &copy; StaffOps Contributors — Apache 2.0
 
 extra_javascript:
   - https://unpkg.com/mermaid/dist/mermaid.min.js

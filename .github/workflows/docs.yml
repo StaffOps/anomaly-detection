@@ -1,0 +1,37 @@
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install mkdocs-material
+
+      - name: Build docs
+        run: mkdocs build --site-dir site
+
+      - name: Deploy to staffops.github.io/anomaly-detection/
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.DOCS_DEPLOY_TOKEN }}
+          external_repository: StaffOps/staffops.github.io
+          publish_branch: gh-pages
+          publish_dir: ./site
+          destination_dir: anomaly-detection
+          keep_files: true
