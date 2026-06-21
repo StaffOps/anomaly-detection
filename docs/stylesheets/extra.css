@@ -127,3 +127,43 @@ body { font-family: var(--so-font-body); }
 @media (prefers-reduced-motion: reduce) {
   .so-card { transition: none; }
 }
+
+/* ─── Hub bar ─────────────────────────────────────────────────────────────── */
+.so-hub-bar {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 0 1rem;
+  height: 34px;
+  background: #071009;
+  border-bottom: 1px solid rgba(61,214,140,.1);
+  font-size: .75rem;
+  font-family: var(--so-font-body);
+}
+.so-hub-bar__brand {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  color: var(--so-green) !important;
+  font-weight: 600;
+  text-decoration: none !important;
+  letter-spacing: .02em;
+}
+.so-hub-bar__icon { opacity: .8; }
+.so-hub-bar__sep { color: rgba(232,245,237,.2); margin: 0 .1rem; }
+.so-hub-bar__nav { display: flex; gap: 1.25rem; }
+.so-hub-bar__nav a {
+  color: rgba(232,245,237,.55) !important;
+  text-decoration: none !important;
+  transition: color .15s;
+}
+.so-hub-bar__nav a:hover { color: var(--so-green) !important; }
+.so-hub-bar__gh {
+  margin-left: auto;
+  color: rgba(232,245,237,.4) !important;
+  text-decoration: none !important;
+  font-size: .7rem;
+  letter-spacing: .05em;
+  transition: color .15s;
+}
+.so-hub-bar__gh:hover { color: var(--so-green) !important; }
