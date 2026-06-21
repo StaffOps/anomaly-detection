@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Private Go module pulled by the controller/worker images.
+  GOPRIVATE: github.com/karlipegomes/*
+
+jobs:
+  # ─── test ───────────────────────────────────────────────────────────────────
+  test-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: controller/go.sum
+
+      # Forward a deploy key so `go` can fetch the private staffops-otel-libs
+      # module over SSH — same mechanism used locally and in the image build.
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.OTEL_LIBS_DEPLOY_KEY }}
+
+      - name: Configure private module access
+        run: git config --global url."git@github.com:".insteadOf "https://github.com/"
+
+      - name: Test with coverage
+        working-directory: controller
+        run: |
+          go test ./internal/... -coverprofile=cov.out -covermode=atomic -timeout 120s
+          echo "### Go coverage" >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -func=cov.out | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
+          # NOTE: ≥90% gate (PH.9) not enforced yet — coverage still climbing.
+
+  test-ml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Test
+        working-directory: ml
+        run: |
+          pip install -e '.[dev]' -q
+          # tests/ is still empty (PH.10) — pytest exits 5 with no tests; allow it.
+          pytest tests/ -v || test $? -eq 5
+
+  # ─── build + push images ──────────────────────────────────────────────────────
+  build:
+    needs: [test-go, test-ml]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: controller
+            context: ./controller
+            target: controller
+            needs_ssh: true
+          - name: worker
+            context: ./controller
+            target: worker
+            needs_ssh: true
+          - name: ml
+            context: ./ml
+            target: ""
+            needs_ssh: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute lowercase image name
+        id: img
+        run: echo "repo=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Only controller/worker need the private module; ml has no private deps.
+      - uses: webfactory/ssh-agent@v0.9.0
+        if: matrix.needs_ssh
+        with:
+          ssh-private-key: ${{ secrets.OTEL_LIBS_DEPLOY_KEY }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ steps.img.outputs.repo }}/${{ matrix.name }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          # Push on branch/main builds; PRs only build to validate (no registry write).
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          ssh: ${{ matrix.needs_ssh && 'default' || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
