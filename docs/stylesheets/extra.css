@@ -64,6 +64,7 @@ body { font-family: var(--so-font-body); }
 
 /* ─── Nav tabs — always dark ─────────────────────────────────────────────── */
 .md-tabs { background: #0a1410 !important; border-bottom: 1px solid var(--so-border); }
+.md-tabs[data-md-component="tabs"] { border-bottom: none; }
 .md-tabs__link { color: rgba(232,245,237,.6) !important; font-family: var(--so-font-body); font-size: .8rem; letter-spacing: .04em; }
 .md-tabs__link--active,
 .md-tabs__link:hover { color: var(--so-green) !important; }
