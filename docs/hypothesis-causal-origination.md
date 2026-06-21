@@ -49,8 +49,8 @@ alerts.
 
 | # | Gate | Pass condition | Status |
 |---|------|----------------|--------|
-| 1 | **Measurement** | Synthetic fault injection over replay yields a real recall lower-bound + FP upper-bound. (Infra already exists: replay mode.) Spec: `.kiro/specs/synthetic-injection/`. | ⬜ spec ready, not executed |
-| 2 | **Competitive teardown as experiment** | Time-boxed attempt to reproduce surviving value as (a) `predict_linear` rules in `vmrules.yaml` and (b) a Robusta playbook. Ports cheaply → it was config, no product. Resists → core found. Spec: `.kiro/specs/competitive-teardown/`. | ⬜ spec ready, not executed |
+| 1 | **Measurement** | Synthetic fault injection over replay yields a real recall lower-bound + FP upper-bound. (Infra already exists: replay mode.) Spec: `specs/synthetic-injection/`. | ⬜ spec ready, not executed |
+| 2 | **Competitive teardown as experiment** | Time-boxed attempt to reproduce surviving value as (a) `predict_linear` rules in `vmrules.yaml` and (b) a Robusta playbook. Ports cheaply → it was config, no product. Resists → core found. Spec: `specs/competitive-teardown/`. | ⬜ spec ready, not executed |
 | 3 | **Degradation model validated** | Chains in `degradation-model.md` confirmed against real incidents via replay, not asserted by mechanism. | ⬜ not started |
 
 **If gate 2 shows the value ports cheaply into config**, the honest conclusion is:

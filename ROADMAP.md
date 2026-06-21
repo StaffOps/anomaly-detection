@@ -22,7 +22,7 @@ recall lower-bound and FP upper-bound **without** needing labeled historical inc
 Infra already exists (replay mode). This is the cheapest, highest-value item and the
 prerequisite for everything algorithmic. **Without numbers, every detector swap is faith.**
 
-**Spec**: [`.kiro/specs/synthetic-injection/`](.kiro/specs/synthetic-injection/) — spec ready, not executed.
+**Spec**: [`specs/synthetic-injection/`](specs/synthetic-injection/) — spec ready, not executed.
 
 ### 🎯 P0.2 — Competitive teardown experiment
 
@@ -31,7 +31,7 @@ Time-boxed (days, not a slide): try to reproduce the surviving value as (a)
 Ports cheaply → it was config, ship that and stop. Resists → the causal core is found
 empirically. This decides whether there is a product to build at all.
 
-**Spec**: [`.kiro/specs/competitive-teardown/`](.kiro/specs/competitive-teardown/) — spec ready, not executed.
+**Spec**: [`specs/competitive-teardown/`](specs/competitive-teardown/) — spec ready, not executed.
 
 ### 🎯 P0.3 — Validate the degradation model
 
@@ -96,7 +96,7 @@ Mapear como anomalias em um workload se propagam pra outros — request flows, b
 
 **Saída esperada**: alerta enriquecido com "linhagem" — "este alerta em service B provavelmente é consequência de A (correlation 0.92, dependency confirmed via Tempo)".
 
-**Por que escopo grande**: requer Tempo integration, possível storage de correlation matrices, modelos de causalidade. Fase 3+ provavelmente. Candidato a spec próprio em `.kiro/specs/cross-workload-dependency-mapping/`.
+**Por que escopo grande**: requer Tempo integration, possível storage de correlation matrices, modelos de causalidade. Fase 3+ provavelmente. Candidato a spec próprio em `specs/cross-workload-dependency-mapping/`.
 
 ### 🎯 P2.7 — Falco integration (runtime security signal)
 
@@ -123,9 +123,9 @@ Adicionar Falco como **nova fonte de sinal** ao lado de métricas (VM), logs (Lo
 
 **Pré-req**: Falco + Falcosidekick deployados no cluster (validar com `gitops`/`security`). Decisão de arquitetura de ingestão antes de codar.
 
-**Effort**: large. Candidato a spec próprio em `.kiro/specs/falco-integration/`.
+**Effort**: large. Candidato a spec próprio em `specs/falco-integration/`.
 
-**Spec**: [`.kiro/specs/falco-integration/`](.kiro/specs/falco-integration/) — requirements + design (4ª fonte de ingestão `Signal="security"`, ingestão Loki-pull default / webhook opt-in, enrich-not-alert v1, janela de correlação assimétrica) + tasks (Phase 0 pré-reqs de infra → core `internal/falco/` → correlator → testes → review sre/security).
+**Spec**: [`specs/falco-integration/`](specs/falco-integration/) — requirements + design (4ª fonte de ingestão `Signal="security"`, ingestão Loki-pull default / webhook opt-in, enrich-not-alert v1, janela de correlação assimétrica) + tasks (Phase 0 pré-reqs de infra → core `internal/falco/` → correlator → testes → review sre/security).
 
 **Status**: spec criada (2026-06-14) — bloqueada em Phase 0 (confirmar Falco/Falcosidekick deployados + decisão de ingestão A vs B). SRE/Security review pendente antes de implementar.
 
@@ -187,7 +187,7 @@ Three independent gaps surfaced by [`docs/threat-model-and-limitations.md`](docs
 
 ### ✅ ~~P3.1 — Replay mode~~ — **DONE**
 
-Spec at [`.kiro/specs/replay-mode/`](.kiro/specs/replay-mode/). All 16 tasks complete.
+Spec at [`specs/replay-mode/`](specs/replay-mode/). All 16 tasks complete.
 
 CLI: `controller --replay --from=24h --to=1h --config=cand.yaml --output=report.json` simulates detection over historical metrics/logs without side effects (no Redis writes, no Alertmanager dispatches, no gRPC fan-out).
 
@@ -223,7 +223,7 @@ Stored in Redis with TTL 30d. Used to:
 - Auto-tune `zscore_threshold` per metric
 - Surface "your top 5 noisy rules" weekly
 
-**Effort**: large. Requires Slack interaction handler + feedback store. Candidato a spec próprio em `.kiro/specs/feedback-loop/`.
+**Effort**: large. Requires Slack interaction handler + feedback store. Candidato a spec próprio em `specs/feedback-loop/`.
 
 ### 🎯 P3.4 — SLO-aware severity
 
@@ -296,7 +296,7 @@ gates. They can be executed in parallel with Phase 0.
 > that would each be rejected by Kyverno admission. Bundling them inside one bullet
 > hid both the blast radius and the effort.
 
-Spec: [`.kiro/specs/production-hardening/`](.kiro/specs/production-hardening/) —
+Spec: [`specs/production-hardening/`](specs/production-hardening/) —
 requirements + tasks. No `design.md` because there is no architectural decision; this
 is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-security.md`,
 `12-factor-app.md`, `dev-environment.md`).
@@ -419,7 +419,7 @@ Invoke staffops-chaitops Agent API on high-confidence anomalies to trigger autom
 - Fire-and-forget: does NOT wait for squad result; controller continues detection cycle
 - Graceful degradation: if Agent API unavailable, normal Alertmanager flow continues
 
-**Spec**: `.kiro/specs/agent-api-integration/`
+**Spec**: `specs/agent-api-integration/`
 
 **Effort**: 22 tasks (6 core + 6 integration/observability + 7 tests + 3 docs)
 
@@ -506,7 +506,7 @@ Single consolidated milestone covering a day of iteration. See `CHANGELOG.md` fo
 - **2026-05-30**: Versions bumped manually per `version-management.md` steering. Each component (controller, ml) versioned independently.
 - **2026-05-30**: Module path renamed `github.com/bigdatacorp/staffops-anomaly-detection` → `github.com/staffops/staffops-anomaly-detection` for org-neutrality. All Go imports + Python proto descriptors regenerated.
 - **2026-05-30**: All endpoint URLs / org-specific identifiers moved to env vars (`${VAR}` / `${VAR:default}` substitution in `config.yaml`). Required vars: `VM_URL`, `LOKI_URL`, `ALERTMANAGER_URL`. Compose fails fast.
-- **2026-05-30**: Adopted spec-driven workflow per `staffops_agent_definition/steering/spec-driven-workflow.md`. `.kiro/specs/replay-mode/` is the pilot — design reviewed before implementation, 11 ambiguities decided up front.
+- **2026-05-30**: Adopted spec-driven workflow per `staffops_agent_definition/steering/spec-driven-workflow.md`. `specs/replay-mode/` is the pilot — design reviewed before implementation, 11 ambiguities decided up front.
 - **2026-05-30**: Observability hardening promoted to dedicated phase (Phase 4). Three blockers identified (instrumentation bugs, `identity` label cardinality bomb, missing multi-cluster labels) that must be fixed before any cluster deploy. Renumbered: old Phase 4 → new Phase 5, old Phase 5 → new Phase 6.
 - **2026-05-30**: Subagent tool (Kiro CLI parallel execution) verified non-functional in this environment (3 consecutive `No result` returns including minimal `summary`-only ping). Falling back to serial implementation by main agent. Will retry when environment changes.
 - **2026-05-30**: `eks_cluster` BDC-specific label removed from app code (was added briefly during P4.A.3, then reverted). Per `observability-principles.md` steering: app emits only `service.name` (here, `cluster`); environment-specific labels (`eks_cluster`, `environment`, `team`, `region`) belong at the scrape layer. Implemented via `static_configs.labels` per scrape job in `scripts/observability/prometheus.yml` for local dev; production uses `vmagent externalLabels`. Documented in `controller/README.md` "Multi-cluster labels" section. App stays org-agnostic — same as the `bigdatacorp` rename earlier.
@@ -520,6 +520,6 @@ Single consolidated milestone covering a day of iteration. See `CHANGELOG.md` fo
   by independent security review; `anomaly-detection` reviewer reaffirmed Decision 8
   (detector is commodity) and recommended P0.2 competitive teardown before any further
   algorithmic investment. Result: created **Phase 5 Pre-Reqs** section above (PH.1–PH.25)
-  capturing the eleven hard-fails as explicit blockers, and `.kiro/specs/production-hardening/`
+  capturing the eleven hard-fails as explicit blockers, and `specs/production-hardening/`
   spec to track execution. The original P5.2 ("Deploy to cluster") was the bullet that
   hid all this — making it explicit prevents the same compression in the next pass.

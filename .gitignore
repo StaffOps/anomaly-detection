@@ -7,6 +7,10 @@ controller/bin/
 
 # Go
 controller/vendor/
+cov.out
+cov_full.out
+coverage.xml
+*.coverprofile
 
 # Python
 ml/__pycache__/
@@ -20,6 +24,14 @@ ml/.venv/
 .vscode/
 *.swp
 *.swo
+
+# Local AI-agent tooling (repo guidance is tool-agnostic in AGENTS.md;
+# keep contributors' personal agent config out of version control)
+.claude/
+.cursor/
+.continue/
+.aider*
+.kiro/
 
 # OS
 .DS_Store

@@ -269,7 +269,7 @@
 
 ## 2026-05-30 23:20 — replay-mode (P3.1) IN PROGRESS — paused at 5/16 tasks
 - **Type**: progress note
-- **Detail**: Started replay-mode implementation as pilot of spec-driven workflow (`.kiro/specs/replay-mode/`). Completed phases 1+2: window parser (T1, 22 sub-tests), VM range query (T2), Loki range query (T3), InMemStore baseline (T4, 7 tests), `baseline.Evaluator` interface refactor (T5, AdaptiveDetector now polymorphic). Paused to attack observability hardening blockers before continuing. Build clean, all tests green.
+- **Detail**: Started replay-mode implementation as pilot of spec-driven workflow (`specs/replay-mode/`). Completed phases 1+2: window parser (T1, 22 sub-tests), VM range query (T2), Loki range query (T3), InMemStore baseline (T4, 7 tests), `baseline.Evaluator` interface refactor (T5, AdaptiveDetector now polymorphic). Paused to attack observability hardening blockers before continuing. Build clean, all tests green.
 - **Evidence**: `controller/internal/replay/{window,inmem_baseline,*_test}.go` + extended `internal/ingestion/{metrics,logs}.go` with TimeSeries/QueryRange.
 - **Action**: resume after observability hardening or deciding next direction. T6-T16 remaining (~5 days sequential).
 

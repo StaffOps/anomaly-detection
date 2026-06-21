@@ -155,14 +155,14 @@ All endpoints, cluster names and namespace lists come from env vars. See `.env.e
    (Go 35 % → ≥ 90 %, ML 0 % → ≥ 90 %, failing test, missing CI), Helm + ArgoCD
    migration, NetworkPolicy + IRSA, dependency hygiene. See
    [`ROADMAP.md` → Phase 5 Pre-Reqs](./ROADMAP.md#phase-5-pre-reqs--production-hardening-blocks-phase-5-deploy)
-   and the spec at [`.kiro/specs/production-hardening/`](./.kiro/specs/production-hardening/).
+   and the spec at [`specs/production-hardening/`](./specs/production-hardening/).
 
 ### 🔜 Next (after blockers)
 - [ ] Wire ML Forecast (Prophet) into cycle (needs baseline time-series export from Redis)
 - [ ] Remove `--dry-run` and validate real alerts via Alertmanager → Slack
 - [ ] Deploy to cluster (K8s manifests in `controller/deploy/`)
 - [ ] Feedback loop (mark false positives to adjust baselines)
-- [ ] Agent API integration — invoke staffops-chaitops squad on high-confidence anomalies (spec: `.kiro/specs/agent-api-integration/`)
+- [ ] Agent API integration — invoke staffops-chaitops squad on high-confidence anomalies (spec: `specs/agent-api-integration/`)
 
 ## Development
 

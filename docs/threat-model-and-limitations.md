@@ -30,7 +30,7 @@ deviate from a learned per-series baseline:
 | `events` | K8s API (`Events("").Watch`) | event-reason patterns |
 
 A fourth signal — `security` via **Falco** — is **specced but not implemented**
-(see `.kiro/specs/falco-integration/`, roadmap P2.7). Even when shipped, its v1 is
+(see `specs/falco-integration/`, roadmap P2.7). Even when shipped, its v1 is
 **enrichment-only**: it annotates an already-existing resource anomaly, it does not
 raise security alerts on its own.
 
@@ -201,7 +201,7 @@ These limitations map to concrete roadmap items (see `ROADMAP.md`):
 - **Absence-of-signal detection** (weakness #3) — **P2.10**, high-value for SRE
   independent of any security goal.
 - **Falco integration** (closes part of the source ceiling) — P2.7,
-  `.kiro/specs/falco-integration/`. Enrichment-only in v1.
+  `specs/falco-integration/`. Enrichment-only in v1.
 - **Least-privilege RBAC + IRSA** (weakness #6) — P5.2, plus the broader hardening
   bundle in [Phase 5 Pre-Reqs](../ROADMAP.md#phase-5-pre-reqs--production-hardening-blocks-phase-5-deploy)
   (PH.1, PH.21, PH.22, PH.23).
