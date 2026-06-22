@@ -271,7 +271,7 @@ Work on these in the order listed. Never mark a blocker done without validating 
 - **PH.1** 🟡 *partial* — images now run as nonroot (`USER 65534` in controller/worker/ml
   Dockerfiles, validated). Pod-level `runAsNonRoot`, `readOnlyRootFilesystem`,
   `drop:[ALL]` still pending — they live in the K8s manifests/Helm chart (PH.15).
-- **PH.2** 🟡 *partial* — CI (GitHub Actions) builds SHA-tagged images to `ghcr.io`.
+- **PH.2** 🟡 *partial* — CI (GitHub Actions) builds SHA-tagged images to Docker Hub.
   `:latest`/`REPLACE_ME_REGISTRY` removal still pending in manifests (PH.15).
 - **PH.4** Redis no auth → External Secrets Operator + mounted password
 - **PH.5** ✅ *done* — ML Dockerfile is multi-stage; runtime image has no gcc/grpcio-tools
@@ -362,11 +362,14 @@ Five workflows in `.github/workflows/` (org-standard layout, mirrors staffops-ai
 |----------|---------|---------|
 | `test.yml` | push/PR `main`,`dev` | `guard` (PR→main only from `dev`), `lint-go` (gofmt+vet), `lint-ml` (ruff), `dep_scan` (Trivy fs), `test-go` + `test-ml` |
 | `sast.yml` | push/PR `main`,`dev` | `gosec` (Go) + `bandit` (ML) |
-| `build.yml` | push `main` | per image: build local → Trivy scan → push `ghcr.io/.../<img>:{sha,latest}` → SBOM |
+| `build.yml` | push `main` | per image: build local → Trivy scan → push to Docker Hub `<img>:{sha,latest}` → SBOM |
 | `release.yml` | tag `v*` / manual | versioned immutable images + GitHub Release |
 | `docs.yml` | push/PR `main` | PR builds `--strict`; main deploys to gh-pages |
 
-- **Registry**: `ghcr.io` (login via `GITHUB_TOKEN`). Images: `controller`, `worker`, `ml`.
+- **Registry**: **Docker Hub** (not ghcr) — the repo is private, so images are published to
+  the org's Docker Hub account (same as staffops-aigent-squad). Needs the
+  `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` secrets. Images:
+  `<user>/staffops-anomaly-detection-{controller,worker,ml}`.
 - **Private module auth**: `DOCS_DEPLOY_TOKEN` secret, passed as the Docker build secret
   `github_token` (HTTPS, `--mount=type=secret`) and as a git credential in test/lint jobs.
   No SSH, no extra secret to provision.

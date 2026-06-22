@@ -13,8 +13,10 @@ Work landed after controller 0.7.0, not yet released (still pre-production, no c
 ### ci / build
 
 **Added — GitHub Actions CI + hardened images (2026-06-21)**
-- New `.github/workflows/ci.yml`: `test (go + ml) → build/push to ghcr.io` with
-  SHA tags. The `≥90%` coverage gate is report-only until PH.9 lands (PH.2/PH.12).
+- GitHub Actions (`test`/`sast`/`build`/`release`/`docs`): build/push SHA-tagged images
+  to **Docker Hub** (repo is private; org pattern, not ghcr), with Trivy + CycloneDX SBOM
+  and gosec/bandit SAST. Private-module auth via `DOCS_DEPLOY_TOKEN`. Security/lint and
+  coverage gates are report-only during rollout (PH.2/PH.9/PH.12).
 - ML image is now multi-stage — runtime layer drops `gcc/g++` and `grpcio-tools` (PH.5).
 - All images run as nonroot `USER 65534`; controller/worker add `tzdata` (PH.1, image side).
 - Runtime `grpcio` bumped to 1.65.4, past CVE-2024-7246 (PH.24).

@@ -321,7 +321,7 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 | PH.9 | 🟡 Go controller coverage **~89.4%** (`./internal/...`) → ≥90%: remaining laggards are `readiness` (~12%), `ml` (~29%), `leader` (~49%) | dev |
 | PH.10 | Bring ML service coverage from **0% → ≥90%**: `ml/tests/` is currently empty (`__init__.py` 0 bytes). Need unit + gRPC integration tests for forecaster, multivariate, server | dev |
 | PH.11 | ✅ Done — `replay/window_test.go` `TestParseWindow_MixedDurationAndTimestamp` fixed; full Go suite green | dev |
-| PH.12 | 🟡 CI added as `.github/workflows/ci.yml` (GitHub Actions): `test (go+ml) → build/push to ghcr.io` with SHA tags + ssh-agent for the private module. The `≥90%` coverage gate is report-only until PH.9 lands. | dev |
+| PH.12 | 🟡 CI added (GitHub Actions: `test`/`sast`/`build`/`release`/`docs`): build/push SHA-tagged images to Docker Hub; private-module auth via `DOCS_DEPLOY_TOKEN`. Security/lint + coverage gates report-only during rollout (see "CI/CD rollout debt"). | dev |
 
 ### Org-neutrality completion (continuation of 2026-05-30 rename)
 
@@ -364,8 +364,9 @@ mechanical application of existing steering. They can be parallelized with Phase
 
 ### CI/CD rollout debt — report-only gates to re-arm (added 2026-06-22)
 
-Full-parity CI/CD (`test`/`sast`/`build`/`release`/`docs`, GitHub Actions → `ghcr.io`,
-private-module auth via `DOCS_DEPLOY_TOKEN`) landed with security/lint gates as
+Full-parity CI/CD (`test`/`sast`/`build`/`release`/`docs`, GitHub Actions → **Docker Hub**
+— repo is private, so images go to the org's Docker Hub account, not ghcr; private-module
+auth via `DOCS_DEPLOY_TOKEN`) landed with security/lint gates as
 **report-only** (`continue-on-error` / Trivy `exit-code: 0`) so they surface debt without
 blocking `main`. Re-arm each gate (flip the flag in the workflow) as its debt clears:
 
