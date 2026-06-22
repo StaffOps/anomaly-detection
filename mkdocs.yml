@@ -3,11 +3,13 @@ site_description: Distributed anomaly detection for Kubernetes clusters
 site_url: https://staffops.github.io/anomaly-detection/
 repo_url: https://github.com/StaffOps/staffops-anomaly-detection
 repo_name: StaffOps/anomaly-detection
-edit_uri: edit/main/docs/
+edit_uri: edit/main/docs/site/
+
+docs_dir: docs/site
 
 theme:
   name: material
-  custom_dir: overrides
+  custom_dir: docs/site/overrides
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
