@@ -15,7 +15,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
 - [ ] **PH.2** — Replace `:latest` and `REPLACE_ME_REGISTRY` placeholders.
   Files: `controller/deploy/controller.yaml` L57, `controller/deploy/worker.yaml`
   L52. Tag pattern: `<harbor>/staffops/anomaly-{controller,worker,ml}:<git-sha>`.
-  Wire to `.gitlab-ci.yml` (PH.12) so CI sets the tag. **Effort: S**.
+  Wire to `.github/workflows/ci.yml` (PH.12) so CI sets the tag. **Effort: S**.
 
 - [ ] **PH.3** — Migrate base images to BDC golden (apko + cosign).
   - `controller/Dockerfile` L1: `golang:1.22-alpine` → `harbor.<org>/golden/golang-1.22`
@@ -60,7 +60,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   Build is currently red. Diagnose via `go test ./internal/replay/ -run
   TestParseWindow_MixedDurationAndTimestamp -v`. **Effort: S**.
 
-- [ ] **PH.12** — Create `.gitlab-ci.yml` (or `.github/workflows/ci.yml`).
+- [ ] **PH.12** — Create `.github/workflows/ci.yml`.
   Stages:
   1. `unit-test` — `docker run golang:1.22 go test -coverprofile=cov.out
      -covermode=atomic ./...; go tool cover -func=cov.out | grep total | awk

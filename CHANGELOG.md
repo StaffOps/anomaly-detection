@@ -10,6 +10,26 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
 
+### ci / build
+
+**Added — GitHub Actions CI + hardened images (2026-06-21)**
+- New `.github/workflows/ci.yml`: `test (go + ml) → build/push to ghcr.io` with
+  SHA tags. The `≥90%` coverage gate is report-only until PH.9 lands (PH.2/PH.12).
+- ML image is now multi-stage — runtime layer drops `gcc/g++` and `grpcio-tools` (PH.5).
+- All images run as nonroot `USER 65534`; controller/worker add `tzdata` (PH.1, image side).
+- Runtime `grpcio` bumped to 1.65.4, past CVE-2024-7246 (PH.24).
+- Private module `staffops-otel-libs` is fetched via BuildKit SSH forwarding
+  (`--mount=type=ssh` / `ssh: default`) — deploy key never enters an image layer.
+- `replay/window_test.go` fix verified; full Go suite green (PH.11).
+
+### repo
+
+**Changed — AI-tool-agnostic layout (2026-06-21)**
+- `AGENTS.md` is now the canonical, tool-neutral agent guide; `CLAUDE.md` is a
+  one-line pointer (`See @AGENTS.md`).
+- Specs moved from `.kiro/specs/` to `specs/` (history preserved); `.kiro/` removed.
+- `.gitignore` excludes local AI-tool dirs and Go coverage artifacts.
+
 ### docs
 
 **Added — Multi-specialist evaluation (2026-06-16)**

@@ -51,8 +51,8 @@ be ceremony.
   packages, with the gate enforced in CI (`go test -coverprofile + threshold`).
 - WHEN I run the Python ML test suite THEN coverage SHALL be ≥ 90 %, enforced
   via `pytest --cov-fail-under=90` in CI.
-- WHEN I push to the repo THEN `unit-test → build-dev → demo` stages SHALL run
-  via `.gitlab-ci.yml`, blocking merge on any failure.
+- WHEN I push to the repo THEN `test → build` jobs SHALL run
+  via `.github/workflows/ci.yml`, blocking merge on any failure.
 - WHEN I check the build status THEN no test SHALL be failing
   (currently `replay/window_test.go::TestParseWindow_MixedDurationAndTimestamp`
   is red).
@@ -91,7 +91,7 @@ The spec is complete when all the following are true and verifiable:
 - [ ] Go coverage ≥ 90 % across `internal/...` (currently 35 %).
 - [ ] Python ML coverage ≥ 90 % (currently 0 %).
 - [ ] `replay/window_test.go::TestParseWindow_MixedDurationAndTimestamp` passes.
-- [ ] `.gitlab-ci.yml` exists with `unit-test → build-dev → demo` stages, each
+- [ ] `.github/workflows/ci.yml` exists with `test → build` jobs, each
       failing the build on coverage / lint regression.
 
 ### Org-neutrality completion

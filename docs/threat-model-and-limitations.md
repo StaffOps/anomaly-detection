@@ -232,13 +232,15 @@ and dependencies**. Concrete gaps observed in `controller/Dockerfile`,
   pseudo-version — a personal GitHub repository. Single account compromise →
   every consumer inherits the payload. There is no Harbor proxy mitigation
   because the dep is not in the org repo.
-- The ML image keeps `gcc/g++` in the runtime layer (single-stage). A compromised
-  pod has an in-container compiler — convenient for staging additional payloads.
-- `grpcio==1.62.1` carries CVE-2024-7246 (DoS, fixed in 1.63). No
-  vulnerability-scanning gate exists.
+- ~~The ML image keeps `gcc/g++` in the runtime layer (single-stage).~~ **Resolved
+  (PH.5)**: the ML image is now multi-stage — the runtime layer has no compiler or
+  build tooling.
+- ~~`grpcio==1.62.1` carries CVE-2024-7246 (DoS).~~ **Resolved (PH.24)**: runtime
+  `grpcio` bumped to 1.65.4. A vulnerability-scanning gate still does not exist.
 
-**Mitigation**: items PH.3 (golden bases + cosign), PH.5 (multi-stage ML), PH.13
-(org rename for the Go dep), PH.24 (grpcio bump) in Phase 5 Pre-Reqs.
+**Mitigation**: PH.5 (multi-stage ML) ✅ and PH.24 (grpcio bump) ✅ are done;
+PH.3 (golden bases + cosign) and PH.13 (org rename for the Go dep) remain in
+Phase 5 Pre-Reqs.
 
 ### B. Redis as a single point of failure for state integrity
 

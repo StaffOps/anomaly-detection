@@ -305,11 +305,11 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.1 | Add `securityContext` (runAsNonRoot, readOnlyRootFilesystem, drop:[ALL], allowPrivilegeEscalation:false) to controller, worker, redis, ML pods | security, gitops |
-| PH.2 | Replace `:latest` tag and `REPLACE_ME_REGISTRY` placeholder with CI-driven SHA tags pulled through Harbor proxy | security, gitops |
+| PH.1 | 🟡 Images run nonroot (`USER 65534`); pod-level `securityContext` (runAsNonRoot, readOnlyRootFilesystem, drop:[ALL], allowPrivilegeEscalation:false) for controller/worker/redis/ML still pending in manifests/Helm (PH.15) | security, gitops |
+| PH.2 | 🟡 CI builds SHA-tagged images to `ghcr.io`; `:latest`/`REPLACE_ME_REGISTRY` removal in manifests pending Helm (PH.15) | security, gitops |
 | PH.3 | Migrate base images to BDC golden (apko-built, cosign-signed): `golang`, `alpine`, `redis`, `python` | security |
 | PH.4 | Enable Redis AUTH; mount password as file-secret via External Secrets Operator (12-factor IV) | security |
-| PH.5 | Multi-stage ML Dockerfile — drop `gcc`/`g++` from runtime image | security |
+| PH.5 | ✅ Done — multi-stage ML Dockerfile; runtime image drops `gcc`/`g++` and `grpcio-tools` | security |
 | PH.6 | Add mandatory labels (`CostCenter`, `Environment`, `app.kubernetes.io/version`) to all pod templates | gitops, security |
 | PH.7 | Add `preStop` hook (`sleep 5`) and `terminationGracePeriodSeconds: 30` to all deployments | gitops |
 | PH.8 | Create K8s manifest for the ML service (today exists only in `docker-compose`) | gitops |
@@ -318,10 +318,10 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.9 | Bring Go controller coverage from **35% → ≥90%**: tests for `dispatcher`, `correlator`, `enrichment`, `suppression`, `redis`, `ratelimit`, `baseline`, `ml/client`, `config/Load`, `config/watcher` | dev |
+| PH.9 | 🟡 Go controller coverage **~89.4%** (`./internal/...`) → ≥90%: remaining laggards are `readiness` (~12%), `ml` (~29%), `leader` (~49%) | dev |
 | PH.10 | Bring ML service coverage from **0% → ≥90%**: `ml/tests/` is currently empty (`__init__.py` 0 bytes). Need unit + gRPC integration tests for forecaster, multivariate, server | dev |
-| PH.11 | Fix the failing `replay/window_test.go` `TestParseWindow_MixedDurationAndTimestamp` — build is currently red | dev |
-| PH.12 | Add `.gitlab-ci.yml` with `unit-test → build-dev → demo` stages enforcing the `≥90%` gate (`go test -coverprofile`, `pytest --cov-fail-under=90`) | dev |
+| PH.11 | ✅ Done — `replay/window_test.go` `TestParseWindow_MixedDurationAndTimestamp` fixed; full Go suite green | dev |
+| PH.12 | 🟡 CI added as `.github/workflows/ci.yml` (GitHub Actions): `test (go+ml) → build/push to ghcr.io` with SHA tags + ssh-agent for the private module. The `≥90%` coverage gate is report-only until PH.9 lands. | dev |
 
 ### Org-neutrality completion (continuation of 2026-05-30 rename)
 
@@ -355,7 +355,7 @@ Currently rated **GitOps maturity 1.5/5**. To unblock cluster deploy:
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.24 | Bump `grpcio` 1.62.1 → 1.65.x (CVE-2024-7246 DoS, fixed in 1.63) | security |
+| PH.24 | ✅ Done — runtime `grpcio` bumped 1.62.1 → 1.65.4 (CVE-2024-7246 DoS); `grpcio-tools` stays 1.62.1 (build-time only) | security |
 | PH.25 | Resolve duplicate dependency pinning in `ml/Dockerfile` (versions hardcoded in `RUN pip install` AND `pyproject.toml` — drift risk) | dev, security |
 
 **Effort estimate**: 1-2 sprints focused work. None of these are research — they are
