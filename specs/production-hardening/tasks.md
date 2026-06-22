@@ -1,5 +1,7 @@
 # Production Hardening — Tasks
 
+> **Status**: `IN-PROGRESS` — CI workflows done, test coverage + Helm chart WIP
+
 Each task carries a `PH.N` identifier matching the corresponding entry in
 `ROADMAP.md` → Phase 5 Pre-Reqs. Effort sizing: **S** ≤ 4h, **M** ≤ 1d, **L** ≤
 3d. Tasks within the same group can run in parallel; groups have soft ordering.

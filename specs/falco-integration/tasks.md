@@ -1,5 +1,7 @@
 # Tasks: Falco Integration (runtime security signal)
 
+> **Status**: `BLOCKED` — Waiting on Phase 0 prereqs (Falco deployed? Ingest mode decision)
+
 > Verification independence (steering): autor do código ≠ autor dos testes. Onde
 > houver subagents disponíveis, delegar implementação a `dev` e testes a uma sessão
 > `dev` distinta, com review por `code-review`. Gate de cobertura ≥90% no package

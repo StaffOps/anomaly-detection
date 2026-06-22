@@ -1,5 +1,7 @@
 # Tasks: Agent API Integration
 
+> **Status**: `FUTURE` — Planned, not yet prioritized
+
 ## Phase 1: Core package
 
 - [ ] Task 1: Criar package `internal/agentapi/` com struct `Config` e parsing YAML (incluir novos campos: max_concurrent, dedup_window, max_payload_bytes)

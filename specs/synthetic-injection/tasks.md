@@ -1,5 +1,7 @@
 # Tasks: Synthetic Fault Injection on Replay
 
+> **Status**: `READY` — Spec complete, not yet executed (Phase 0.1 gate)
+
 > Verification independence (steering): autor do código ≠ autor dos testes. Onde
 > houver subagents, delegar implementação a `dev` e testes a sessão `dev` distinta,
 > review por `code-review`. Gate de cobertura ≥90% no novo código (`internal/replay/inject/`).

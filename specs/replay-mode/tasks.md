@@ -1,5 +1,7 @@
 # Tasks: Replay Mode
 
+> **Status**: `DONE` — Implemented in controller 0.7.0 (2026-05-31)
+
 Sequenciamento das tasks com dependências explícitas. Cada task entrega valor (commit verde, build OK, testes passando) ou é claramente plumbing pra próxima.
 
 ## Phase 1 — Foundation (range queries + window parsing)
