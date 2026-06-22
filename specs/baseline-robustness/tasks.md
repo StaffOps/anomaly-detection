@@ -1,6 +1,6 @@
 # Tasks: Baseline Robustness
 
-> **Status**: `TODO` — Ready to implement, no external blockers. Touches internal/baseline/store.go.
+> **Status**: `IN-PROGRESS` — P2.8 (workload keying) DONE (2026-06-22). P2.9 and P2.10 remain.
 
 ## P2.8 — Workload-identity baseline keying
 
