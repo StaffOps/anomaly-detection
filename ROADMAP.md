@@ -306,7 +306,7 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 | # | Item | Source review |
 |---|------|---------------|
 | PH.1 | 🟡 Images run nonroot (`USER 65534`); pod-level `securityContext` (runAsNonRoot, readOnlyRootFilesystem, drop:[ALL], allowPrivilegeEscalation:false) for controller/worker/redis/ML still pending in manifests/Helm (PH.15) | security, gitops |
-| PH.2 | 🟡 CI builds SHA-tagged images to `ghcr.io`; `:latest`/`REPLACE_ME_REGISTRY` removal in manifests pending Helm (PH.15) | security, gitops |
+| PH.2 | 🟡 CI builds SHA-tagged images to Docker Hub; `:latest`/`REPLACE_ME_REGISTRY` removal in manifests pending Helm (PH.15) | security, gitops |
 | PH.3 | Migrate base images to BDC golden (apko-built, cosign-signed): `golang`, `alpine`, `redis`, `python` | security |
 | PH.4 | Enable Redis AUTH; mount password as file-secret via External Secrets Operator (12-factor IV) | security |
 | PH.5 | ✅ Done — multi-stage ML Dockerfile; runtime image drops `gcc`/`g++` and `grpcio-tools` | security |
