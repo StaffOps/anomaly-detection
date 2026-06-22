@@ -382,6 +382,18 @@ blocking `main`. Re-arm each gate (flip the flag in the workflow) as its debt cl
 - [x] **Private-module auth in CI** — `DOCS_DEPLOY_TOKEN` confirmed to read `staffops-otel-libs`
       (`test-go` green in CI 2026-06-22); no dedicated deploy key needed.
 
+**Open decision — branch model.** The workflows were modeled on staffops-aigent-squad,
+which uses a `main`+`dev` model with a `guard` job (PRs to `main` must come from `dev`).
+This repo is **trunk-based** today (all history is direct commits to `main`; no `dev`
+branch exists), so:
+- the `guard` job never runs (it only triggers on PRs to `main`) — currently decorative;
+- the `dev` entries in `push`/`pull_request` triggers reference a non-existent branch.
+
+Decide one and adjust the triggers accordingly:
+- [ ] **Trunk-based** (matches today) — drop `guard` + `dev`; `test`/`sast` on push+PR to `main`.
+- [ ] **Adopt `main`+`dev`** — create `dev`, work there, PR into a protected `main` (keep `guard`).
+- [ ] **Trunk + optional PRs** — no `dev`/`guard`, keep PR-to-`main` triggers for feature branches.
+
 > Cross-repo: the "version vs gitignore the `.kiro/`/`.claude/` tooling dirs" decision is
 > tracked in `staffops_agent_definition/steering/spec-driven-workflow.md`.
 
