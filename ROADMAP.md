@@ -39,13 +39,20 @@ Confirm the causal chains in `docs/architecture/degradation-model.md` against re
 incidents via replay (walk each chain backwards from symptom, check leading→lagging
 ordering). Until done, the model is a written hypothesis, not ground truth.
 
-### 🎯 P0.4 — FDR (Benjamini-Hochberg) over per-cycle series
+### ✅ ~~P0.4 — FDR (Benjamini-Hochberg) over per-cycle series~~ — **DONE (2026-06-22)**
 
 Independent of which thesis wins: ~400 adaptive series at fixed z>3 ≈ ~1000+ FP/day
-from multiple comparisons alone. Apply FDR control before dispatch. Cheap, attacks the
+from multiple comparisons alone. Applied FDR control before dispatch. Cheap, attacks the
 largest FP source. **Read as diagnostic**: that the best detector fix is a generic
 statistical correction unrelated to .NET/k8s/trace confirms the value was never in the
 detector.
+
+**Implementation**: `internal/detection/fdr.go` — Benjamini-Hochberg on p-values derived
+from z-scores, applied per cycle after adaptive detection, before correlation. Only
+adaptive results filtered; static/pattern pass through. Config: `controller.fdr_target`
+(default 0.05). Metrics: `staffops_ad_detection_fdr_{accepted,rejected}_total`. 100% test
+coverage (20 unit tests). Remaining: T6-T7 (replay before/after comparison to quantify
+real FP reduction).
 
 ---
 

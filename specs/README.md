@@ -31,7 +31,7 @@ Feature and experiment specifications for `staffops-anomaly-detection`.
 | Spec | Status | Phase | Summary |
 |------|--------|-------|---------|
 | [production-hardening](production-hardening/) | `IN-PROGRESS` | P5 | Kyverno admission, CI gates, Helm chart, GitOps |
-| [fdr-correction](fdr-correction/) | `TODO` | P0.4 | Benjamini-Hochberg FDR to cut ~1000+ FP/day |
+| [fdr-correction](fdr-correction/) | `DONE` | P0.4 | Benjamini-Hochberg FDR to cut ~1000+ FP/day |
 | [baseline-robustness](baseline-robustness/) | `TODO` | P2.8-10 | Workload keying, anti-poisoning, dead man's switch |
 | [cardinality-guard](cardinality-guard/) | `TODO` | P5.4 | Self-protection: cap baseline series count |
 | [self-monitoring-rules](self-monitoring-rules/) | `TODO` | P6.1 | PrometheusRule/VMRule for system self-health |
