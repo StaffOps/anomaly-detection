@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,30 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 )
+
+// Pod name patterns for workload extraction (same as correlation package).
+var (
+	deployPat  = regexp.MustCompile(`^(.+)-[a-f0-9]{8,10}-[a-z0-9]{5}$`)
+	stsPat     = regexp.MustCompile(`^(.+)-(\d+)$`)
+	dsPat      = regexp.MustCompile(`^(.+)-[a-z0-9]{5}$`)
+)
+
+// extractWorkload derives workload name from pod name.
+func extractWorkload(pod string) string {
+	if pod == "" {
+		return ""
+	}
+	if m := deployPat.FindStringSubmatch(pod); len(m) > 1 {
+		return m[1]
+	}
+	if m := stsPat.FindStringSubmatch(pod); len(m) > 1 {
+		return m[1]
+	}
+	if m := dsPat.FindStringSubmatch(pod); len(m) > 1 {
+		return m[1]
+	}
+	return pod
+}
 
 // Stats holds the baseline statistics for a single series.
 type Stats struct {
@@ -56,20 +81,25 @@ type hashStore interface {
 
 // Store manages baselines in Redis.
 type Store struct {
-	redis hashStore
-	cfg   config.Baseline
+	redis           hashStore
+	cfg             config.Baseline
+	ephemeralLabels map[string]struct{}
 }
 
 // Compile-time check that Store satisfies Evaluator.
 var _ Evaluator = (*Store)(nil)
 
 func NewStore(redis hashStore, cfg config.Baseline) *Store {
-	return &Store{redis: redis, cfg: cfg}
+	eph := make(map[string]struct{}, len(cfg.EphemeralLabels))
+	for _, l := range cfg.EphemeralLabels {
+		eph[l] = struct{}{}
+	}
+	return &Store{redis: redis, cfg: cfg, ephemeralLabels: eph}
 }
 
 // Evaluate updates the baseline for a series and returns whether the value is anomalous.
 func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]string, value float64) (*Result, error) {
-	key := baselineKey(metric, labels)
+	key := baselineKey(metric, s.normalizeLabels(labels))
 
 	stats, err := s.load(ctx, key)
 	if err != nil {
@@ -179,6 +209,27 @@ func parseStats(data map[string]string) *Stats {
 	ts, _ := strconv.ParseInt(data["last_update"], 10, 64)
 	s.LastUpdate = time.Unix(ts, 0)
 	return s
+}
+
+// normalizeLabels returns a stable label set for baseline keying:
+// 1. Replaces "pod" value with extracted workload name (survives pod restarts)
+// 2. Drops ephemeral labels configured in baseline.ephemeral_labels
+func (s *Store) normalizeLabels(labels map[string]string) map[string]string {
+	if len(labels) == 0 {
+		return labels
+	}
+	normalized := make(map[string]string, len(labels))
+	for k, v := range labels {
+		if _, ephemeral := s.ephemeralLabels[k]; ephemeral {
+			continue
+		}
+		if k == "pod" && v != "" {
+			normalized["pod"] = extractWorkload(v)
+			continue
+		}
+		normalized[k] = v
+	}
+	return normalized
 }
 
 func baselineKey(metric string, labels map[string]string) string {
