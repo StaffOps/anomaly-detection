@@ -362,6 +362,28 @@ Currently rated **GitOps maturity 1.5/5**. To unblock cluster deploy:
 mechanical application of existing steering. They can be parallelized with Phase 0
 (strategic gates) since the two paths don't conflict.
 
+### CI/CD rollout debt — report-only gates to re-arm (added 2026-06-22)
+
+Full-parity CI/CD (`test`/`sast`/`build`/`release`/`docs`, GitHub Actions → `ghcr.io`,
+private-module auth via `DOCS_DEPLOY_TOKEN`) landed with security/lint gates as
+**report-only** (`continue-on-error` / Trivy `exit-code: 0`) so they surface debt without
+blocking `main`. Re-arm each gate (flip the flag in the workflow) as its debt clears:
+
+- [ ] **gofmt** — 16 unformatted files; `gofmt -w` then drop `continue-on-error` on `lint-go`.
+- [ ] **go vet** — context leak in `internal/redis/client_test.go:25` (cancel func discarded).
+- [ ] **Trivy (deps + images)** — `google.golang.org/grpc` 1.67.1 → 1.79.3 (CVE-2026-33186,
+      CRITICAL), `go.opentelemetry.io/otel/sdk` (CVE-2026-24051), `net/url` (CVE-2025-61726);
+      ML base `python:3.11-slim` (debian) CVEs. Then set Trivy `exit-code: 1` (re-arm
+      `release.yml` first — a versioned image must never ship vulnerable).
+- [ ] **gosec / bandit** — triage findings, suppress reviewed FPs inline, drop `continue-on-error`.
+- [ ] **Coverage gate** — enforce once PH.9 (Go ~89.4% → ≥90%) and PH.10 (ML 0% → ≥90%) land.
+- [x] **`test-ml`** — fixed 2026-06-22 (hatch wheel `packages=["server"]`; grpcio aligned to 1.65.4).
+- [x] **Private-module auth in CI** — `DOCS_DEPLOY_TOKEN` confirmed to read `staffops-otel-libs`
+      (`test-go` green in CI 2026-06-22); no dedicated deploy key needed.
+
+> Cross-repo: the "version vs gitignore the `.kiro/`/`.claude/` tooling dirs" decision is
+> tracked in `staffops_agent_definition/steering/spec-driven-workflow.md`.
+
 ---
 
 ## Phase 5 — Cluster readiness (was Phase 4)

@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "ML service for anomaly detection (Prophet forecasting + Isolation Forest)"
 requires-python = ">=3.11"
 dependencies = [
-    "grpcio==1.62.1",
+    "grpcio==1.65.4",
     "grpcio-tools==1.62.1",
     "protobuf==4.25.3",
     "prophet==1.3.0",
@@ -23,6 +23,11 @@ dev = [
     "pytest==8.1.1",
     "pytest-asyncio==0.23.6",
 ]
+
+[tool.hatch.build.targets.wheel]
+# The importable package lives in server/ (project name differs from package dir),
+# so hatchling needs this explicitly or editable installs fail metadata generation.
+packages = ["server"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
