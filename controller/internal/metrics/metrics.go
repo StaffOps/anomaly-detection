@@ -182,6 +182,16 @@ var (
 		Help: "Anomaly groups produced by the correlator",
 	}, []string{"severity"})
 
+	// FDR (Benjamini-Hochberg) metrics
+	FDRAccepted = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staffops_ad_detection_fdr_accepted_total",
+		Help: "Adaptive anomalies accepted after FDR correction",
+	})
+	FDRRejected = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staffops_ad_detection_fdr_rejected_total",
+		Help: "Adaptive anomalies rejected by FDR correction",
+	})
+
 	WorkloadPatterns = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "staffops_ad_detection_workload_patterns_total",
 		Help: "Workload-level patterns detected (≥N replicas of same workload anomalous)",
@@ -342,6 +352,7 @@ func MustRegisterController(reg prometheus.Registerer) {
 		AnomalyDetected, AnomalyCorrelated,
 		AnomalyByWorkload,
 		WorkloadPatterns, PodAlertsSuppressed,
+		FDRAccepted, FDRRejected,
 		AlertsFired, AlertsDeduplicated, AlertsDispatchErrors,
 		MLCalls, MLCallDuration,
 		EnrichmentRuns, EnrichmentDuration,

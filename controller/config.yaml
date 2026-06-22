@@ -30,6 +30,7 @@ controller:
   job_interval: 60s
   correlation_window: 2m
   cooldown: 5m
+  fdr_target: 0.05  # Benjamini-Hochberg FDR control (0.05 = 5% expected false discoveries)
   lease_name: anomaly-controller-leader
   lease_namespace: ${CONTROLLER_LEASE_NAMESPACE:monitoring}
   metrics_port: 8080

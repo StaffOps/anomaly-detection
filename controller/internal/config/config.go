@@ -53,6 +53,7 @@ type Controller struct {
 	JobInterval               time.Duration `yaml:"job_interval"`
 	CorrelationWindow         time.Duration `yaml:"correlation_window"`
 	Cooldown                  time.Duration `yaml:"cooldown"`
+	FDRTarget                 float64       `yaml:"fdr_target"`
 	LeaseName                 string        `yaml:"lease_name"`
 	LeaseNamespace            string        `yaml:"lease_namespace"`
 	MetricsPort               int           `yaml:"metrics_port"`

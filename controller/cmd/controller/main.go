@@ -268,7 +268,34 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 
 	// Feed anomalies into correlator (ML multivariate runs after correlation+enrichment,
 	// so the feature vector includes contextual signals not just the triggering metric).
+	//
+	// FDR (Benjamini-Hochberg): filter adaptive anomalies to control false discovery
+	// rate from multiple comparisons (~400 series at z>3 ≈ ~1000+ FP/day without).
+	fdr := detection.NewFDR(cfg.Controller.FDRTarget)
+	var allAnomalies []*detection.Anomaly
 	for _, a := range results.Anomalies {
+		allAnomalies = append(allAnomalies, &detection.Anomaly{
+			MetricName: a.MetricName,
+			Labels:     a.Labels,
+			Value:      a.CurrentValue,
+			Mean:       a.BaselineMean,
+			Stddev:     a.BaselineStddev,
+			Score:      a.AnomalyScore,
+			Severity:   a.Severity,
+			Signal:     a.Signal,
+			Detector:   a.Detector,
+			Timestamp:  time.Unix(a.Timestamp, 0),
+		})
+	}
+
+	accepted, rejected := fdr.Apply(allAnomalies)
+	metrics.FDRAccepted.Add(float64(len(accepted)))
+	metrics.FDRRejected.Add(float64(rejected))
+	if rejected > 0 {
+		slog.Info("fdr_applied", "accepted", len(accepted), "rejected", rejected, "target", cfg.Controller.FDRTarget)
+	}
+
+	for _, a := range accepted {
 		metrics.AnomalyDetected.WithLabelValues(a.Severity, a.Signal).Inc()
 
 		// AnomalyByWorkload: bounded labels for dashboards (top noisy workloads).
@@ -297,10 +324,10 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 			"namespace", a.Labels["namespace"],
 			"pod", a.Labels["pod"],
 			"service_name", a.Labels["service_name"],
-			"value", a.CurrentValue,
-			"baseline_mean", a.BaselineMean,
-			"baseline_stddev", a.BaselineStddev,
-			"score", a.AnomalyScore,
+			"value", a.Value,
+			"baseline_mean", a.Mean,
+			"baseline_stddev", a.Stddev,
+			"score", a.Score,
 			"severity", a.Severity,
 			"signal", a.Signal,
 			"detector", a.Detector,
@@ -309,14 +336,14 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 		correlator.Add(detection.Anomaly{
 			MetricName: a.MetricName,
 			Labels:     a.Labels,
-			Value:      a.CurrentValue,
-			Mean:       a.BaselineMean,
-			Stddev:     a.BaselineStddev,
-			Score:      a.AnomalyScore,
+			Value:      a.Value,
+			Mean:       a.Mean,
+			Stddev:     a.Stddev,
+			Score:      a.Score,
 			Severity:   a.Severity,
 			Signal:     a.Signal,
 			Detector:   a.Detector,
-			Timestamp:  time.Unix(a.Timestamp, 0),
+			Timestamp:  a.Timestamp,
 		})
 	}
 
