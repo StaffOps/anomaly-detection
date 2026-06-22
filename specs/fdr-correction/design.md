@@ -59,4 +59,4 @@ Very marginal anomalies (z=3.01) will be rejected by BH when many series are tes
 
 | Service | Purpose |
 |---------|---------|
-| VictoriaMetrics (replay) | Before/after comparison on same data window |
+| Prometheus-compatible TSDB (replay) | Before/after comparison on same data window |

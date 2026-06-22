@@ -97,4 +97,4 @@ Anomaly detected (worker)
 |---------|---------|
 | ML service (gRPC :50051) | Isolation Forest multivariate detection |
 | Redis | Enrichment cache, correlation window state |
-| VictoriaMetrics | Enrichment queries (CPU, memory, latency, error rate) |
+| Prometheus-compatible TSDB | Enrichment queries (CPU, memory, latency, error rate) |

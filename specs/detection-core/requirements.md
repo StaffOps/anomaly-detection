@@ -17,7 +17,7 @@ THEN the link SHALL open the correct Grafana Explore panel with pre-filled query
 ### US-3: Operator checking controller health
 
 WHEN an operator or K8s probe hits `/readyz`
-THEN the endpoint SHALL report aggregate health of all dependencies (Redis, VictoriaMetrics, Loki, Alertmanager, ML service) with each probe capped at 3s timeout, and the ML probe SHALL be no-op when the ML service is disabled.
+THEN the endpoint SHALL report aggregate health of all dependencies (Redis, Prometheus-compatible TSDB, Loki, Alertmanager, ML service) with each probe capped at 3s timeout, and the ML probe SHALL be no-op when the ML service is disabled.
 
 ## Acceptance Criteria
 
@@ -41,7 +41,7 @@ THEN the endpoint SHALL report aggregate health of all dependencies (Redis, Vict
 
 ### P1.3 — Complete Readiness Checks
 
-- [x] `/readyz` endpoint probes: Redis, VictoriaMetrics, Loki, Alertmanager, ML service
+- [x] `/readyz` endpoint probes: Redis, Prometheus-compatible TSDB, Loki, Alertmanager, ML service
 - [x] Each probe capped at 3s independent timeout
 - [x] ML probe returns healthy (no-op) when ML service is disabled in config
 - [x] Metric `staffops_ad_controller_readiness_checks_total{dependency,result}` incremented per check

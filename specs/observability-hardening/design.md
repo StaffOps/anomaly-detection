@@ -10,7 +10,7 @@ Controller (Go)
 └── cmd/worker/main.go      ← gRPC client with OTel interceptors
 
 Telemetry flow:
-  Metrics: App → Prometheus /metrics → vmagent scrape → VictoriaMetrics
+  Metrics: App → Prometheus /metrics → vmagent scrape → Prometheus-compatible TSDB
   Traces:  App → OTel SDK → OTel Collector (gRPC) → Tempo
   Logs:    slog → OTel bridge → OTel Collector → Loki
 ```
@@ -57,7 +57,7 @@ Telemetry flow:
 | Cost | Reality |
 |------|---------|
 | Cannot filter metrics by specific pod in PromQL | Use traces or logs for pod-level drill-down |
-| Alertmanager annotations not queryable in VictoriaMetrics | Acceptable — annotations are for humans, not queries |
+| Alertmanager annotations not queryable in metrics TSDB | Acceptable — annotations are for humans, not queries |
 
 **When this decision would be wrong**:
 - If per-pod metric comparison were a primary use case (it's not — USE method applies at workload level)
@@ -93,5 +93,5 @@ Telemetry flow:
 |---------|---------|
 | `staffops/otel-helper-go` | OTel SDK initialization + slog bridge |
 | OTel Collector (cluster) | Trace/log export target |
-| VictoriaMetrics | Metrics storage (scraped by vmagent) |
+| Prometheus-compatible TSDB | Metrics storage (scraped by agent) |
 | Grafana | Dashboard rendering |

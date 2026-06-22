@@ -40,6 +40,7 @@ Feature and experiment specifications for `staffops-anomaly-detection`.
 
 | Spec | Status | Phase | Summary |
 |------|--------|-------|---------|
+| [service-dependency-graph](service-dependency-graph/) | `FUTURE` | P2.6 | Node graph: map service dependencies, propagation detection, Grafana visualization |
 | [falco-integration](falco-integration/) | `BLOCKED` | P2.7 | Runtime security signal as 4th ingestion source |
 | [agent-api-integration](agent-api-integration/) | `FUTURE` | P5.5 | Trigger AI agent investigation on high-confidence alerts |
 

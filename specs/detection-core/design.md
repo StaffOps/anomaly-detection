@@ -7,7 +7,7 @@ Anomaly Detected
       │
       ▼
 ┌─────────────┐     ┌───────────┐     ┌──────────────────┐
-│  Enrichment │────▶│ Redis LRU │────▶│ VictoriaMetrics   │
+│  Enrichment │────▶│ Redis LRU │────▶│ Prometheus-compatible TSDB│
 │  Engine     │     │ Cache     │     │ (live PromQL)     │
 └─────────────┘     └───────────┘     └──────────────────┘
       │
@@ -38,18 +38,18 @@ Anomaly Detected
 
 ### Decision 1: Enrichment in the controller, not Alertmanager templates
 
-**Choice**: The controller queries VictoriaMetrics for ratio metrics and injects them into the alert payload before firing.
+**Choice**: The controller queries the Prometheus-compatible TSDB for ratio metrics and injects them into the alert payload before firing.
 
 **Justification**:
 1. Alertmanager templates cannot execute live queries — they only interpolate labels already present in the alert
-2. Ratios (cpu_ratio, memory_ratio) require instant PromQL against VictoriaMetrics at anomaly time
+2. Ratios (cpu_ratio, memory_ratio) require instant PromQL against the metrics TSDB at anomaly time
 3. Centralizing enrichment keeps Alertmanager config simple and stateless
 
 **Trade-offs accepted**:
 | Cost | Reality |
 |------|---------|
 | Controller latency increases per alert | Bounded by semaphore concurrency + 3s query timeout; sub-second in practice |
-| Controller depends on VictoriaMetrics availability | Already a hard dependency for detection; readiness check covers it |
+| Controller depends on metrics TSDB availability | Already a hard dependency for detection; readiness check covers it |
 
 **When this decision would be wrong**:
 - Alert volume exceeds controller's enrichment throughput (>1000 alerts/min sustained)
@@ -108,7 +108,7 @@ Anomaly Detected
 
 | Service | Purpose |
 |---------|---------|
-| VictoriaMetrics | Live PromQL queries for enrichment ratios |
+| Prometheus-compatible TSDB | Live PromQL queries for enrichment ratios |
 | Redis | Enrichment cache + existing baseline storage |
 | Alertmanager | Alert delivery target |
 | Loki | Link target (LogQL URLs) |

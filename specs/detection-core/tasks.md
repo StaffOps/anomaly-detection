@@ -25,7 +25,7 @@
 
 - [x] Task 14: Implement `/readyz` endpoint with parallel probe execution
 - [x] Task 15: Add Redis probe (PING, 3s timeout)
-- [x] Task 16: Add VictoriaMetrics probe (query `up`, 3s timeout)
+- [x] Task 16: Add Prometheus-compatible TSDB probe (query `up`, 3s timeout)
 - [x] Task 17: Add Loki probe (ready endpoint, 3s timeout)
 - [x] Task 18: Add Alertmanager probe (status endpoint, 3s timeout)
 - [x] Task 19: Add ML service probe (gRPC Health check, no-op when disabled)

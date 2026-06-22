@@ -27,4 +27,4 @@ WHEN causal chains are validated THEN SREs can trust the degradation model for r
 ## Dependencies
 
 - Replay mode (done)
-- Historical incident data available via VictoriaMetrics/Loki
+- Historical incident data available via Prometheus-compatible TSDB/Loki

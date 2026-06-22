@@ -244,7 +244,7 @@ Se o tick simulator está rodando e algo falha:
 
 | Serviço | Propósito | Operação |
 |---------|-----------|----------|
-| VictoriaMetrics | Histórico de métricas | `GET /api/v1/query_range` |
+| Prometheus-compatible TSDB | Histórico de métricas | `GET /api/v1/query_range` |
 | Loki | Histórico de logs | `GET /loki/api/v1/query_range` |
 | Redis | — | **NÃO acessado em replay** |
 | Alertmanager | — | **NÃO acessado em replay** |

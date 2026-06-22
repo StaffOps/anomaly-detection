@@ -8,7 +8,7 @@ config. After four rounds of design review, the detector was proven commodity
 (intra-runtime chain ordering) is not expressible as declarative config.
 
 This experiment tests that hypothesis by attempting to reproduce each
-capability in incumbent tools (VictoriaMetrics rules, Alertmanager config,
+capability in incumbent tools (Prometheus-compatible TSDB rules, Alertmanager config,
 Robusta playbooks).
 
 ## User Stories
