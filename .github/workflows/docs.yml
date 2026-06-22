@@ -1,15 +1,37 @@
-name: Deploy docs
+name: Docs
 
 on:
   push:
-    branches: [main]
+    branches: [main]          # deploy to prod ONLY from main
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+  pull_request:
+    branches: [main, dev]     # validate on PRs (no deploy)
     paths:
       - "docs/**"
       - "mkdocs.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  # PR lane: prove the site builds (broken nav/links fail --strict). No deploy.
+  build_check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install mkdocs-material==9.5.39
+      - run: mkdocs build --strict --site-dir site
+
+  # Publish lane: only on push to main.
   deploy:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +43,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install mkdocs-material
+        run: pip install mkdocs-material==9.5.39
 
       - name: Build docs
         run: mkdocs build --site-dir site

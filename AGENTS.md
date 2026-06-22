@@ -49,32 +49,32 @@ Backing: Redis (baselines, dedup), VictoriaMetrics (PromQL), Loki (LogQL)
 **No local Go or Python.** Every operation runs in a container.
 
 ```bash
+# All Go commands pull the PRIVATE module staffops-otel-libs, so the container needs
+# git + an HTTPS token. Locally use `gh auth token` (or your DOCS_DEPLOY_TOKEN); CI uses
+# the DOCS_DEPLOY_TOKEN secret — same pattern as the Dockerfile build secret (github_token).
+TOKEN=$(gh auth token)
+
 # Go — build both binaries
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.22-alpine sh -c \
-  "CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ && \
-   CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/"
+docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
+  apk add --no-cache git >/dev/null
+  export GOPRIVATE=github.com/karlipegomes/*
+  git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+  CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ &&
+  CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/'
 
 # Go — tests
-# NOTE: the build pulls the PRIVATE module staffops-otel-libs, so the container
-# needs git + SSH. Forward the host ssh-agent (Docker Desktop socket path below).
-docker run --rm -v "$(pwd)/controller":/src -w /src \
-  -v /run/host-services/ssh-auth.sock:/ssh-agent -e SSH_AUTH_SOCK=/ssh-agent \
-  golang:1.22-alpine sh -c '
-    apk add --no-cache git openssh-client >/dev/null
-    export GOPRIVATE=github.com/karlipegomes/*
-    git config --global url."git@github.com:".insteadOf "https://github.com/"
-    mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-    go test ./...'
+docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
+  apk add --no-cache git >/dev/null
+  export GOPRIVATE=github.com/karlipegomes/*
+  git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+  go test ./...'
 
 # Go — tests with coverage (≥90% gate is PH.9 — in progress; CI report-only for now)
-docker run --rm -v "$(pwd)/controller":/src -w /src \
-  -v /run/host-services/ssh-auth.sock:/ssh-agent -e SSH_AUTH_SOCK=/ssh-agent \
-  golang:1.22-alpine sh -c '
-    apk add --no-cache git openssh-client >/dev/null
-    export GOPRIVATE=github.com/karlipegomes/*
-    git config --global url."git@github.com:".insteadOf "https://github.com/"
-    mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-    go test ./internal/... -coverprofile=cov.out && go tool cover -func=cov.out | tail -5'
+docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
+  apk add --no-cache git >/dev/null
+  export GOPRIVATE=github.com/karlipegomes/*
+  git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+  go test ./internal/... -coverprofile=cov.out && go tool cover -func=cov.out | tail -5'
 
 # Python ML — build image
 docker build -t staffops-anomaly-ml ./ml
@@ -351,6 +351,30 @@ smoke test against real endpoints (T14) still pending.
 | ML service | 50051 | gRPC | Forecast + DetectMultivariate |
 | ML service | 8082 | HTTP | Prometheus metrics |
 | Redis | 6379 | TCP | Baselines + dedup |
+
+---
+
+## CI/CD (GitHub Actions)
+
+Five workflows in `.github/workflows/` (org-standard layout, mirrors staffops-aigent-squad):
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `test.yml` | push/PR `main`,`dev` | `guard` (PR→main only from `dev`), `lint-go` (gofmt+vet), `lint-ml` (ruff), `dep_scan` (Trivy fs), `test-go` + `test-ml` |
+| `sast.yml` | push/PR `main`,`dev` | `gosec` (Go) + `bandit` (ML) |
+| `build.yml` | push `main` | per image: build local → Trivy scan → push `ghcr.io/.../<img>:{sha,latest}` → SBOM |
+| `release.yml` | tag `v*` / manual | versioned immutable images + GitHub Release |
+| `docs.yml` | push/PR `main` | PR builds `--strict`; main deploys to gh-pages |
+
+- **Registry**: `ghcr.io` (login via `GITHUB_TOKEN`). Images: `controller`, `worker`, `ml`.
+- **Private module auth**: `DOCS_DEPLOY_TOKEN` secret, passed as the Docker build secret
+  `github_token` (HTTPS, `--mount=type=secret`) and as a git credential in test/lint jobs.
+  No SSH, no extra secret to provision.
+- **Rollout = report-only gates**: `lint-*`, `dep_scan`, `gosec`, `bandit` run
+  `continue-on-error`, and the Trivy image scan is `exit-code: 0`. They surface
+  pre-existing debt (gofmt, `go vet`, grpc/otel/base-image CVEs) without blocking `main`.
+  Flip each back to blocking (`continue-on-error` off / `exit-code: 1`) as the debt clears.
+  Coverage gates are likewise report-only until PH.9 (Go ~89.4%) and PH.10 (ML 0%) land.
 
 ---
 

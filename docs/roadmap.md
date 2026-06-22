@@ -49,7 +49,7 @@ Ordered by priority — items higher up are nearer-term.
 - [ ] **P5.2** — Deploy to cluster (validate IRSA, ApplicationSet)
 - [ ] **P5.3** — Remove `--dry-run`, validate real alerts
 - [ ] **P5.4** — Cardinality guard (self-protection)
-- [ ] **P5.5** — Agent API Integration (staffops-chaitops) — invoke Agent API on high-confidence anomalies for automated squad investigation; circuit breaker, bounded concurrency (max 5), Redis dedup. Blocked on P5.3. [Spec](specs/agent-api-integration/)
+- [ ] **P5.5** — Agent API Integration (staffops-chaitops) — invoke Agent API on high-confidence anomalies for automated squad investigation; circuit breaker, bounded concurrency (max 5), Redis dedup. Blocked on P5.3. [Spec](../specs/agent-api-integration/)
 
 ## 🔜 Phase 6 — Self-Monitoring
 

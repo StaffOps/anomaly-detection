@@ -1,0 +1,123 @@
+name: Test
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+env:
+  # Private Go module pulled by controller/worker.
+  GOPRIVATE: github.com/karlipegomes/*
+
+jobs:
+  # main accepts PRs ONLY from dev (branch protection can't enforce source branch).
+  # Required check on main only — never runs on dev PRs, so it never hangs them.
+  guard:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce PR source is dev
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "::error::main only accepts PRs from 'dev' (got '$HEAD_REF')"
+            exit 1
+          fi
+          echo "OK: PR from dev → main"
+
+  lint-go:
+    runs-on: ubuntu-latest
+    # TODO: remove once gofmt/vet debt is cleared — gate is report-only for now.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: controller/go.sum
+      - name: Configure git for private module
+        run: git config --global url."https://x-access-token:${{ secrets.DOCS_DEPLOY_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: gofmt
+        working-directory: controller
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt found unformatted files:"; echo "$unformatted"; exit 1
+          fi
+      - name: go vet
+        working-directory: controller
+        run: go vet ./...
+
+  lint-ml:
+    runs-on: ubuntu-latest
+    # TODO: report-only during rollout — flip to blocking once stable.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+        # Exclude generated protobuf stubs — not our code to lint.
+      - run: ruff check ml/ --exclude 'ml/server/generated/*'
+
+  # SCA — vulnerable dependencies (go.sum + Python). No image build; fast PR feedback.
+  dep_scan:
+    runs-on: ubuntu-latest
+    # TODO: report-only — flip to blocking once grpc/otel/stdlib CVEs are cleared.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem (dependencies)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          trivyignores: .trivyignore
+
+  test-go:
+    runs-on: ubuntu-latest
+    needs: lint-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: controller/go.sum
+      - name: Configure git for private module
+        run: git config --global url."https://x-access-token:${{ secrets.DOCS_DEPLOY_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Test with coverage
+        working-directory: controller
+        run: |
+          go test ./internal/... -coverprofile=cov.out -covermode=atomic -timeout 120s
+          pct=$(go tool cover -func=cov.out | tail -1 | awk '{print $3}')
+          echo "### Go coverage: ${pct}" >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -func=cov.out | tail -1
+          # TODO(PH.9): flip to a hard gate once ≥90%:
+          #   v=${pct%\%}; awk "BEGIN{exit !($v>=90)}" || { echo "::error::coverage ${pct} < 90%"; exit 1; }
+
+  test-ml:
+    runs-on: ubuntu-latest
+    needs: lint-ml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        working-directory: ml
+        run: pip install -e '.[dev]' -q
+      - name: Test with coverage
+        working-directory: ml
+        run: |
+          # tests/ still empty (PH.10) — pytest exits 5 with no tests; allow it.
+          # TODO(PH.10): add --cov --cov-fail-under=90 once tests exist.
+          pytest tests/ -q || test $? -eq 5

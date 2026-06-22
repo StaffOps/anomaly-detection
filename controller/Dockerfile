@@ -1,21 +1,21 @@
 # syntax=docker/dockerfile:1.7
 FROM golang:1.22-alpine AS builder
 
-# git + openssh: needed to fetch the private staffops-otel-libs module.
-# The SSH key is forwarded from the build host's agent (--mount=type=ssh)
-# and is NEVER baked into an image layer. Same mechanism works in CI, where
-# the runner loads the deploy key into ssh-agent before the build.
-RUN apk add --no-cache git openssh-client
+# git: needed to fetch the private staffops-otel-libs module over HTTPS.
+RUN apk add --no-cache git
 
-# Private module: bypass the public proxy/checksum DB and force SSH transport.
+# Private module: bypass the public proxy/checksum DB. Auth uses an HTTPS
+# token mounted as a BuildKit secret (id=github_token) — never baked into a
+# layer. Same DOCS_DEPLOY_TOKEN pattern used across the org's repos.
 ENV GOPRIVATE=github.com/karlipegomes/*
-RUN git config --global url."git@github.com:".insteadOf "https://github.com/" \
- && mkdir -p -m 0700 /root/.ssh \
- && ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN --mount=type=ssh go mod download
+RUN --mount=type=secret,id=github_token \
+    git config --global credential.helper store \
+ && printf "https://x-access-token:%s@github.com\n" "$(cat /run/secrets/github_token)" > ~/.git-credentials \
+ && go mod download \
+ && rm -f ~/.git-credentials
 
 COPY . .
 

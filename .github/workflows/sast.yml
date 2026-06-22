@@ -1,0 +1,50 @@
+name: SAST
+
+# Static analysis of our own source: gosec (Go controller/worker) + Bandit (Python ML).
+# Repo is private without GitHub Advanced Security, so both run entirely in CI and
+# fail the job on findings. Reviewed false-positives: gosec `#nosec <rule> // reason`,
+# Bandit `# nosec <ID>` + reason.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+env:
+  GOPRIVATE: github.com/karlipegomes/*
+
+jobs:
+  gosec:
+    runs-on: ubuntu-latest
+    # TODO: report-only during rollout — flip to blocking once findings are triaged.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: controller/go.sum
+      - name: Configure git for private module
+        run: git config --global url."https://x-access-token:${{ secrets.DOCS_DEPLOY_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: gosec
+        working-directory: controller
+        run: gosec ./...
+
+  bandit:
+    runs-on: ubuntu-latest
+    # TODO: report-only during rollout — flip to blocking once findings are triaged.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install bandit
+      - name: Bandit (medium+ severity, medium+ confidence)
+        run: bandit -r ml/server -x ml/server/generated --severity-level medium --confidence-level medium

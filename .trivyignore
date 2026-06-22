@@ -1,0 +1,5 @@
+# Trivy CVE ignore list — reviewed and assessed as non-applicable.
+# Format: CVE-ID  [# reason]
+#
+# Add an entry ONLY after assessing the CVE does not apply to this project,
+# and document why on the same line. Empty by default — no blanket ignores.
