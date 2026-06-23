@@ -5,8 +5,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONTROLLER_DIR="$(dirname "$SCRIPT_DIR")/controller"
 
 echo "=== Building Go binaries ==="
-docker run --rm -v "$CONTROLLER_DIR":/src -w /src golang:1.22-alpine sh -c \
-  "CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ && CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/"
+docker run --rm \
+  -v "$CONTROLLER_DIR":/src \
+  -v "$HOME/.ssh:/root/.ssh:ro" \
+  -w /src \
+  -e GOPRIVATE=github.com/karlipegomes \
+  golang:1.22 sh -c \
+  "git config --global url.'git@github.com:'.insteadOf 'https://github.com/' && \
+   CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ && \
+   CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/"
 
 echo "=== Starting full stack ==="
 cd "$SCRIPT_DIR"
