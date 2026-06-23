@@ -84,7 +84,18 @@ type Store struct {
 	redis           hashStore
 	cfg             config.Baseline
 	ephemeralLabels map[string]struct{}
+	absence         AbsenceRecorder
 }
+
+// AbsenceRecorder is called on every sample to track series liveness.
+type AbsenceRecorder interface {
+	RecordSample(metric string, labels map[string]string)
+}
+
+// noopRecorder is used when no absence tracker is configured.
+type noopRecorder struct{}
+
+func (noopRecorder) RecordSample(string, map[string]string) {}
 
 // Compile-time check that Store satisfies Evaluator.
 var _ Evaluator = (*Store)(nil)
@@ -94,12 +105,20 @@ func NewStore(redis hashStore, cfg config.Baseline) *Store {
 	for _, l := range cfg.EphemeralLabels {
 		eph[l] = struct{}{}
 	}
-	return &Store{redis: redis, cfg: cfg, ephemeralLabels: eph}
+	return &Store{redis: redis, cfg: cfg, ephemeralLabels: eph, absence: noopRecorder{}}
+}
+
+// SetAbsenceRecorder attaches an absence tracker to the store.
+func (s *Store) SetAbsenceRecorder(r AbsenceRecorder) {
+	s.absence = r
 }
 
 // Evaluate updates the baseline for a series and returns whether the value is anomalous.
 func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]string, value float64) (*Result, error) {
 	key := baselineKey(metric, s.normalizeLabels(labels))
+
+	// Track series liveness for absence-of-signal detection.
+	s.absence.RecordSample(metric, labels)
 
 	stats, err := s.load(ctx, key)
 	if err != nil {
