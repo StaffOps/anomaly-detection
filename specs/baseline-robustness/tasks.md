@@ -1,6 +1,6 @@
 # Tasks: Baseline Robustness
 
-> **Status**: `IN-PROGRESS` — P2.8 (workload keying) DONE (2026-06-22). P2.9 and P2.10 remain.
+> **Status**: `DONE` — P2.8 (workload keying), P2.9 (anti-poisoning), P2.10 (absence detection) all implemented 2026-06-22.
 
 ## P2.8 — Workload-identity baseline keying
 
