@@ -10,6 +10,39 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
 
+### detection
+
+**Added — FDR correction (P0.4) (2026-06-22)**
+- Benjamini-Hochberg False Discovery Rate control applied per detection cycle
+- Filters adaptive z-score anomalies to cut ~1000+ FP/day from multiple comparisons
+- Only adaptive results filtered; static/pattern pass through unchanged
+- Config: `controller.fdr_target` (default 0.05 = 5% expected false discoveries)
+- Metrics: `staffops_ad_detection_fdr_accepted_total`, `staffops_ad_detection_fdr_rejected_total`
+- 20 unit tests, 100% coverage on `internal/detection/fdr.go`
+
+### baseline
+
+**Added — Baseline robustness trio (P2.8, P2.9, P2.10) (2026-06-22)**
+- **P2.8 Workload-identity keying**: normalize labels before hashing baseline key — extract
+  workload from pod name via regex, drop configurable ephemeral labels. Same workload pods
+  now share a baseline across restarts. Config: `baseline.ephemeral_labels`.
+- **P2.9 Anti-poisoning gate**: compute z-score BEFORE updating baseline. Skip update when
+  z > `poison_threshold` (default 4.0). Prevents slow-ramp attacks from dragging baseline.
+  Zero-stddev handling: 1% of EWMA as floor. Metric: `staffops_ad_worker_baseline_poison_rejected_total`.
+- **P2.10 Absence-of-signal detection**: new `internal/absence/` package. Tracks series liveness
+  via `AbsenceRecorder` interface on every baseline evaluation. Background checker fires alerts
+  when previously-active series go silent for > threshold (default 5m). Suppresses known-idle
+  namespaces via pattern config. Startup grace period prevents false alerts on controller restart.
+  11 unit tests.
+
+### docs / specs
+
+**Added — Full spec coverage (2026-06-22)**
+- 21 specs covering every significant ROADMAP item (retroactive for completed + new for planned)
+- `specs/README.md` index with status tracking and project direction summary
+- MkDocs restructured to `docs/site/` pattern (aligned with staffops-aigent-squad)
+- All specs vendor-agnostic ("Prometheus-compatible TSDB" not VictoriaMetrics)
+
 ### ci / build
 
 **Added — GitHub Actions CI + hardened images (2026-06-21)**

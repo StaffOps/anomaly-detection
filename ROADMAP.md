@@ -156,37 +156,27 @@ Aggregate anomalies by namespace, run multivariate on `{count_anomalous_pods, di
 
 Three independent gaps surfaced by [`docs/threat-model-and-limitations.md`](docs/threat-model-and-limitations.md). They degrade the **reliability** product, not just any future security framing — so they belong here, not in a security-only phase. All three are code-grounded (verified against `internal/baseline/store.go`).
 
-#### 🎯 P2.8 — Workload-identity baseline keying
+#### ✅ ~~P2.8 — Workload-identity baseline keying~~ — **DONE (2026-06-22)**
 
-`baselineKey()` hashes the raw sorted label set. If `pod` is in the labels, the baseline **dies on every pod restart** (pods are cattle, ephemeral UIDs) → cold-start blindness on every rollout. `correlation.ExtractWorkload()` already exists (Deployment/StatefulSet/DaemonSet from pod name) but is used in correlation, **not** in the baseline key.
+`baselineKey()` now normalizes labels before hashing: extracts workload from pod name via
+regex (same patterns as `correlation.ExtractWorkload`), drops configurable ephemeral labels.
+Same workload pods share a baseline across restarts. Config: `baseline.ephemeral_labels`.
+15 unit tests (key stability verified).
 
-**Fix**: derive a stable entity key (workload, not pod) for baselining. Normalize the label set through `ExtractWorkload` before hashing; drop `pod`/ephemeral labels from the key.
+#### ✅ ~~P2.9 — Outlier rejection before baseline update (anti-poisoning)~~ — **DONE (2026-06-22)**
 
-**Watch-out**: legitimately per-pod signals (e.g. a specific replica leaking) would be smoothed — confirm the workload-level baseline still catches single-replica outliers, or keep a two-tier baseline (workload + per-replica deviation from siblings).
+Z-score computed BEFORE updating baseline. When z > `poison_threshold` (default 4.0), update
+is skipped entirely — prevents slow-ramp attacks from dragging baseline until malicious load
+reads as normal. Zero-stddev handling uses 1% of EWMA as floor. Warm-up samples always update.
+Config: `baseline.poison_threshold`. Metric: `staffops_ad_worker_baseline_poison_rejected_total`.
 
-**Effort**: medium. Touches baseline key + warm-up semantics + tests.
+#### ✅ ~~P2.10 — Absence-of-signal ("dead man's switch") detection~~ — **DONE (2026-06-22)**
 
-#### 🎯 P2.9 — Outlier rejection before baseline update (anti-poisoning)
-
-`Store.Evaluate()` updates EWMA/mean/stddev **unconditionally** on every sample, including anomalous ones. Consequences:
-- **Benign**: a slow organic ramp is absorbed and stops alerting.
-- **Adversarial**: low-and-slow activity drags the baseline until malicious load reads as normal (baseline poisoning).
-
-**Fix**: gate the baseline update — e.g. skip (or down-weight) the update when the sample is already flagged anomalous beyond a hard multiple of stddev; optionally a "frozen baseline" window after a confirmed anomaly.
-
-**Watch-out**: don't freeze so aggressively that genuine regime changes (intentional capacity increase) never re-baseline — pair with a slow-path acceptance after N sustained samples.
-
-**Effort**: small-medium. Localized to `Evaluate()` + tests for the poisoning scenario.
-
-#### 🎯 P2.10 — Absence-of-signal ("dead man's switch") detection
-
-`/readyz` checks the detector's **own** dependencies, not whether an *expected* signal went silent. "This workload always emits N logs/min and stopped" raises nothing today. Misses both adversarial pipeline-blinding and genuine reliability events (a crashed exporter looks like calm).
-
-**Fix**: track expected emission rate per workload/series; alert when a previously-active series goes silent for > threshold. Reuses the baseline store (a series with history that drops to zero samples is the signal).
-
-**Watch-out**: legitimate scale-to-zero (KEDA, cronjobs idle) must not page — needs the same suppression/seasonality awareness as the positive-direction detectors. Cardinality: bound by tracked-series count, same guard as P5.4.
-
-**Effort**: medium. New detector mode + careful FP control.
+New `internal/absence/` package. Tracks series liveness via `AbsenceRecorder` interface
+called on every baseline evaluation. Background checker fires alerts when previously-active
+series go silent for > threshold (default 5m). Suppresses known-idle namespaces via pattern
+config (`batch-*`, `keda-*`). Startup grace period (2× threshold) prevents false alerts on
+controller restart. 11 unit tests.
 
 ---
 

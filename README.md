@@ -76,14 +76,15 @@ staffops-anomaly-detection/
 ## Detection Pipeline
 
 ```
-Every 30s:
+Every 60s:
   1. Controller builds job batch (static + adaptive + log rules)
-  2. Workers execute queries against VictoriaMetrics/Loki
+  2. Workers execute queries against Prometheus-compatible TSDB / Loki
   3. Workers run detection (static threshold, Z-Score, log rate)
   4. Controller receives anomalies
-  5. ML Isolation Forest evaluates multivariate correlation (≥2 anomalies)
-  6. Correlator groups by workload, deduplicates, escalates severity
-  7. Dispatcher fires to Alertmanager (dry-run mode available)
+  5. FDR correction (Benjamini-Hochberg) filters false positives from multiple comparisons
+  6. ML Isolation Forest evaluates multivariate correlation (≥2 anomalies)
+  7. Correlator groups by workload, deduplicates, escalates severity
+  8. Dispatcher fires to Alertmanager (dry-run mode available)
 ```
 
 ## Detection Methods
@@ -93,8 +94,18 @@ Every 30s:
 | Static threshold | `static` | Value > configured limit (CPU > 90%, restarts > 3) |
 | Adaptive Z-Score | `adaptive` | Value deviates > 3σ from EWMA baseline |
 | Log rate anomaly | `adaptive` | Log volume spike via Loki queries |
+| FDR correction | `fdr` | Benjamini-Hochberg filters weak adaptive results per cycle |
 | ML Multivariate | `ml_isolation_forest` | Correlated anomalies across multiple metrics |
-| ML Forecast | `ml_forecast` | Prophet predicts threshold breach within 30min (ready, not yet wired) |
+| ML Forecast | `ml_forecast` | Prophet predicts threshold breach (ready, not yet wired) |
+| Absence-of-signal | `absence` | Previously-active series goes silent > threshold |
+
+## Baseline Robustness
+
+| Feature | Purpose |
+|---------|---------|
+| Workload-identity keying | Baselines survive pod restarts (keyed by workload, not pod) |
+| Anti-poisoning gate | Skips baseline update on extreme anomalies (z > 4.0) |
+| Absence detection | Alerts when active series stop emitting |
 
 ## Configuration
 
