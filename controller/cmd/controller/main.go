@@ -299,10 +299,18 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 		metrics.AnomalyDetected.WithLabelValues(a.Severity, a.Signal).Inc()
 
 		// AnomalyByWorkload: bounded labels for dashboards (top noisy workloads).
-		// Extracts deployment/statefulset/daemonset name from pod, falls back to
-		// service_name for service-level anomalies. Empty values normalized to
-		// "unknown" to keep cardinality bounded even on degenerate inputs.
+		// Namespace resolution: try namespace → deployment_environment → service_namespace.
+		// For span metrics that lack k8s namespace, service_name is the best identifier.
 		ns := a.Labels["namespace"]
+		if ns == "" {
+			ns = a.Labels["deployment_environment"]
+		}
+		if ns == "" {
+			ns = a.Labels["service_namespace"]
+		}
+		if ns == "" {
+			ns = a.Labels["destination_workload_namespace"]
+		}
 		if ns == "" {
 			ns = "unknown"
 		}

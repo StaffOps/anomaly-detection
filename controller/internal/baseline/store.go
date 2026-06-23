@@ -142,11 +142,15 @@ func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]s
 
 	// Compute Z-Score against CURRENT baseline (before any update).
 	// When stddev is 0 (all identical samples), use a minimum floor to avoid
-	// infinite z-score on trivial deviations. Floor = 1% of EWMA or 1e-9.
+	// infinite z-score on trivial deviations. Floor = 1% of EWMA or absolute
+	// value (whichever is larger), minimum 1e-9. When both EWMA and stddev are 0
+	// (cold series that only saw zeros), any non-zero value is genuinely anomalous
+	// but we cap at a sane z-score to avoid billions.
 	var zscore float64
 	stddev := stats.Stddev
 	if stddev == 0 {
-		stddev = math.Max(math.Abs(stats.EWMA)*0.01, 1e-9)
+		floor := math.Max(math.Abs(stats.EWMA)*0.01, math.Abs(value)*0.01)
+		stddev = math.Max(floor, 1e-9)
 	}
 	zscore = math.Abs(value-stats.EWMA) / stddev
 

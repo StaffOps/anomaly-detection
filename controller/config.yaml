@@ -115,6 +115,8 @@ detection:
   # These learn baseline per series and alert on deviations.
   adaptive_metrics:
     # RED metrics from spanmetrics (30+ services)
+    # Note: spanmetrics lack k8s namespace — only service_name available.
+    # namespace shows as "unknown" in dashboards for these.
     - name: error_rate_by_service
       query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[1m])) by (service_name)
       group_by: [service_name]
