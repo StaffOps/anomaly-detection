@@ -301,6 +301,11 @@ var (
 		Help: "Baseline updates written to Redis",
 	})
 
+	WorkerBaselinePoisonRejected = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staffops_ad_worker_baseline_poison_rejected_total",
+		Help: "Baseline updates skipped due to anti-poisoning gate (sample too anomalous)",
+	})
+
 	WorkerBaselineSeries = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "staffops_ad_worker_baseline_series_tracked",
 		Help: "Number of series with active baselines",
@@ -367,7 +372,7 @@ func MustRegisterWorker(reg prometheus.Registerer) {
 	reg.MustRegister(
 		WorkerJobsProcessed, WorkerJobDuration,
 		WorkerQueryDuration, WorkerQueryErrors,
-		WorkerDetections, WorkerBaselineUpdates, WorkerBaselineSeries,
+		WorkerDetections, WorkerBaselineUpdates, WorkerBaselinePoisonRejected, WorkerBaselineSeries,
 		WorkerEventsReceived,
 		WorkerRedisOps, WorkerRedisDuration, WorkerRedisErrors,
 		BuildInfo,

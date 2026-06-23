@@ -60,6 +60,7 @@ baseline:
   window_size: 60
   ewma_alpha: 0.3
   zscore_threshold: 3.0
+  poison_threshold: 4.0  # Skip baseline update when z > this (anti-poisoning). 0 = disabled.
   warm_up_samples: 60
   seasonal_min_days: 7
 

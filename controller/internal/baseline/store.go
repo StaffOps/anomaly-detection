@@ -121,61 +121,86 @@ func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]s
 		return &Result{IsWarmingUp: true, Value: value, Mean: value, EWMA: value}, nil
 	}
 
-	// Update EWMA
-	alpha := s.cfg.EWMAAlpha
-	newEWMA := alpha*value + (1-alpha)*stats.EWMA
-
-	// Update running mean and stddev (Welford's algorithm)
-	newCount := stats.Count + 1
-	delta := value - stats.Mean
-	newMean := stats.Mean + delta/float64(newCount)
-	delta2 := value - newMean
-	// Running variance: M2 = stddev^2 * (count-1)
-	m2 := stats.Stddev * stats.Stddev * float64(stats.Count)
-	newM2 := m2 + delta*delta2
-	var newStddev float64
-	if newCount > 1 {
-		newStddev = math.Sqrt(newM2 / float64(newCount))
+	// Compute Z-Score against CURRENT baseline (before any update).
+	// When stddev is 0 (all identical samples), use a minimum floor to avoid
+	// infinite z-score on trivial deviations. Floor = 1% of EWMA or 1e-9.
+	var zscore float64
+	stddev := stats.Stddev
+	if stddev == 0 {
+		stddev = math.Max(math.Abs(stats.EWMA)*0.01, 1e-9)
 	}
+	zscore = math.Abs(value-stats.EWMA) / stddev
 
-	updated := &Stats{
-		Mean:       newMean,
-		Stddev:     newStddev,
-		EWMA:       newEWMA,
-		Count:      newCount,
-		LastUpdate: time.Now(),
-	}
+	// Anti-poisoning gate: skip baseline update when the sample is extremely
+	// anomalous (z > poison_threshold). Prevents slow-ramp attacks from dragging
+	// the baseline until malicious load reads as normal.
+	// A poison_threshold of 0 disables the gate (always update).
+	poisoned := s.cfg.PoisonThreshold > 0 && zscore > s.cfg.PoisonThreshold
 
-	if err := s.save(ctx, key, updated); err != nil {
-		return nil, err
-	}
+	// Warm-up phase: always update (need samples to establish baseline).
+	isWarmingUp := stats.Count < int64(s.cfg.WarmUpSamples)
 
-	metrics.WorkerBaselineUpdates.Inc()
+	if !poisoned || isWarmingUp {
+		// Update EWMA
+		alpha := s.cfg.EWMAAlpha
+		newEWMA := alpha*value + (1-alpha)*stats.EWMA
 
-	// Warm-up: not enough samples for reliable detection
-	if newCount < int64(s.cfg.WarmUpSamples) {
+		// Update running mean and stddev (Welford's algorithm)
+		newCount := stats.Count + 1
+		delta := value - stats.Mean
+		newMean := stats.Mean + delta/float64(newCount)
+		delta2 := value - newMean
+		m2 := stats.Stddev * stats.Stddev * float64(stats.Count)
+		newM2 := m2 + delta*delta2
+		var newStddev float64
+		if newCount > 1 {
+			newStddev = math.Sqrt(newM2 / float64(newCount))
+		}
+
+		updated := &Stats{
+			Mean:       newMean,
+			Stddev:     newStddev,
+			EWMA:       newEWMA,
+			Count:      newCount,
+			LastUpdate: time.Now(),
+		}
+		if err := s.save(ctx, key, updated); err != nil {
+			return nil, err
+		}
+		metrics.WorkerBaselineUpdates.Inc()
+
+		// Return warm-up result (no anomaly detection yet)
+		if isWarmingUp {
+			return &Result{
+				IsWarmingUp: true,
+				Value:       value,
+				Mean:        newMean,
+				Stddev:      newStddev,
+				EWMA:        newEWMA,
+			}, nil
+		}
+
+		// Use updated stats for the result
 		return &Result{
-			IsWarmingUp: true,
-			Value:       value,
-			Mean:        newMean,
-			Stddev:      newStddev,
-			EWMA:        newEWMA,
+			IsAnomaly: zscore > s.cfg.ZScoreThreshold,
+			ZScore:    zscore,
+			Value:     value,
+			Mean:      newMean,
+			Stddev:    newStddev,
+			EWMA:      newEWMA,
 		}, nil
 	}
 
-	// Z-Score against EWMA baseline
-	var zscore float64
-	if newStddev > 0 {
-		zscore = math.Abs(value-newEWMA) / newStddev
-	}
+	// Poisoned: return anomaly result WITHOUT updating baseline.
+	metrics.WorkerBaselinePoisonRejected.Inc()
 
 	return &Result{
 		IsAnomaly: zscore > s.cfg.ZScoreThreshold,
 		ZScore:    zscore,
 		Value:     value,
-		Mean:      newMean,
-		Stddev:    newStddev,
-		EWMA:      newEWMA,
+		Mean:      stats.Mean,
+		Stddev:    stats.Stddev,
+		EWMA:      stats.EWMA,
 	}, nil
 }
 

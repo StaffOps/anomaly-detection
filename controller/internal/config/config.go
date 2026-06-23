@@ -88,12 +88,13 @@ type Worker struct {
 }
 
 type Baseline struct {
-	WindowSize      int      `yaml:"window_size"`
-	EWMAAlpha       float64  `yaml:"ewma_alpha"`
-	ZScoreThreshold float64  `yaml:"zscore_threshold"`
-	WarmUpSamples   int      `yaml:"warm_up_samples"`
-	SeasonalMinDays int      `yaml:"seasonal_min_days"`
-	EphemeralLabels []string `yaml:"ephemeral_labels"`
+	WindowSize       int      `yaml:"window_size"`
+	EWMAAlpha        float64  `yaml:"ewma_alpha"`
+	ZScoreThreshold  float64  `yaml:"zscore_threshold"`
+	PoisonThreshold  float64  `yaml:"poison_threshold"`
+	WarmUpSamples    int      `yaml:"warm_up_samples"`
+	SeasonalMinDays  int      `yaml:"seasonal_min_days"`
+	EphemeralLabels  []string `yaml:"ephemeral_labels"`
 }
 
 type Detection struct {
