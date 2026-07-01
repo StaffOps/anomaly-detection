@@ -73,9 +73,11 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
-      # 2) GATE — report-only during rollout. TODO: flip exit-code back to "1"
-      # once CVE debt is cleared — a release should be the FIRST gate re-armed,
-      # since a vulnerable versioned image must never be published.
+      # 2) GATE — report-only. Go/dependency CVEs are cleared (Go 1.25 migration,
+      # 2026-07-01) and dep_scan is armed. This IMAGE gate stays report-only until
+      # PH.3 (golden apko base images): the ML runtime still inherits python:3.11-slim
+      # (debian) perl-base CVEs that are fix_deferred/affected upstream. Flip
+      # exit-code to "1" once the ML image moves off the debian base.
       - name: Trivy scan (report-only gate)
         uses: aquasecurity/trivy-action@master
         with:

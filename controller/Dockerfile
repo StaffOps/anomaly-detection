@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # git: needed to fetch the private staffops-otel-libs module over HTTPS.
 RUN apk add --no-cache git

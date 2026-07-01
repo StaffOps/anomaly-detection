@@ -12,6 +12,26 @@ Work landed after controller 0.7.0, not yet released (still pre-production, no c
 
 ### test / ci
 
+**Changed — Go 1.25 migration + CVE remediation (2026-07-01)**
+- Migrated the controller toolchain **Go 1.22 → 1.25** to remediate 11 dependency
+  CVEs whose fixes require a newer Go. Cleared (Trivy `go.mod` scan: 0 CRITICAL/HIGH):
+  - `google.golang.org/grpc` 1.67.1 → **1.81.1** — CVE-2026-33186 (**CRITICAL**, authz
+    bypass via missing leading slash; controller does not use `grpc/authz`, but the
+    versioned image must not ship a CRITICAL).
+  - `go.opentelemetry.io/otel/*` 1.31 → **1.44** (log family 0.7 → 0.20) — CVE-2026-24051,
+    CVE-2026-39883 (PATH-hijack code exec).
+  - `golang.org/x/net` 0.30 → **0.55** — 6 CVEs (HTML parse DoS, http2, idna).
+  - `golang.org/x/oauth2` 0.22 → **0.36** — CVE-2025-22868 (jws memory exhaustion).
+  - Transitive refresh: `protobuf` 1.35 → 1.36.11, `genproto`, `grpc-gateway` 2.22 → 2.29.
+- `controller/Dockerfile` builder `golang:1.22-alpine` → `golang:1.25-alpine`;
+  CI `go-version` `1.22` → `1.25` (`test.yml` ×2, `sast.yml`).
+- Full build + test suite green on Go 1.25; controller coverage preserved (90.4%).
+- Fixed the pre-existing `go vet` context leak in `internal/redis/client_test.go`
+  (`ctx(t)` registers `cancel` via `t.Cleanup`) — clears a CI rollout-debt item.
+- **Gates**: `dep_scan` (Trivy fs) armed (blocking). Image-scan gates
+  (`build.yml`/`release.yml`) remain report-only until PH.3 (golden apko base) — the ML
+  `python:3.11-slim` debian `perl-base` CVEs are `fix_deferred`/`affected` upstream.
+
 **Added — Go controller coverage to ≥90% + gate armed (PH.9) (2026-06-30)**
 - Controller coverage **89.5% → 90.4%** (`./internal/...`).
 - `internal/ml/client_error_test.go`: enabled `New`/`Close` (lazy dial), RPC

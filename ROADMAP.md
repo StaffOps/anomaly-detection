@@ -368,17 +368,33 @@ auth via `DOCS_DEPLOY_TOKEN`) landed with security/lint gates as
 blocking `main`. Re-arm each gate (flip the flag in the workflow) as its debt clears:
 
 - [ ] **gofmt** — 16 unformatted files; `gofmt -w` then drop `continue-on-error` on `lint-go`.
-- [ ] **go vet** — context leak in `internal/redis/client_test.go:25` (cancel func discarded).
-- [ ] **Trivy (deps + images)** — `google.golang.org/grpc` 1.67.1 → 1.79.3 (CVE-2026-33186,
-      CRITICAL), `go.opentelemetry.io/otel/sdk` (CVE-2026-24051), `net/url` (CVE-2025-61726);
-      ML base `python:3.11-slim` (debian) CVEs. Then set Trivy `exit-code: 1` (re-arm
-      `release.yml` first — a versioned image must never ship vulnerable).
+- [x] **go vet** — ✅ fixed 2026-07-01: context leak in `internal/redis/client_test.go`
+      resolved (`ctx(t)` now registers `cancel` via `t.Cleanup`). `go vet ./...` clean on Go 1.25.
+- [x] **Trivy (deps)** — ✅ armed 2026-07-01. All 11 Go CVEs cleared via the **Go 1.25
+      migration**: `grpc` 1.67.1 → 1.81.1 (CVE-2026-33186 CRITICAL), `otel/sdk` 1.31 → 1.44
+      (CVE-2026-24051/-39883), `golang.org/x/net` 0.30 → 0.55 (6 CVEs), `golang.org/x/oauth2`
+      0.22 → 0.36 (CVE-2025-22868). `dep_scan` (fs) now blocking (`continue-on-error` removed).
+      **Image** gates (`build.yml`/`release.yml`) stay report-only until **PH.3** — the ML
+      `python:3.11-slim` (debian) `perl-base` CVEs are `fix_deferred`/`affected` upstream and
+      only clear when the ML image moves to a golden apko base.
 - [ ] **gosec / bandit** — triage findings, suppress reviewed FPs inline, drop `continue-on-error`.
 - [x] **Coverage gate** — ✅ armed both sides: ML `test-ml` (`--cov-fail-under=90`, PH.10)
       and Go `test-go` (hard fail < 90%, PH.9, controller at 90.4%).
 - [x] **`test-ml`** — fixed 2026-06-22 (hatch wheel `packages=["server"]`; grpcio aligned to 1.65.4).
 - [x] **Private-module auth in CI** — `DOCS_DEPLOY_TOKEN` confirmed to read `staffops-otel-libs`
       (`test-go` green in CI 2026-06-22); no dedicated deploy key needed.
+
+**Follow-up debt from the Go 1.25 migration (2026-07-01, non-blocking):**
+
+- [ ] **`grpc.Dial` → `grpc.NewClient`** — `Dial` is soft-deprecated since grpc-go 1.68
+      (still works in 1.81). Call sites: `cmd/controller/main.go`, `internal/ml/client.go`,
+      and two ml test helpers. Behavior is already lazy, so migration is mechanical.
+- [ ] **OTel exporter/contrib version skew** — `otelgrpc` v0.56 + `otlp*grpc` v1.31 lag core
+      v1.44. Backward-compatible (build green), but they'll align when `staffops-otel-libs`
+      (PH.13) is next bumped; revisit then.
+- [ ] **Image Trivy gate** — when revisiting before PH.3, consider `exit-code: 1` +
+      `ignore-unfixed: true` to arm against *fixable* image CVEs while still passing the
+      upstream-deferred debian `perl-base` findings.
 
 **Open decision — branch model.** The workflows were modeled on staffops-aigent-squad,
 which uses a `main`+`dev` model with a `guard` job (PRs to `main` must come from `dev`).
