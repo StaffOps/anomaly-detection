@@ -12,6 +12,17 @@ Work landed after controller 0.7.0, not yet released (still pre-production, no c
 
 ### test / ci
 
+**Added — Go controller coverage to ≥90% + gate armed (PH.9) (2026-06-30)**
+- Controller coverage **89.5% → 90.4%** (`./internal/...`).
+- `internal/ml/client_error_test.go`: enabled `New`/`Close` (lazy dial), RPC
+  error propagation (Health/Forecast/DetectMultivariate), disabled no-op guards
+  (`internal/ml` 81% → 94%).
+- `internal/baseline/absence_recorder_test.go`: `SetAbsenceRecorder` wiring +
+  `noopRecorder` zero-value path (`internal/baseline` → 97%).
+- `internal/readiness/ml_test.go`: enabled `MLChecker` branch (Health probe
+  against an unreachable endpoint) (`internal/readiness` 91.9% → 96.8%).
+- CI `test-go` coverage gate **armed** — hard fail below 90% (was report-only).
+
 **Added — ML service test suite (PH.10) (2026-06-30)**
 - ML service coverage **0% → 98.44%** (gate ≥90%). `ml/tests/` was empty.
 - `tests/test_forecaster.py`: Prophet mocked (slow + non-deterministic) — asserts

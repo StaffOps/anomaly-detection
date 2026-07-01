@@ -72,7 +72,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   3. `demo` — spin docker-compose, hit `/healthz`, verify a synthetic anomaly.
   - **Effort: M** (pipeline plumbing + test helpers).
 
-- [ ] **PH.9** — Bring Go controller coverage from **35 %** to **≥ 90 %**.
+- [x] **PH.9** — Bring Go controller coverage from **35 %** to **≥ 90 %**. **DONE (2026-06-30, 90.4%)**.
   Priority order (highest-value paths first per `dev-environment.md`):
   1. `internal/alert/dispatcher.go` — Fire / FireCorrelated branches, dry-run,
      dedup, error wrapping. (currently 0 %)

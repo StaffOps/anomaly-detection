@@ -101,8 +101,8 @@ jobs:
           pct=$(go tool cover -func=cov.out | tail -1 | awk '{print $3}')
           echo "### Go coverage: ${pct}" >> "$GITHUB_STEP_SUMMARY"
           go tool cover -func=cov.out | tail -1
-          # TODO(PH.9): flip to a hard gate once ≥90%:
-          #   v=${pct%\%}; awk "BEGIN{exit !($v>=90)}" || { echo "::error::coverage ${pct} < 90%"; exit 1; }
+          # PH.9: hard gate — controller coverage must stay ≥90%.
+          v=${pct%\%}; awk "BEGIN{exit !($v>=90)}" || { echo "::error::coverage ${pct} < 90%"; exit 1; }
 
   test-ml:
     runs-on: ubuntu-latest
