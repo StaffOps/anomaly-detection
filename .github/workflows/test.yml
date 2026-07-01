@@ -117,7 +117,4 @@ jobs:
         run: pip install -e '.[dev]' -q
       - name: Test with coverage
         working-directory: ml
-        run: |
-          # tests/ still empty (PH.10) — pytest exits 5 with no tests; allow it.
-          # TODO(PH.10): add --cov --cov-fail-under=90 once tests exist.
-          pytest tests/ -q || test $? -eq 5
+        run: pytest tests/ -q

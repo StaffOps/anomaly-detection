@@ -316,7 +316,7 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 | # | Item | Source review |
 |---|------|---------------|
 | PH.9 | 🟡 Go controller coverage **~89.4%** (`./internal/...`) → ≥90%: remaining laggards are `readiness` (~12%), `ml` (~29%), `leader` (~49%) | dev |
-| PH.10 | Bring ML service coverage from **0% → ≥90%**: `ml/tests/` is currently empty (`__init__.py` 0 bytes). Need unit + gRPC integration tests for forecaster, multivariate, server | dev |
+| PH.10 | ✅ **Done (2026-06-30)** — ML service coverage **0% → 98.44%** (gate ≥90%). `ml/tests/` now has `test_forecaster.py` (Prophet mocked), `test_multivariate.py` (Isolation Forest injected fake), `test_server.py` (servicer + `serve()`). `pytest-cov` + `--cov-fail-under=90` in `pyproject.toml`; CI `test-ml` gate armed | dev |
 | PH.11 | ✅ Done — `replay/window_test.go` `TestParseWindow_MixedDurationAndTimestamp` fixed; full Go suite green | dev |
 | PH.12 | 🟡 CI added (GitHub Actions: `test`/`sast`/`build`/`release`/`docs`): build/push SHA-tagged images to Docker Hub; private-module auth via `DOCS_DEPLOY_TOKEN`. Security/lint + coverage gates report-only during rollout (see "CI/CD rollout debt"). | dev |
 
@@ -374,7 +374,8 @@ blocking `main`. Re-arm each gate (flip the flag in the workflow) as its debt cl
       ML base `python:3.11-slim` (debian) CVEs. Then set Trivy `exit-code: 1` (re-arm
       `release.yml` first — a versioned image must never ship vulnerable).
 - [ ] **gosec / bandit** — triage findings, suppress reviewed FPs inline, drop `continue-on-error`.
-- [ ] **Coverage gate** — enforce once PH.9 (Go ~89.4% → ≥90%) and PH.10 (ML 0% → ≥90%) land.
+- [ ] **Coverage gate** — ML side ✅ armed (PH.10, `test-ml` enforces `--cov-fail-under=90`).
+      Go side pending PH.9 (~89.4% → ≥90%); arm `test-go` coverage gate once it lands.
 - [x] **`test-ml`** — fixed 2026-06-22 (hatch wheel `packages=["server"]`; grpcio aligned to 1.65.4).
 - [x] **Private-module auth in CI** — `DOCS_DEPLOY_TOKEN` confirmed to read `staffops-otel-libs`
       (`test-go` green in CI 2026-06-22); no dedicated deploy key needed.

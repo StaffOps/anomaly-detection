@@ -10,6 +10,24 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
 
+### test / ci
+
+**Added — ML service test suite (PH.10) (2026-06-30)**
+- ML service coverage **0% → 98.44%** (gate ≥90%). `ml/tests/` was empty.
+- `tests/test_forecaster.py`: Prophet mocked (slow + non-deterministic) — asserts
+  horizon slicing, breach decision, time-to-breach, confidence clamp, fit frame shape.
+- `tests/test_multivariate.py`: Isolation Forest replaced with a controllable fake —
+  canonical feature padding, warm-up threshold, periodic refit, contributor selection.
+- `tests/test_server.py`: gRPC servicer via a fake `ServicerContext` + injected stubs —
+  Forecast/DetectMultivariate happy + error paths (INTERNAL + empty response), Health,
+  and `serve()` bootstrap.
+- `pytest-cov==5.0.0` added; `--cov=server --cov-fail-under=90` in `pyproject.toml`,
+  `server/generated/*` omitted.
+- Fixed committed `server/generated/ml_pb2_grpc.py` to a package-relative import
+  (`from server.generated import ml_pb2`) — the stub was only importable inside the
+  Docker build (via a Dockerfile `sed`), breaking local/CI import. The `sed` is now a no-op.
+- CI `test-ml` coverage gate armed (dropped the "empty tests → exit 5" allowance).
+
 ### detection
 
 **Added — FDR correction (P0.4) (2026-06-22)**

@@ -90,14 +90,19 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
     explicitly, not just happy paths.
   - **Effort: L** (largest single task in the spec).
 
-- [ ] **PH.10** — Bring Python ML coverage from **0 %** to **≥ 90 %**.
+- [x] **PH.10** — Bring Python ML coverage from **0 %** to **≥ 90 %**. **DONE (2026-06-30, 98.44%)**.
   - `tests/test_forecaster.py` — Prophet wrapper (mock `Prophet.fit/predict`),
     breach-prediction logic, confidence calculation.
   - `tests/test_multivariate.py` — Isolation Forest wrapper, canonical feature
     padding, contributors selection, history-bound fitting.
-  - `tests/test_server.py` — gRPC server integration via `grpc_testing` or
-    in-process channel. Cover Forecast, DetectMultivariate, Health.
-  - Add `--cov-fail-under=90` and `pytest-cov` to `[tool.pytest.ini_options]`.
+  - `tests/test_server.py` — gRPC servicer via in-process fake context +
+    injected stubs. Covers Forecast, DetectMultivariate, Health, and `serve()`.
+  - Added `--cov=server --cov-fail-under=90` and `pytest-cov` to `pyproject.toml`;
+    `server/generated/*` omitted from the gate.
+  - Fixed committed `server/generated/ml_pb2_grpc.py` to a package-relative
+    import (`from server.generated import ml_pb2`) so the module is importable
+    outside the Docker build (the Dockerfile `sed` is now a no-op).
+  - CI `test-ml` gate armed (removed the `exit 5` allowance).
   - **Effort: L**.
 
 ## Group C — Org-neutrality completion [parallelizable, S each]
