@@ -70,7 +70,6 @@ spec:
         app: anomaly-controller
         app.kubernetes.io/name: anomaly-controller
         app.kubernetes.io/version: {{ .Values.controller.image.tag | default .Chart.AppVersion | quote }}
-        CostCenter: {{ .Values.global.costCenter | quote }}
         Environment: {{ .Values.global.environment | quote }}
     spec:
       serviceAccountName: anomaly-controller

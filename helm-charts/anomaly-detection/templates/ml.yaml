@@ -41,7 +41,6 @@ spec:
         app: anomaly-ml
         app.kubernetes.io/name: anomaly-ml
         app.kubernetes.io/version: {{ .Values.ml.image.tag | default .Chart.AppVersion | quote }}
-        CostCenter: {{ .Values.global.costCenter | quote }}
         Environment: {{ .Values.global.environment | quote }}
     spec:
       securityContext:

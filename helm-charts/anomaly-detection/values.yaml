@@ -2,8 +2,9 @@
 # Per-environment overrides in values-{dev,hml,prd}.yaml.
 
 global:
-  # Mandatory labels — Kyverno enforces these on all pods.
-  costCenter: "Platform-StaffOps"  # CONFIRM: correct CostCenter for this project
+  # Environment is a runtime label (LOCAL/DEV/HML/PRD/BTC). Corp cost tags
+  # (CostCenter/CostProject/CostScope) are injected at deploy time by the corp
+  # overlay/ApplicationSet — this repo stays org-neutral.
   environment: "DEV"
 
 # --- Controller ---
@@ -53,12 +54,14 @@ redis:
       memory: 128Mi
   persistence:
     enabled: true
-    size: 1Gi  # CONFIRM: appropriate PVC size
-    storageClass: ""  # CONFIRM: storageClass (empty = cluster default)
+    size: 10Gi
+    storageClass: ""  # empty = cluster default (gp3)
   auth:
-    # Password sourced from ExternalSecret (file-mounted, not env-var).
+    # Password synced by External Secrets Operator from AWS Secrets Manager.
     secretName: anomaly-redis-auth
-    # AWS Secrets Manager key for ESO to fetch
+    # ClusterSecretStore name (verified in the core cluster: `aws`, ReadWrite/Valid).
+    secretStore: "aws"
+    # AWS Secrets Manager key ESO fetches (create it to homologate — see README).
     awsSecretKey: "staffops/anomaly-detection/redis-password"
 
 # --- ML Service ---

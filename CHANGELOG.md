@@ -13,6 +13,12 @@ Work landed after controller 0.7.0, not yet released (still pre-production, no c
 ### infra / gitops
 
 **Added — Helm chart `helm-charts/anomaly-detection/` (PH.15) (2026-07-02)**
+- Org-neutral: **no corp cost tags** (CostCenter/CostProject/CostScope) baked in —
+  those are injected at deploy time by the corp overlay/ApplicationSet. Pod labels
+  are `app.kubernetes.io/name`+`version` + runtime `Environment` only.
+- ESO wired to the real `core` cluster: `ClusterSecretStore` **`aws`** (verified),
+  `external-secrets.io/v1` API, region us-east-1. AWS secret
+  `staffops/anomaly-detection/redis-password` created to homologate. Redis PVC 10Gi.
 - Full chart (18 files) replacing the raw `controller/deploy/*.yaml`: templates for
   controller, worker, redis (+PVC), ML service, RBAC, ConfigMap, VMRule,
   VMServiceScrape, PDB, NetworkPolicy, ExternalSecret; per-env overlays

@@ -23,13 +23,13 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
 {{- end }}
 
 {{/*
-Pod labels — mandatory for Kyverno admission (PH.1/PH.6).
-Includes CostCenter, Environment, app.kubernetes.io/name, app.kubernetes.io/version.
+Pod labels — mandatory app labels + runtime Environment.
+Corp cost tags (CostCenter/CostProject/CostScope) are NOT set here: this repo is
+org-neutral. They are injected at deploy time by the corp overlay/ApplicationSet.
 */}}
 {{- define "anomaly-detection.podLabels" -}}
 app.kubernetes.io/name: {{ .component }}
 app.kubernetes.io/version: {{ .tag | default $.Chart.AppVersion | quote }}
-CostCenter: {{ .global.costCenter | quote }}
 Environment: {{ .global.environment | quote }}
 {{- end }}
 

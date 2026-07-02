@@ -40,7 +40,6 @@ spec:
         app: anomaly-redis
         app.kubernetes.io/name: anomaly-redis
         app.kubernetes.io/version: {{ .Values.redis.image.tag | quote }}
-        CostCenter: {{ .Values.global.costCenter | quote }}
         Environment: {{ .Values.global.environment | quote }}
     spec:
       securityContext:
