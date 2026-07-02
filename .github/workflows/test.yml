@@ -32,8 +32,7 @@ jobs:
 
   lint-go:
     runs-on: ubuntu-latest
-    # TODO: remove once gofmt/vet debt is cleared — gate is report-only for now.
-    continue-on-error: true
+    # Armed 2026-07-02: gofmt (18 files) + go vet (redis context leak) debt cleared.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

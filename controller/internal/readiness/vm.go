@@ -26,7 +26,9 @@ func VMChecker(cfg config.DatasourceEndpoint) metrics.ReadinessChecker {
 	url := cfg.URL + "/api/v1/query?query=up"
 	return func(ctx context.Context) error {
 		err := probeJSON(ctx, client, url, func(body []byte) error {
-			var r struct{ Status string `json:"status"` }
+			var r struct {
+				Status string `json:"status"`
+			}
 			if err := json.Unmarshal(body, &r); err != nil {
 				return fmt.Errorf("decode: %w", err)
 			}

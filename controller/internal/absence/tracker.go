@@ -12,10 +12,10 @@ import (
 // Config holds settings for the absence-of-signal detector.
 type Config struct {
 	Enabled          bool          `yaml:"enabled"`
-	Threshold        time.Duration `yaml:"threshold"`          // silence duration before alerting (default 5m)
-	CheckInterval    time.Duration `yaml:"check_interval"`     // how often to scan (default 30s)
-	StartupGrace     time.Duration `yaml:"startup_grace"`      // skip alerts after boot (default 2× threshold)
-	SuppressPatterns []string      `yaml:"suppress_patterns"`  // namespace patterns to suppress (e.g. "batch-*", "keda-*")
+	Threshold        time.Duration `yaml:"threshold"`         // silence duration before alerting (default 5m)
+	CheckInterval    time.Duration `yaml:"check_interval"`    // how often to scan (default 30s)
+	StartupGrace     time.Duration `yaml:"startup_grace"`     // skip alerts after boot (default 2× threshold)
+	SuppressPatterns []string      `yaml:"suppress_patterns"` // namespace patterns to suppress (e.g. "batch-*", "keda-*")
 }
 
 // Alert represents an absence-of-signal detection.

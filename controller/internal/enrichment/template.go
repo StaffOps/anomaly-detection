@@ -7,7 +7,8 @@ import "strings"
 // callers should validate the rendered query before executing.
 //
 // Supported placeholders:
-//   $namespace, $pod, $container, $service_name, $workload, $node
+//
+//	$namespace, $pod, $container, $service_name, $workload, $node
 func substitute(query string, id Identity) string {
 	r := strings.NewReplacer(
 		"$namespace", id.Namespace,

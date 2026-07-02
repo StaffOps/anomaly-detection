@@ -27,8 +27,8 @@ func TestBuildAlert_WithPodLabel(t *testing.T) {
 
 func TestBuildAlert_WithLinks(t *testing.T) {
 	lb := NewLinkBuilder(config.Links{
-		GrafanaBaseURL:   "https://grafana.test",
-		RunbookBaseURL:   "https://docs.test/runbooks",
+		GrafanaBaseURL: "https://grafana.test",
+		RunbookBaseURL: "https://docs.test/runbooks",
 	})
 	d := &Dispatcher{
 		client:  &http.Client{Timeout: time.Second},

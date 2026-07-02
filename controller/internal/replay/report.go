@@ -21,18 +21,18 @@ type Report struct {
 
 // Metadata holds replay run context.
 type Metadata struct {
-	SchemaVersion      string        `json:"schema_version"`
-	ControllerVersion  string        `json:"controller_version"`
-	RanAt              time.Time     `json:"ran_at"`
-	WindowStart        time.Time     `json:"window_start"`
-	WindowEnd          time.Time     `json:"window_end"`
-	WarmupStart        time.Time     `json:"warmup_start"`
-	WarmupEnd          time.Time     `json:"warmup_end"`
-	WarmupFraction     float64       `json:"warmup_fraction"`
-	TickIntervalSec    int           `json:"tick_interval_seconds"`
-	ResultStatus       string        `json:"result_status"`
-	ConfigSummary      ConfigSummary `json:"config_summary"`
-	ExecutionMetrics   ExecutionMetrics `json:"execution_metrics"`
+	SchemaVersion     string           `json:"schema_version"`
+	ControllerVersion string           `json:"controller_version"`
+	RanAt             time.Time        `json:"ran_at"`
+	WindowStart       time.Time        `json:"window_start"`
+	WindowEnd         time.Time        `json:"window_end"`
+	WarmupStart       time.Time        `json:"warmup_start"`
+	WarmupEnd         time.Time        `json:"warmup_end"`
+	WarmupFraction    float64          `json:"warmup_fraction"`
+	TickIntervalSec   int              `json:"tick_interval_seconds"`
+	ResultStatus      string           `json:"result_status"`
+	ConfigSummary     ConfigSummary    `json:"config_summary"`
+	ExecutionMetrics  ExecutionMetrics `json:"execution_metrics"`
 }
 
 // ConfigSummary counts detection rules in the config.
@@ -44,13 +44,13 @@ type ConfigSummary struct {
 
 // Totals aggregates anomaly counts.
 type Totals struct {
-	Anomalies      int            `json:"anomalies"`
-	BySeverity     map[string]int `json:"by_severity"`
-	BySignal       map[string]int `json:"by_signal"`
-	ByDetector     map[string]int `json:"by_detector"`
-	ByKind         map[string]int `json:"by_kind"`
-	WarmupSkipped  int            `json:"warmup_skipped"`
-	QueryErrors    int            `json:"query_errors"`
+	Anomalies     int            `json:"anomalies"`
+	BySeverity    map[string]int `json:"by_severity"`
+	BySignal      map[string]int `json:"by_signal"`
+	ByDetector    map[string]int `json:"by_detector"`
+	ByKind        map[string]int `json:"by_kind"`
+	WarmupSkipped int            `json:"warmup_skipped"`
+	QueryErrors   int            `json:"query_errors"`
 }
 
 // WorkloadCount is a top-workload entry.

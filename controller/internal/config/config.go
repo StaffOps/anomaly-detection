@@ -50,16 +50,16 @@ type ML struct {
 }
 
 type Controller struct {
-	JobInterval               time.Duration `yaml:"job_interval"`
-	CorrelationWindow         time.Duration `yaml:"correlation_window"`
-	Cooldown                  time.Duration `yaml:"cooldown"`
-	FDRTarget                 float64       `yaml:"fdr_target"`
-	LeaseName                 string        `yaml:"lease_name"`
-	LeaseNamespace            string        `yaml:"lease_namespace"`
-	MetricsPort               int           `yaml:"metrics_port"`
-	WorkerEndpoint            string        `yaml:"worker_endpoint"`
-	WorkloadPatternMinPods    int           `yaml:"workload_pattern_min_pods"`
-	LeaderElection            LeaderElection `yaml:"leader_election"`
+	JobInterval            time.Duration  `yaml:"job_interval"`
+	CorrelationWindow      time.Duration  `yaml:"correlation_window"`
+	Cooldown               time.Duration  `yaml:"cooldown"`
+	FDRTarget              float64        `yaml:"fdr_target"`
+	LeaseName              string         `yaml:"lease_name"`
+	LeaseNamespace         string         `yaml:"lease_namespace"`
+	MetricsPort            int            `yaml:"metrics_port"`
+	WorkerEndpoint         string         `yaml:"worker_endpoint"`
+	WorkloadPatternMinPods int            `yaml:"workload_pattern_min_pods"`
+	LeaderElection         LeaderElection `yaml:"leader_election"`
 }
 
 // LeaderElection controls K8s Lease-based leader election for HA.
@@ -75,10 +75,10 @@ type Controller struct {
 // gives a ~17s worst-case failover window.
 type LeaderElection struct {
 	Enabled       bool          `yaml:"enabled"`
-	Identity      string        `yaml:"identity"`        // defaults to POD_NAME or hostname
-	LeaseDuration time.Duration `yaml:"lease_duration"`  // default 15s
-	RenewDeadline time.Duration `yaml:"renew_deadline"`  // default 10s
-	RetryPeriod   time.Duration `yaml:"retry_period"`    // default 2s
+	Identity      string        `yaml:"identity"`       // defaults to POD_NAME or hostname
+	LeaseDuration time.Duration `yaml:"lease_duration"` // default 15s
+	RenewDeadline time.Duration `yaml:"renew_deadline"` // default 10s
+	RetryPeriod   time.Duration `yaml:"retry_period"`   // default 2s
 }
 
 type Worker struct {
@@ -88,13 +88,13 @@ type Worker struct {
 }
 
 type Baseline struct {
-	WindowSize       int      `yaml:"window_size"`
-	EWMAAlpha        float64  `yaml:"ewma_alpha"`
-	ZScoreThreshold  float64  `yaml:"zscore_threshold"`
-	PoisonThreshold  float64  `yaml:"poison_threshold"`
-	WarmUpSamples    int      `yaml:"warm_up_samples"`
-	SeasonalMinDays  int      `yaml:"seasonal_min_days"`
-	EphemeralLabels  []string `yaml:"ephemeral_labels"`
+	WindowSize      int      `yaml:"window_size"`
+	EWMAAlpha       float64  `yaml:"ewma_alpha"`
+	ZScoreThreshold float64  `yaml:"zscore_threshold"`
+	PoisonThreshold float64  `yaml:"poison_threshold"`
+	WarmUpSamples   int      `yaml:"warm_up_samples"`
+	SeasonalMinDays int      `yaml:"seasonal_min_days"`
+	EphemeralLabels []string `yaml:"ephemeral_labels"`
 }
 
 type Detection struct {
@@ -144,12 +144,12 @@ type Suppression struct {
 // service-level) with template-substituted queries (e.g. $pod, $namespace,
 // $service_name) to build a diagnostic context attached to the alert payload.
 type Enrichment struct {
-	Enabled       bool                 `yaml:"enabled"`
-	CacheTTL      time.Duration        `yaml:"cache_ttl"`       // dedup repeat queries
-	QueryTimeout  time.Duration        `yaml:"query_timeout"`   // per-query timeout
-	MaxConcurrent int                  `yaml:"max_concurrent"`  // cap parallelism
-	PodBundle     []EnrichmentQuery    `yaml:"pod_bundle"`
-	ServiceBundle []EnrichmentQuery    `yaml:"service_bundle"`
+	Enabled       bool              `yaml:"enabled"`
+	CacheTTL      time.Duration     `yaml:"cache_ttl"`      // dedup repeat queries
+	QueryTimeout  time.Duration     `yaml:"query_timeout"`  // per-query timeout
+	MaxConcurrent int               `yaml:"max_concurrent"` // cap parallelism
+	PodBundle     []EnrichmentQuery `yaml:"pod_bundle"`
+	ServiceBundle []EnrichmentQuery `yaml:"service_bundle"`
 }
 
 // EnrichmentQuery is a single query in an enrichment bundle.

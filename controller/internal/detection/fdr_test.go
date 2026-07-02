@@ -247,8 +247,8 @@ func TestFDR_Apply_MixedAdaptiveAndStatic(t *testing.T) {
 	input := []*Anomaly{
 		makeAnomaly("static", 2.0),
 		makeAnomaly("pattern", 3.0),
-		makeAnomaly("adaptive", 5.0),  // significant → accepted
-		makeAnomaly("adaptive", 0.5),  // p≈0.617 → rejected
+		makeAnomaly("adaptive", 5.0), // significant → accepted
+		makeAnomaly("adaptive", 0.5), // p≈0.617 → rejected
 	}
 	accepted, rejected := fdr.Apply(input)
 	// Static + pattern (2) + adaptive survivors.

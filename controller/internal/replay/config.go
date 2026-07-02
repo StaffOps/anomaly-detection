@@ -4,12 +4,12 @@ import "time"
 
 // ReplayConfig holds the parameters for a replay run.
 type ReplayConfig struct {
-	From            time.Time
-	To              time.Time
-	ConfigPath      string
-	OutputPath      string
-	WarmupFraction  float64
-	MaxAnomalies    int
+	From           time.Time
+	To             time.Time
+	ConfigPath     string
+	OutputPath     string
+	WarmupFraction float64
+	MaxAnomalies   int
 }
 
 // DefaultReplayConfig returns a ReplayConfig with sensible defaults.

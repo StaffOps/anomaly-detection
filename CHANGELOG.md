@@ -12,6 +12,11 @@ Work landed after controller 0.7.0, not yet released (still pre-production, no c
 
 ### test / ci
 
+**Changed — gofmt across controller + `lint-go` armed (2026-07-02)**
+- `gofmt -w` applied to 18 files (comment-alignment / spacing only — no semantic
+  change; `go build`/`vet`/`test` all green after). `gofmt -l` now clean.
+- CI `lint-go` gate armed (dropped `continue-on-error`): gofmt + go vet now block.
+
 **Changed — Go 1.25 migration + CVE remediation (2026-07-01)**
 - Migrated the controller toolchain **Go 1.22 → 1.25** to remediate 11 dependency
   CVEs whose fixes require a newer Go. Cleared (Trivy `go.mod` scan: 0 CRITICAL/HIGH):

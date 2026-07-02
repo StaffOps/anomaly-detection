@@ -13,7 +13,7 @@ func TestSeverityFromScore(t *testing.T) {
 	}{
 		{0.0, "warning"},
 		{0.5, "warning"},
-		{0.8, "warning"},  // boundary: 0.8 is NOT > 0.8
+		{0.8, "warning"}, // boundary: 0.8 is NOT > 0.8
 		{0.81, "critical"},
 		{1.0, "critical"},
 	}

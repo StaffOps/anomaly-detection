@@ -29,9 +29,9 @@ func newReplayConfig(vmURL, lokiURL string) *config.Config {
 			WarmUpSamples:   1, // minimal warmup for tests
 		},
 		Detection: config.Detection{
-			StaticRules:   []config.StaticRule{},
+			StaticRules:     []config.StaticRule{},
 			AdaptiveMetrics: []config.AdaptiveMetric{},
-			LogPatterns:   []config.LogPattern{},
+			LogPatterns:     []config.LogPattern{},
 		},
 	}
 }

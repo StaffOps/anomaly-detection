@@ -238,10 +238,10 @@ func buildTestConfig(vmBase, lokiBase string) *config.Config {
 			WorkloadPatternMinPods: 3,
 		},
 		Baseline: config.Baseline{
-			WindowSize:     60,
-			EWMAAlpha:      0.3,
+			WindowSize:      60,
+			EWMAAlpha:       0.3,
 			ZScoreThreshold: 3.0,
-			WarmUpSamples:  60,
+			WarmUpSamples:   60,
 		},
 		Detection: config.Detection{
 			StaticRules: []config.StaticRule{

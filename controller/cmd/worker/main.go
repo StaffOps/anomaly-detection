@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/grpc"
-	"github.com/prometheus/client_golang/prometheus"
 	otelhelper "github.com/karlipegomes/staffops-otel-libs/go"
+	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/grpc"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -23,10 +23,10 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 	"github.com/staffops/staffops-anomaly-detection/internal/ratelimit"
+	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 	"github.com/staffops/staffops-anomaly-detection/internal/suppression"
 	"github.com/staffops/staffops-anomaly-detection/internal/version"
 	pb "github.com/staffops/staffops-anomaly-detection/proto"
-	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 )
 
 func main() {
@@ -91,7 +91,7 @@ func main() {
 	suppressionFilter := suppression.NewFilter(cfg.Suppression)
 
 	// Rate limiters
-	vmLimiter := ratelimit.New(20)  // 20 queries/s to VM (conservative to avoid overloading vmselect)
+	vmLimiter := ratelimit.New(20)   // 20 queries/s to VM (conservative to avoid overloading vmselect)
 	lokiLimiter := ratelimit.New(50) // 50 queries/s to Loki
 
 	// Ingestion

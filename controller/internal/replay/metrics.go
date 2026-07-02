@@ -38,8 +38,8 @@ func newMetricsCollector() *metricsCollector {
 	}
 }
 
-func (m *metricsCollector) recordTick()        { m.mu.Lock(); m.ticksProcessed++; m.mu.Unlock() }
-func (m *metricsCollector) recordSkip()        { m.mu.Lock(); m.ticksSkipped++; m.mu.Unlock() }
+func (m *metricsCollector) recordTick() { m.mu.Lock(); m.ticksProcessed++; m.mu.Unlock() }
+func (m *metricsCollector) recordSkip() { m.mu.Lock(); m.ticksSkipped++; m.mu.Unlock() }
 func (m *metricsCollector) recordVMQuery(d time.Duration) {
 	m.mu.Lock()
 	m.vmQueries++

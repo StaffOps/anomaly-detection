@@ -83,9 +83,9 @@ type Config struct {
 //   - Builds a K8s client (in-cluster if Kubeconfig is empty).
 //   - Creates a LeaseLock for {Namespace, Name, Identity}.
 //   - Calls leaderelection.RunOrDie which loops forever:
-//       - Tries to acquire the lease
-//       - On success: invokes OnStartedLeading(leaderCtx); leaderCtx is cancelled when lease lost
-//       - On loss: invokes OnStoppedLeading()
+//   - Tries to acquire the lease
+//   - On success: invokes OnStartedLeading(leaderCtx); leaderCtx is cancelled when lease lost
+//   - On loss: invokes OnStoppedLeading()
 //
 // Returns when ctx is cancelled or on fatal client setup errors.
 //

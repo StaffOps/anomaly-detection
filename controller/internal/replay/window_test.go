@@ -33,8 +33,8 @@ func TestParseWindow_DurationDays(t *testing.T) {
 
 func TestParseWindow_AbsoluteTimestamps(t *testing.T) {
 	tests := []struct {
-		name      string
-		from, to  string
+		name       string
+		from, to   string
 		wantWindow time.Duration
 	}{
 		{"24h_absolute", "2026-05-29T00:00:00Z", "2026-05-30T00:00:00Z", 24 * time.Hour},
@@ -167,10 +167,10 @@ func TestParseDays(t *testing.T) {
 		{"7d", 7 * 24 * time.Hour, true, false},
 		{"0d", 0, true, false},
 		{"-1d", 0, true, true},
-		{"24h", 0, false, false},   // not days
-		{"3", 0, false, false},     // no unit
-		{"abc", 0, false, false},   // not a number
-		{"3da", 0, false, false},   // doesn't end in `d`
+		{"24h", 0, false, false}, // not days
+		{"3", 0, false, false},   // no unit
+		{"abc", 0, false, false}, // not a number
+		{"3da", 0, false, false}, // doesn't end in `d`
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

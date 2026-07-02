@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus"
 	otelhelper "github.com/karlipegomes/staffops-otel-libs/go"
+	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -29,10 +29,10 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 	"github.com/staffops/staffops-anomaly-detection/internal/ml"
 	"github.com/staffops/staffops-anomaly-detection/internal/readiness"
+	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 	"github.com/staffops/staffops-anomaly-detection/internal/replay"
 	"github.com/staffops/staffops-anomaly-detection/internal/version"
 	pb "github.com/staffops/staffops-anomaly-detection/proto"
-	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 )
 
 func main() {

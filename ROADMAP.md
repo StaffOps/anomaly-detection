@@ -367,7 +367,8 @@ auth via `DOCS_DEPLOY_TOKEN`) landed with security/lint gates as
 **report-only** (`continue-on-error` / Trivy `exit-code: 0`) so they surface debt without
 blocking `main`. Re-arm each gate (flip the flag in the workflow) as its debt clears:
 
-- [ ] **gofmt** — 16 unformatted files; `gofmt -w` then drop `continue-on-error` on `lint-go`.
+- [x] **gofmt** — ✅ done 2026-07-02: `gofmt -w` applied to 18 files (comment-alignment
+      only, no semantic change); `gofmt -l` clean. `lint-go` armed (`continue-on-error` dropped).
 - [x] **go vet** — ✅ fixed 2026-07-01: context leak in `internal/redis/client_test.go`
       resolved (`ctx(t)` now registers `cancel` via `t.Cleanup`). `go vet ./...` clean on Go 1.25.
 - [x] **Trivy (deps)** — ✅ armed 2026-07-01. All 11 Go CVEs cleared via the **Go 1.25

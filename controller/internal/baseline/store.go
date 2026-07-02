@@ -17,9 +17,9 @@ import (
 
 // Pod name patterns for workload extraction (same as correlation package).
 var (
-	deployPat  = regexp.MustCompile(`^(.+)-[a-f0-9]{8,10}-[a-z0-9]{5}$`)
-	stsPat     = regexp.MustCompile(`^(.+)-(\d+)$`)
-	dsPat      = regexp.MustCompile(`^(.+)-[a-z0-9]{5}$`)
+	deployPat = regexp.MustCompile(`^(.+)-[a-f0-9]{8,10}-[a-z0-9]{5}$`)
+	stsPat    = regexp.MustCompile(`^(.+)-(\d+)$`)
+	dsPat     = regexp.MustCompile(`^(.+)-[a-z0-9]{5}$`)
 )
 
 // extractWorkload derives workload name from pod name.
@@ -50,12 +50,12 @@ type Stats struct {
 
 // Result is the output of evaluating a value against its baseline.
 type Result struct {
-	IsAnomaly  bool
-	ZScore     float64
-	Value      float64
-	Mean       float64
-	Stddev     float64
-	EWMA       float64
+	IsAnomaly   bool
+	ZScore      float64
+	Value       float64
+	Mean        float64
+	Stddev      float64
+	EWMA        float64
 	IsWarmingUp bool
 }
 
