@@ -5,7 +5,7 @@
 > Verification independence (steering): autor do código ≠ autor dos testes. Onde
 > houver subagents, delegar implementação a `dev` e testes a sessão `dev` distinta,
 > review por `code-review`. Gate de cobertura ≥90% no novo código (`internal/replay/inject/`).
-> Builds via Docker (`golang:1.22-alpine`), sem SDK local.
+> Builds via Docker (`golang:1.25-alpine`), sem SDK local.
 
 ## Phase 1: Injection core (`internal/replay/inject/`)
 

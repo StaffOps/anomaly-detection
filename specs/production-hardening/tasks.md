@@ -20,7 +20,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   Wire to `.github/workflows/ci.yml` (PH.12) so CI sets the tag. **Effort: S**.
 
 - [ ] **PH.3** — Migrate base images to BDC golden (apko + cosign).
-  - `controller/Dockerfile` L1: `golang:1.22-alpine` → `harbor.<org>/golden/golang-1.22`
+  - `controller/Dockerfile` L1: `golang:1.25-alpine` → `harbor.<org>/golden/golang-1.25`
   - `controller/Dockerfile` L10, L15: `alpine:3.20` → golden minimal
   - `ml/Dockerfile` L1: `python:3.11-slim` → `harbor.<org>/golden/python-3.11`
   - Validate cosign chain via `cosign verify` against the golden image catalog.
@@ -64,7 +64,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
 
 - [ ] **PH.12** — Create `.github/workflows/ci.yml`.
   Stages:
-  1. `unit-test` — `docker run golang:1.22 go test -coverprofile=cov.out
+  1. `unit-test` — `docker run golang:1.25 go test -coverprofile=cov.out
      -covermode=atomic ./...; go tool cover -func=cov.out | grep total | awk
      '{exit ($3+0 < 90)}'` and `pytest --cov=server --cov-fail-under=90`.
   2. `build-dev` — multi-arch `docker buildx build --platform

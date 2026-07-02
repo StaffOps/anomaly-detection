@@ -55,7 +55,7 @@ Backing: Redis (baselines, dedup), VictoriaMetrics (PromQL), Loki (LogQL)
 TOKEN=$(gh auth token)
 
 # Go — build both binaries
-docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
+docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.25-alpine sh -c '
   apk add --no-cache git >/dev/null
   export GOPRIVATE=github.com/karlipegomes/*
   git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
@@ -63,14 +63,14 @@ docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.2
   CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/'
 
 # Go — tests
-docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
+docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.25-alpine sh -c '
   apk add --no-cache git >/dev/null
   export GOPRIVATE=github.com/karlipegomes/*
   git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
   go test ./...'
 
-# Go — tests with coverage (≥90% gate is PH.9 — in progress; CI report-only for now)
-docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
+# Go — tests with coverage (≥90% gate is PH.9 — done; CI test-go enforces it)
+docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.25-alpine sh -c '
   apk add --no-cache git >/dev/null
   export GOPRIVATE=github.com/karlipegomes/*
   git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
