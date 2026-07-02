@@ -1,0 +1,29 @@
+{{- if gt (int .Values.controller.replicas) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: anomaly-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: anomaly-controller
+---
+{{- end }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: anomaly-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+spec:
+  # maxUnavailable (not minAvailable) so the budget never deadlocks node drains
+  # when replicas is small (e.g. DEV replicas=2). Always allows one eviction.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: anomaly-worker

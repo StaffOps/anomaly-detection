@@ -1,0 +1,32 @@
+# HML environment overlay
+global:
+  environment: "HML"
+
+config:
+  cluster: "bdc-workloads-prd-nv"
+  datasources:
+    victoriametrics:
+      url: "http://vm-cluster-vmselect.monitoring:8481/select/0/prometheus"
+    loki:
+      url: "http://loki-gateway.monitoring:80"
+    alertmanager:
+      url: "http://prometheus-alertmanager.monitoring:9093"
+  ml:
+    enabled: false
+
+controller:
+  replicas: 2
+  image:
+    tag: ""
+
+worker:
+  replicas: 3
+  image:
+    tag: ""
+
+redis:
+  persistence:
+    size: 2Gi
+
+ml:
+  enabled: false

@@ -8,7 +8,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
 
 ## Group A — Kyverno admission (hard-fails) [parallelizable]
 
-- [ ] **PH.1** — Add `securityContext` to all four pod types (controller, worker,
+- [x] **PH.1** (done in chart PH.15) — Add `securityContext` to all four pod types (controller, worker,
   redis, ML). Required keys: `runAsNonRoot: true`, `runAsUser: 65534`,
   `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`,
   `capabilities.drop: ["ALL"]`. Validate by running a `kubectl apply --dry-run=server`
@@ -40,18 +40,18 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   - Verify final image with `docker run --rm <image> which gcc` returns nothing.
   - **Effort: S**.
 
-- [ ] **PH.6** — Add mandatory labels to all pod templates.
+- [x] **PH.6** (done in chart PH.15) — Add mandatory labels to all pod templates.
   - `app.kubernetes.io/name`, `app.kubernetes.io/version` (from CI tag),
     `CostCenter` (from Helm values), `Environment` (from Helm values).
   - Apply as part of Helm chart in PH.15 — coordinate ordering.
   - **Effort: S**.
 
-- [ ] **PH.7** — Add `lifecycle.preStop` (`sleep 5`) and
+- [x] **PH.7** (done in chart PH.15) — Add `lifecycle.preStop` (`sleep 5`) and
   `terminationGracePeriodSeconds: 30` to controller, worker, ML, redis.
   Validate by killing a pod under load and confirming no in-flight gRPC errors.
   **Effort: S**.
 
-- [ ] **PH.8** — Create K8s manifest for the ML service. Today it exists only
+- [x] **PH.8** (done in chart PH.15) — Create K8s manifest for the ML service. Today it exists only
   in `scripts/docker-compose.yaml`. Mirror the controller pattern: `Deployment`,
   `Service` (gRPC 50051 + metrics 8082), `ServiceAccount`, RBAC if needed,
   gRPC liveness probe (after PH.10 lands `grpc_health_v1`). **Effort: M**.
@@ -117,7 +117,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   5. Remove `karlipegomes` references from `go.mod` and `go.sum`.
   - **Effort: S** (mostly process / repo creation).
 
-- [ ] **PH.14** — Move BDC-specific URLs out of the in-repo ConfigMap.
+- [x] **PH.14** (done in chart PH.15) — Move BDC-specific URLs out of the in-repo ConfigMap.
   - File: `controller/deploy/redis.yaml` (the embedded ConfigMap, lines ~110-160).
   - Move `vm-cluster-vmselect.monitoring:8481`, `loki-gateway.monitoring:80`,
     `prometheus-alertmanager.monitoring:9093`, `anomaly-redis.monitoring:6379`,
@@ -127,7 +127,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
 
 ## Group D — Helm + ArgoCD [serial, M each]
 
-- [ ] **PH.15** — Create `helm-charts/anomaly-detection/`.
+- [x] **PH.15** (DONE 2026-07-02) — Create `helm-charts/anomaly-detection/`.
   Layout per the gitops review recommendation:
   ```
   helm-charts/anomaly-detection/
@@ -162,27 +162,27 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   env). Reference Helm values per env. Include `automated.prune`,
   `automated.selfHeal`, `retry.limit: 3`. **Effort: M**.
 
-- [ ] **PH.17** — Add `argocd.argoproj.io/sync-wave` annotations:
+- [x] **PH.17** (done in chart PH.15) — Add `argocd.argoproj.io/sync-wave` annotations:
   `-2` namespace, `-1` Redis + ServiceAccounts + RBAC, `0` controller + worker
   + ML, `1` VMRule + VMServiceScrape + Dashboard. **Effort: S** (in PH.15
   templates).
 
-- [ ] **PH.18** — Add `PodDisruptionBudget`:
+- [x] **PH.18** (done in chart PH.15) — Add `PodDisruptionBudget`:
   - controller: `minAvailable: 1` (preserves leader)
   - worker: `minAvailable: 2` (out of 3)
   - **Effort: S** (in PH.15 templates).
 
-- [ ] **PH.19** — Replace `prometheus.io/scrape` annotations with
+- [x] **PH.19** (done in chart PH.15) — Replace `prometheus.io/scrape` annotations with
   `VMServiceScrape` CRDs. Also: define `VMRule` for staffops_ad alerts already
   in `controller/deploy/vmrules.yaml`. **Effort: S**.
 
-- [ ] **PH.20** — Remove explicit CPU limits from controller + worker
+- [x] **PH.20** (done in chart PH.15) — Remove explicit CPU limits from controller + worker
   deployments (keep memory limits; ScaleOps manages CPU). Document in chart
   comments why. **Effort: S**.
 
 ## Group E — Network & secrets [parallelizable]
 
-- [ ] **PH.21** — Add `NetworkPolicy`:
+- [x] **PH.21** (done in chart PH.15) — Add `NetworkPolicy`:
   - Redis: ingress only from controller+worker pods.
   - Worker gRPC (50052): ingress only from controller pods.
   - ML gRPC (50051): ingress only from controller pods.
@@ -196,7 +196,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
     Manager direct read).
   - **Effort: S**.
 
-- [ ] **PH.23** — Worker RBAC: drop `events list/watch`. Only the controller
+- [x] **PH.23** (done in chart PH.15) — Worker RBAC: drop `events list/watch`. Only the controller
   uses `EventWatcher`. Validate post-change that worker pods do not error
   on missing permissions. **Effort: S**.
 
@@ -217,12 +217,12 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
 
 | Group | Tasks | Status |
 |-------|-------|:------:|
-| A. Kyverno admission | PH.1 – PH.8 | ⬜ not started |
-| B. Test & CI | PH.9 – PH.12 | ⬜ not started |
-| C. Org-neutrality | PH.13 – PH.14 | ⬜ not started |
-| D. Helm + ArgoCD | PH.15 – PH.20 | ⬜ not started |
-| E. Network & secrets | PH.21 – PH.23 | ⬜ not started |
-| F. Dependency hygiene | PH.24 – PH.25 | ⬜ not started |
+| A. Kyverno admission | PH.1 – PH.8 | 🟡 mostly done (PH.1/6/7/8 in chart; PH.2/PH.5 done; PH.3 golden images pending) |
+| B. Test & CI | PH.9 – PH.12 | ✅ done (PH.9/10 coverage gates armed, PH.11 fixed, PH.12 CI live) |
+| C. Org-neutrality | PH.13 – PH.14 | 🟡 PH.14 done in chart; PH.13 (otel-libs → org repo) pending |
+| D. Helm + ArgoCD | PH.15 – PH.20 | 🟡 chart done (PH.15/17/18/19/20); PH.16 ApplicationSet pending |
+| E. Network & secrets | PH.21 – PH.23 | 🟡 PH.21/23 in chart; PH.22 IRSA ARN + PH.4 AWS secret pending |
+| F. Dependency hygiene | PH.24 – PH.25 | 🟡 PH.24 done; PH.25 pending |
 
 ## Promotion triggers (when this spec is "done")
 

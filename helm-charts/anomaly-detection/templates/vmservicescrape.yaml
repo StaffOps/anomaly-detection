@@ -1,0 +1,57 @@
+{{- if .Values.vmServiceScrape.enabled }}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: anomaly-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: anomaly-controller
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: anomaly-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: anomaly-worker
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+---
+{{- if .Values.ml.enabled }}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: anomaly-ml
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: anomaly-ml
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+{{- end }}
+{{- end }}

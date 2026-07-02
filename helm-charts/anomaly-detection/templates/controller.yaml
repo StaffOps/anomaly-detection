@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: anomaly-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    {{- if .Values.controller.serviceAccount.irsaRoleArn }}
+    eks.amazonaws.com/role-arn: {{ .Values.controller.serviceAccount.irsaRoleArn | quote }}
+    {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: anomaly-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: anomaly-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+subjects:
+  - kind: ServiceAccount
+    name: anomaly-controller
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: anomaly-controller
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anomaly-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: anomaly-controller
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      app: anomaly-controller
+  template:
+    metadata:
+      labels:
+        app: anomaly-controller
+        app.kubernetes.io/name: anomaly-controller
+        app.kubernetes.io/version: {{ .Values.controller.image.tag | default .Chart.AppVersion | quote }}
+        CostCenter: {{ .Values.global.costCenter | quote }}
+        Environment: {{ .Values.global.environment | quote }}
+    spec:
+      serviceAccountName: anomaly-controller
+      securityContext:
+        {{- include "anomaly-detection.podSecurityContext" . | nindent 8 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: controller
+          image: "{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag | default .Chart.AppVersion }}"
+          args: ["--config", "/config/config.yaml"]
+          ports:
+            - containerPort: 8080
+              name: metrics
+          env:
+            - name: CLUSTER_NAME
+              value: {{ .Values.config.cluster | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: LEADER_ELECTION_ENABLED
+              value: {{ .Values.controller.leaderElection.enabled | quote }}
+            - name: CONTROLLER_LEASE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.auth.secretName }}
+                  key: redis-password
+          securityContext:
+            {{- include "anomaly-detection.securityContext" . | nindent 12 }}
+          {{- include "anomaly-detection.lifecycle" . | nindent 10 }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: redis-secret
+              mountPath: /etc/secrets
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              {{- toYaml .Values.controller.resources.requests | nindent 14 }}
+            limits:
+              memory: {{ .Values.controller.resources.limits.memory }}
+      volumes:
+        - name: config
+          configMap:
+            name: anomaly-detection-config
+        - name: tmp
+          emptyDir: {}
+        - name: redis-secret
+          secret:
+            secretName: {{ .Values.redis.auth.secretName }}
+            defaultMode: 0400

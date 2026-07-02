@@ -302,14 +302,14 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.1 | 🟡 Images run nonroot (`USER 65534`); pod-level `securityContext` (runAsNonRoot, readOnlyRootFilesystem, drop:[ALL], allowPrivilegeEscalation:false) for controller/worker/redis/ML still pending in manifests/Helm (PH.15) | security, gitops |
+| PH.1 | ✅ **Done in chart (PH.15)** — pod-level `securityContext` (runAsNonRoot, readOnlyRootFilesystem + emptyDir writable paths, drop:[ALL], allowPrivilegeEscalation:false, runAsUser 65534) on all 4 pods (controller/worker/redis/ML) | security, gitops |
 | PH.2 | 🟡 CI builds SHA-tagged images to Docker Hub; `:latest`/`REPLACE_ME_REGISTRY` removal in manifests pending Helm (PH.15) | security, gitops |
 | PH.3 | Migrate base images to BDC golden (apko-built, cosign-signed): `golang`, `alpine`, `redis`, `python` | security |
 | PH.4 | Enable Redis AUTH; mount password as file-secret via External Secrets Operator (12-factor IV) | security |
 | PH.5 | ✅ Done — multi-stage ML Dockerfile; runtime image drops `gcc`/`g++` and `grpcio-tools` | security |
-| PH.6 | Add mandatory labels (`CostCenter`, `Environment`, `app.kubernetes.io/version`) to all pod templates | gitops, security |
-| PH.7 | Add `preStop` hook (`sleep 5`) and `terminationGracePeriodSeconds: 30` to all deployments | gitops |
-| PH.8 | Create K8s manifest for the ML service (today exists only in `docker-compose`) | gitops |
+| PH.6 | ✅ **Done in chart (PH.15)** — `CostCenter`, `Environment`, `app.kubernetes.io/name`, `app.kubernetes.io/version` on all pod templates | gitops, security |
+| PH.7 | ✅ **Done in chart (PH.15)** — `preStop` (`sleep 5`) + `terminationGracePeriodSeconds: 30` on all deployments | gitops |
+| PH.8 | ✅ **Done in chart (PH.15)** — ML Service + Deployment templated (`ml.enabled`, on in prd) | gitops |
 
 ### Test & CI gates (steering `dev-environment.md` ≥90%)
 
@@ -325,7 +325,7 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 | # | Item | Source review |
 |---|------|---------------|
 | PH.13 | Move `github.com/karlipegomes/staffops-otel-libs/go` (personal repo, pseudo-version) to org repo with proper release tagging — `karli` username in import path is the same anti-pattern as the earlier `bigdatacorp` rename | security, dev |
-| PH.14 | Move BDC-specific URLs out of `controller/deploy/redis.yaml` ConfigMap (`vm-cluster-vmselect.monitoring:8481`, `loki-gateway.monitoring:80`) into Helm values | gitops |
+| PH.14 | ✅ **Done in chart (PH.15)** — VM/Loki/Alertmanager/redis endpoints templated from Helm values (`config.datasources.*`), no longer hardcoded in an in-repo ConfigMap | gitops |
 
 ### Helm chart + GitOps (move from raw YAML to ApplicationSet)
 
@@ -333,20 +333,20 @@ Currently rated **GitOps maturity 1.5/5**. To unblock cluster deploy:
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.15 | Create `helm-charts/anomaly-detection/` with `templates/` + `values.yaml` + per-env overrides; covers controller, worker, redis (with PVC), ML, RBAC, VMRule, VMServiceScrape, PDB | gitops |
+| PH.15 | ✅ **Done (2026-07-02)** — `helm-charts/anomaly-detection/` created (18 files): controller, worker, redis (+PVC, AUTH via ExternalSecret), ML (PH.8), RBAC, VMRule, VMServiceScrape, PDB, NetworkPolicy, per-env overlays (dev/hml/prd). Folds in PH.1/PH.6/PH.7/PH.14/PH.20/PH.21/PH.23. `helm lint --strict` clean; renders valid YAML all envs. Delegated to `gitops`, reviewed by `code-review` (fixed a Redis-AUTH config-key blocker + PDB single-replica deadlock) | gitops |
 | PH.16 | Create ArgoCD `ApplicationSet` (matrix: cluster × env) targeting the Helm chart | gitops |
 | PH.17 | Add `argocd.argoproj.io/sync-wave` annotations so Redis comes up before controller/worker | gitops |
 | PH.18 | Add `PodDisruptionBudget` (`minAvailable: 1` controller leader, `minAvailable: 2` workers) | gitops |
 | PH.19 | Replace `prometheus.io/scrape` annotations with `VMServiceScrape` CRDs | gitops |
-| PH.20 | Remove explicit CPU limits from controller/worker (ScaleOps manages; throttling risk on the 60s detection cycle is real) | gitops |
+| PH.20 | ✅ **Done in chart (PH.15)** — controller/worker have memory-only limits (no CPU limit); redis keeps a small CPU limit (not on the 60s detection path) | gitops |
 
 ### Network & secrets
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.21 | Add `NetworkPolicy`: redis ← only controller+worker; worker gRPC ← only controller; ML gRPC ← only controller | security |
+| PH.21 | ✅ **Done in chart (PH.15)** — `NetworkPolicy`: redis ← controller+worker; worker gRPC ← controller; ML gRPC ← controller (selectors verified against pod labels) | security |
 | PH.22 | Pre-provision a zero-permission IRSA role for the controller ServiceAccount (`eks.amazonaws.com/role-arn` annotation). Scoped policies added later when ML S3 model storage lands | security, gitops |
-| PH.23 | Worker RBAC: drop `events list/watch` (only the controller uses `EventWatcher`; this is a copy-paste from controller RBAC) | security |
+| PH.23 | ✅ **Done in chart (PH.15)** — worker chart has no Role/RoleBinding (events `list/watch` dropped; only the controller keeps `EventWatcher` RBAC) | security |
 
 ### Dependency hygiene
 

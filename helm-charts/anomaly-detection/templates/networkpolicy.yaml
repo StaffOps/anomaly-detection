@@ -1,0 +1,83 @@
+{{- if .Values.networkPolicy.enabled }}
+# Redis: ingress only from controller + worker pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: anomaly-redis-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: anomaly-redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: anomaly-controller
+        - podSelector:
+            matchLabels:
+              app: anomaly-worker
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# Worker gRPC: ingress only from controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: anomaly-worker-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: anomaly-worker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: anomaly-controller
+      ports:
+        - protocol: TCP
+          port: 50052
+    # Allow metrics scraping (VMServiceScrape / Prometheus)
+    - ports:
+        - protocol: TCP
+          port: 8081
+---
+{{- if .Values.ml.enabled }}
+# ML gRPC: ingress only from controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: anomaly-ml-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: anomaly-ml
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: anomaly-controller
+      ports:
+        - protocol: TCP
+          port: 50051
+    # Allow metrics scraping
+    - ports:
+        - protocol: TCP
+          port: 8082
+{{- end }}
+{{- end }}

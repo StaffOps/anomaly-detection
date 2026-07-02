@@ -10,6 +10,29 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
 
+### infra / gitops
+
+**Added — Helm chart `helm-charts/anomaly-detection/` (PH.15) (2026-07-02)**
+- Full chart (18 files) replacing the raw `controller/deploy/*.yaml`: templates for
+  controller, worker, redis (+PVC), ML service, RBAC, ConfigMap, VMRule,
+  VMServiceScrape, PDB, NetworkPolicy, ExternalSecret; per-env overlays
+  `values-{dev,hml,prd}.yaml`. `helm lint --strict` clean; renders valid YAML in all envs.
+- Folds in the pod-template hard-fails as chart-native: **PH.1** (securityContext
+  runAsNonRoot/readOnlyRootFilesystem+emptyDir/drop-ALL/runAsUser 65534 on all 4 pods),
+  **PH.6** (CostCenter/Environment/name/version labels), **PH.7** (preStop + grace 30s),
+  **PH.8** (ML manifest, previously docker-compose only), **PH.14** (datasource URLs
+  templated from values, not a hardcoded ConfigMap), **PH.20** (memory-only limits on
+  controller/worker), **PH.21** (NetworkPolicy: redis←controller+worker, worker←controller,
+  ML←controller), **PH.23** (worker has no events RBAC).
+- Redis AUTH (**PH.4**) via ExternalSecret (AWS Secrets Manager) + `password: ${REDIS_PASSWORD}`
+  consumed through the Go config's env expansion; sync-wave orders ESO→redis→RBAC→workloads.
+- Worker PDB uses `maxUnavailable: 1` and controller PDB is suppressed at replicas=1 —
+  avoids node-drain deadlock in DEV.
+- Delegated to the `gitops` specialist; independently reviewed by `code-review`
+  (caught + fixed a Redis-AUTH config-key mismatch and a single-replica PDB deadlock).
+- Not included: ArgoCD ApplicationSet (**PH.16**, next). ML/base images still on
+  upstream tags until **PH.3** (golden apko).
+
 ### test / ci
 
 **Changed — gofmt across controller + `lint-go` armed (2026-07-02)**

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    istio.io/dataplane-mode: ambient
+    {{- include "anomaly-detection.labels" . | nindent 4 }}
