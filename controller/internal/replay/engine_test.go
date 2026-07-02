@@ -10,15 +10,15 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 )
 
-// emptyRangeResponse is a valid but empty VictoriaMetrics/Loki range response.
+// emptyRangeResponse is a valid but empty Prometheus-compatible/Loki range response.
 const emptyRangeResponse = `{"status":"success","data":{"resultType":"matrix","result":[]}}`
 
 func newReplayConfig(vmURL, lokiURL string) *config.Config {
 	return &config.Config{
 		Cluster: "test",
 		Datasources: config.Datasources{
-			VictoriaMetrics: config.DatasourceEndpoint{URL: vmURL, Timeout: time.Second},
-			Loki:            config.DatasourceEndpoint{URL: lokiURL, Timeout: time.Second},
+			Prometheus: config.DatasourceEndpoint{URL: vmURL, Timeout: time.Second},
+			Loki:       config.DatasourceEndpoint{URL: lokiURL, Timeout: time.Second},
 		},
 		Controller: config.Controller{
 			JobInterval: 30 * time.Minute, // large step = few ticks in test

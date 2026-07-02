@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	otelhelper "github.com/staffops/staffops-otel-libs/go"
 	"github.com/prometheus/client_golang/prometheus"
+	otelhelper "github.com/staffops/staffops-otel-libs/go"
 	"google.golang.org/grpc"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -95,7 +95,7 @@ func main() {
 	lokiLimiter := ratelimit.New(50) // 50 queries/s to Loki
 
 	// Ingestion
-	metricsPoller := ingestion.NewMetricsPoller(cfg.Datasources.VictoriaMetrics)
+	metricsPoller := ingestion.NewMetricsPoller(cfg.Datasources.Prometheus)
 	logsPoller := ingestion.NewLogsPoller(cfg.Datasources.Loki)
 
 	// K8s client (optional, for event watcher)

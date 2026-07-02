@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	otelhelper "github.com/staffops/staffops-otel-libs/go"
 	"github.com/prometheus/client_golang/prometheus"
+	otelhelper "github.com/staffops/staffops-otel-libs/go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -114,7 +114,7 @@ func main() {
 	dispatcher := alert.NewDispatcher(cfg.Datasources.Alertmanager, *dryRun, cfg.Cluster, linkBuilder)
 
 	// Enrichment engine (label-based pivot for alert context)
-	vmPoller := ingestion.NewMetricsPoller(cfg.Datasources.VictoriaMetrics)
+	vmPoller := ingestion.NewMetricsPoller(cfg.Datasources.Prometheus)
 	lokiPoller := ingestion.NewLogsPoller(cfg.Datasources.Loki)
 	enricher := enrichment.NewEngine(cfg.Enrichment, vmPoller, lokiPoller, redis)
 
@@ -145,7 +145,7 @@ func main() {
 	defer mlClient.Close()
 
 	// Wire readiness checks for all upstream dependencies.
-	metricsSrv.AddReadinessCheck(readiness.VMChecker(cfg.Datasources.VictoriaMetrics))
+	metricsSrv.AddReadinessCheck(readiness.PromChecker(cfg.Datasources.Prometheus))
 	metricsSrv.AddReadinessCheck(readiness.LokiChecker(cfg.Datasources.Loki))
 	metricsSrv.AddReadinessCheck(readiness.AlertmanagerChecker(cfg.Datasources.Alertmanager))
 	metricsSrv.AddReadinessCheck(readiness.MLChecker(mlClient))
@@ -496,8 +496,8 @@ func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction flo
 	fmt.Println()
 
 	// Pre-flight checks.
-	if err := preflightVM(cfg.Datasources.VictoriaMetrics); err != nil {
-		slog.Error("pre-flight: VM unreachable", "error", err)
+	if err := preflightProm(cfg.Datasources.Prometheus); err != nil {
+		slog.Error("pre-flight: Prometheus-compatible TSDB unreachable", "error", err)
 		os.Exit(1)
 	}
 	if err := preflightLoki(cfg.Datasources.Loki); err != nil {
@@ -579,17 +579,17 @@ func parseDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-// preflightVM checks VM is reachable with query=up.
-func preflightVM(ds config.DatasourceEndpoint) error {
+// preflightProm checks the Prometheus-compatible TSDB is reachable with query=up.
+func preflightProm(ds config.DatasourceEndpoint) error {
 	url := strings.TrimRight(ds.URL, "/") + "/api/v1/query?query=up"
 	client := &http.Client{Timeout: ds.Timeout}
 	resp, err := client.Get(url)
 	if err != nil {
-		return fmt.Errorf("VM query failed: %w", err)
+		return fmt.Errorf("prometheus query failed: %w", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("VM returned status %d", resp.StatusCode)
+		return fmt.Errorf("prometheus returned status %d", resp.StatusCode)
 	}
 	return nil
 }

@@ -12,8 +12,8 @@ import (
 type ExecutionMetrics struct {
 	TicksProcessed         int     `json:"ticks_processed"`
 	TicksSkippedQueryError int     `json:"ticks_skipped_query_error"`
-	VMQueriesTotal         int     `json:"vm_queries_total"`
-	VMQueryDurationP95     float64 `json:"vm_query_duration_seconds_p95"`
+	PromQueriesTotal       int     `json:"prometheus_queries_total"`
+	PromQueryDurationP95   float64 `json:"prometheus_query_duration_seconds_p95"`
 	LokiQueriesTotal       int     `json:"loki_queries_total"`
 	MemoryPeakMB           float64 `json:"memory_peak_mb"`
 	DurationSeconds        float64 `json:"duration_seconds"`
@@ -24,26 +24,26 @@ type metricsCollector struct {
 	mu             sync.Mutex
 	ticksProcessed int
 	ticksSkipped   int
-	vmQueries      int
+	promQueries    int
 	lokiQueries    int
 	memPeakBytes   uint64
-	vmDurations    *p95Window
+	promDurations  *p95Window
 	start          time.Time
 }
 
 func newMetricsCollector() *metricsCollector {
 	return &metricsCollector{
-		vmDurations: newP95Window(100),
-		start:       time.Now(),
+		promDurations: newP95Window(100),
+		start:         time.Now(),
 	}
 }
 
 func (m *metricsCollector) recordTick() { m.mu.Lock(); m.ticksProcessed++; m.mu.Unlock() }
 func (m *metricsCollector) recordSkip() { m.mu.Lock(); m.ticksSkipped++; m.mu.Unlock() }
-func (m *metricsCollector) recordVMQuery(d time.Duration) {
+func (m *metricsCollector) recordPromQuery(d time.Duration) {
 	m.mu.Lock()
-	m.vmQueries++
-	m.vmDurations.add(d.Seconds())
+	m.promQueries++
+	m.promDurations.add(d.Seconds())
 	m.mu.Unlock()
 }
 func (m *metricsCollector) recordLokiQuery() { m.mu.Lock(); m.lokiQueries++; m.mu.Unlock() }
@@ -64,8 +64,8 @@ func (m *metricsCollector) snapshot() ExecutionMetrics {
 	return ExecutionMetrics{
 		TicksProcessed:         m.ticksProcessed,
 		TicksSkippedQueryError: m.ticksSkipped,
-		VMQueriesTotal:         m.vmQueries,
-		VMQueryDurationP95:     m.vmDurations.p95(),
+		PromQueriesTotal:       m.promQueries,
+		PromQueryDurationP95:   m.promDurations.p95(),
 		LokiQueriesTotal:       m.lokiQueries,
 		MemoryPeakMB:           float64(m.memPeakBytes) / (1024 * 1024),
 		DurationSeconds:        time.Since(m.start).Seconds(),

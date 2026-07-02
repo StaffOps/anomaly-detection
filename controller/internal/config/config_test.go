@@ -138,7 +138,7 @@ func TestLoad_ValidMinimalConfig(t *testing.T) {
 	content := `
 cluster: test
 datasources:
-  victoriametrics:
+  prometheus:
     url: ${VM_URL}
   loki:
     url: ${LOKI_URL}
@@ -153,8 +153,8 @@ datasources:
 	if cfg.Cluster != "test" {
 		t.Errorf("cluster: want test, got %q", cfg.Cluster)
 	}
-	if cfg.Datasources.VictoriaMetrics.URL != "http://vm:9090" {
-		t.Errorf("VM URL: want http://vm:9090, got %q", cfg.Datasources.VictoriaMetrics.URL)
+	if cfg.Datasources.Prometheus.URL != "http://vm:9090" {
+		t.Errorf("VM URL: want http://vm:9090, got %q", cfg.Datasources.Prometheus.URL)
 	}
 }
 

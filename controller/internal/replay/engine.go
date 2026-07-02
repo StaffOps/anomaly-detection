@@ -42,7 +42,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 	)
 
 	// Initialize pollers and in-memory baseline.
-	vm := ingestion.NewMetricsPoller(cfg.Datasources.VictoriaMetrics)
+	vm := ingestion.NewMetricsPoller(cfg.Datasources.Prometheus)
 	loki := ingestion.NewLogsPoller(cfg.Datasources.Loki)
 	store := NewInMemStore(cfg.Baseline)
 	engine := detection.NewEngine(cfg.Detection, store)
@@ -85,7 +85,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 			for _, am := range cfg.Detection.AdaptiveMetrics {
 				qStart := time.Now()
 				series, err := vm.QueryRange(ctx, am.Query, chunkStart, tick, step)
-				mc.recordVMQuery(time.Since(qStart))
+				mc.recordPromQuery(time.Since(qStart))
 				if err != nil {
 					slog.Warn("[REPLAY] vm query failed, skipping tick",
 						"tick", tick.Format(time.RFC3339), "metric", am.Name, "error", err)
@@ -119,7 +119,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 		for _, rule := range cfg.Detection.StaticRules {
 			qStart := time.Now()
 			series, err := vm.QueryRange(ctx, rule.Query, chunkStart, tick, step)
-			mc.recordVMQuery(time.Since(qStart))
+			mc.recordPromQuery(time.Since(qStart))
 			if err != nil {
 				slog.Warn("[REPLAY] vm static query failed",
 					"tick", tick.Format(time.RFC3339), "rule", rule.Name, "error", err)

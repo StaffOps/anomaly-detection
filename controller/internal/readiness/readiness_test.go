@@ -10,7 +10,7 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 )
 
-func TestVMChecker_OK(t *testing.T) {
+func TestPromChecker_OK(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/query" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
@@ -20,29 +20,29 @@ func TestVMChecker_OK(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	check := VMChecker(config.DatasourceEndpoint{URL: srv.URL, Timeout: 2 * time.Second})
+	check := PromChecker(config.DatasourceEndpoint{URL: srv.URL, Timeout: 2 * time.Second})
 	if err := check(context.Background()); err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
 }
 
-func TestVMChecker_HTTPError(t *testing.T) {
+func TestPromChecker_HTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
-	check := VMChecker(config.DatasourceEndpoint{URL: srv.URL})
+	check := PromChecker(config.DatasourceEndpoint{URL: srv.URL})
 	if err := check(context.Background()); err == nil {
 		t.Fatal("expected error, got nil")
 	}
 }
 
-func TestVMChecker_StatusError(t *testing.T) {
+func TestPromChecker_StatusError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"status":"error","error":"oops"}`))
 	}))
 	defer srv.Close()
-	check := VMChecker(config.DatasourceEndpoint{URL: srv.URL})
+	check := PromChecker(config.DatasourceEndpoint{URL: srv.URL})
 	if err := check(context.Background()); err == nil {
 		t.Fatal("expected error on status=error")
 	}

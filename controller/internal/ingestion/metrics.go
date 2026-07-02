@@ -34,7 +34,7 @@ type TimeSeries struct {
 	Points []Point
 }
 
-// MetricsPoller queries VictoriaMetrics via PromQL.
+// MetricsPoller queries a Prometheus-compatible TSDB via PromQL.
 type MetricsPoller struct {
 	client  *http.Client
 	baseURL string
@@ -51,7 +51,7 @@ func NewMetricsPoller(cfg config.DatasourceEndpoint) *MetricsPoller {
 func (p *MetricsPoller) Query(ctx context.Context, query string) ([]Sample, error) {
 	start := time.Now()
 	defer func() {
-		metrics.WorkerQueryDuration.WithLabelValues("vm").Observe(time.Since(start).Seconds())
+		metrics.WorkerQueryDuration.WithLabelValues("prometheus").Observe(time.Since(start).Seconds())
 	}()
 
 	u, err := url.Parse(p.baseURL + "/api/v1/query")
@@ -67,14 +67,14 @@ func (p *MetricsPoller) Query(ctx context.Context, query string) ([]Sample, erro
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		metrics.WorkerQueryErrors.WithLabelValues("vm").Inc()
+		metrics.WorkerQueryErrors.WithLabelValues("prometheus").Inc()
 		return nil, fmt.Errorf("query vm: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		metrics.WorkerQueryErrors.WithLabelValues("vm").Inc()
+		metrics.WorkerQueryErrors.WithLabelValues("prometheus").Inc()
 		return nil, fmt.Errorf("vm returned %d: %s", resp.StatusCode, body)
 	}
 
@@ -103,7 +103,7 @@ func (p *MetricsPoller) Query(ctx context.Context, query string) ([]Sample, erro
 func (p *MetricsPoller) QueryRange(ctx context.Context, query string, start, end time.Time, step time.Duration) ([]TimeSeries, error) {
 	t0 := time.Now()
 	defer func() {
-		metrics.WorkerQueryDuration.WithLabelValues("vm_range").Observe(time.Since(t0).Seconds())
+		metrics.WorkerQueryDuration.WithLabelValues("prometheus_range").Observe(time.Since(t0).Seconds())
 	}()
 
 	u, err := url.Parse(p.baseURL + "/api/v1/query_range")
@@ -125,14 +125,14 @@ func (p *MetricsPoller) QueryRange(ctx context.Context, query string, start, end
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		metrics.WorkerQueryErrors.WithLabelValues("vm_range").Inc()
+		metrics.WorkerQueryErrors.WithLabelValues("prometheus_range").Inc()
 		return nil, fmt.Errorf("query_range vm: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		metrics.WorkerQueryErrors.WithLabelValues("vm_range").Inc()
+		metrics.WorkerQueryErrors.WithLabelValues("prometheus_range").Inc()
 		return nil, fmt.Errorf("vm returned %d: %s", resp.StatusCode, body)
 	}
 

@@ -25,7 +25,7 @@ import (
 // Run:
 //   go test -tags=integration -run TestReplayIntegration ./internal/replay/
 //
-// The test injects synthetic metrics into VictoriaMetrics and verifies that
+// The test injects synthetic metrics into a Prometheus-compatible TSDB and verifies that
 // the replay engine detects the known anomalies with ≥90% accuracy.
 
 func vmURL() string {
@@ -62,7 +62,7 @@ func TestReplayIntegration(t *testing.T) {
 	windowStart := windowEnd.Add(-3 * time.Hour)
 	anomalyStart := windowEnd.Add(-1 * time.Hour)
 
-	// --- Inject synthetic metrics into VictoriaMetrics ---
+	// --- Inject synthetic metrics into Prometheus-compatible TSDB ---
 	t.Log("Injecting synthetic metrics into VM...")
 	injectedAnomalies := injectMetrics(t, vm, windowStart, windowEnd, anomalyStart)
 	t.Logf("Injected %d anomalous data points", injectedAnomalies)
@@ -126,7 +126,7 @@ func TestReplayIntegration(t *testing.T) {
 	}
 }
 
-// injectMetrics pushes synthetic time-series into VictoriaMetrics.
+// injectMetrics pushes synthetic time-series into a Prometheus-compatible TSDB.
 // Returns the number of anomalous data points injected.
 func injectMetrics(t *testing.T, vmBase string, start, end, anomalyStart time.Time) int {
 	t.Helper()
@@ -228,8 +228,8 @@ func buildTestConfig(vmBase, lokiBase string) *config.Config {
 	return &config.Config{
 		Cluster: "integration-test",
 		Datasources: config.Datasources{
-			VictoriaMetrics: config.DatasourceEndpoint{URL: vmBase, Timeout: 10 * time.Second},
-			Loki:            config.DatasourceEndpoint{URL: lokiBase, Timeout: 10 * time.Second},
+			Prometheus: config.DatasourceEndpoint{URL: vmBase, Timeout: 10 * time.Second},
+			Loki:       config.DatasourceEndpoint{URL: lokiBase, Timeout: 10 * time.Second},
 		},
 		Controller: config.Controller{
 			JobInterval:            30 * time.Second,

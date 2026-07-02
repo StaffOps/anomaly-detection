@@ -51,8 +51,8 @@ func testReport() *Report {
 		ExecutionMetrics: ExecutionMetrics{
 			TicksProcessed:         2304,
 			TicksSkippedQueryError: 2,
-			VMQueriesTotal:         4608,
-			VMQueryDurationP95:     0.42,
+			PromQueriesTotal:       4608,
+			PromQueryDurationP95:   0.42,
 			LokiQueriesTotal:       1152,
 			MemoryPeakMB:           348.5,
 			DurationSeconds:        187.4,

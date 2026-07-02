@@ -18,8 +18,8 @@
     "execution_metrics": {
       "ticks_processed": 2304,
       "ticks_skipped_query_error": 2,
-      "vm_queries_total": 4608,
-      "vm_query_duration_seconds_p95": 0.42,
+      "prometheus_queries_total": 4608,
+      "prometheus_query_duration_seconds_p95": 0.42,
       "loki_queries_total": 1152,
       "memory_peak_mb": 348.5,
       "duration_seconds": 187.4

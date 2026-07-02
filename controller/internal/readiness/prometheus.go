@@ -1,5 +1,5 @@
 // Package readiness provides ReadinessChecker implementations for upstream
-// dependencies (VictoriaMetrics, Loki, Alertmanager, ML service).
+// dependencies (Prometheus-compatible TSDB, Loki, Alertmanager, ML service).
 //
 // All checkers follow metrics.ReadinessChecker (func(ctx) error) and are
 // expected to return quickly (cap timeout to 3s) so /readyz stays responsive
@@ -19,9 +19,9 @@ import (
 
 const readinessCap = 3 * time.Second
 
-// VMChecker probes VictoriaMetrics by issuing a trivial PromQL query.
+// PromChecker probes a Prometheus-compatible TSDB by issuing a trivial PromQL query.
 // Returns nil when status=success in the response; error otherwise.
-func VMChecker(cfg config.DatasourceEndpoint) metrics.ReadinessChecker {
+func PromChecker(cfg config.DatasourceEndpoint) metrics.ReadinessChecker {
 	client := &http.Client{Timeout: clamp(cfg.Timeout)}
 	url := cfg.URL + "/api/v1/query?query=up"
 	return func(ctx context.Context) error {
@@ -33,11 +33,11 @@ func VMChecker(cfg config.DatasourceEndpoint) metrics.ReadinessChecker {
 				return fmt.Errorf("decode: %w", err)
 			}
 			if r.Status != "success" {
-				return fmt.Errorf("vm status=%q", r.Status)
+				return fmt.Errorf("prometheus status=%q", r.Status)
 			}
 			return nil
 		})
-		recordResult("vm", err)
+		recordResult("prometheus", err)
 		return err
 	}
 }

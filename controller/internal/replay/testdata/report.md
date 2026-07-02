@@ -76,8 +76,8 @@
 | Duration | 187.4s |
 | Ticks processed | 2304 |
 | Ticks skipped | 2 |
-| VM queries | 4608 |
-| VM p95 latency | 0.420s |
+| Prometheus queries | 4608 |
+| Prometheus p95 latency | 0.420s |
 | Loki queries | 1152 |
 | Memory peak | 348.5 MB |
 
