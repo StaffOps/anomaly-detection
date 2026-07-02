@@ -68,8 +68,6 @@ jobs:
           load: true
           push: false
           tags: ${{ steps.img.outputs.ref }}:${{ steps.ver.outputs.version }}
-          secrets: |
-            github_token=${{ secrets.DOCS_DEPLOY_TOKEN }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
@@ -98,8 +96,6 @@ jobs:
           tags: |
             ${{ steps.img.outputs.ref }}:${{ steps.ver.outputs.version }}
             ${{ steps.img.outputs.ref }}:latest
-          secrets: |
-            github_token=${{ secrets.DOCS_DEPLOY_TOKEN }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 

@@ -10,6 +10,19 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
 
+### deps / supply chain
+
+**Changed — otel-helper Go module moved to org (PH.13) (2026-07-02)**
+- Dependency moved off the personal account: `github.com/karlipegomes/staffops-otel-libs/go`
+  (pseudo-version) → `github.com/staffops/staffops-otel-libs/go` at tagged release **v0.1.0**.
+  (Companion commit + tag `go/v0.1.0` pushed to the `StaffOps/staffops-otel-libs` repo.)
+- Controller/worker imports + `go.mod` updated; build + full test suite green on Go 1.25.
+- The module is now a **public org module**, so all private-module auth was removed:
+  Dockerfile (GOPRIVATE + `--mount=type=secret` git-credential dance + `apk add git`),
+  CI `test`/`sast`/`build`/`release` (GOPRIVATE env, "Configure git for private module"
+  steps, `github_token` build secret), `AGENTS.md`, and `scripts/start.sh` (SSH mount).
+- Closes the threat-model "personal-account single-point-of-compromise" finding.
+
 ### infra / gitops
 
 **Added — Helm chart `helm-charts/anomaly-detection/` (PH.15) (2026-07-02)**

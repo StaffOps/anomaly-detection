@@ -107,7 +107,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
 
 ## Group C — Org-neutrality completion [parallelizable, S each]
 
-- [ ] **PH.13** — Move `github.com/karlipegomes/staffops-otel-libs/go` to org
+- [x] **PH.13** (DONE 2026-07-02) — Move `github.com/karlipegomes/staffops-otel-libs/go` to org
   repo. Steps:
   1. Create `github.com/staffops/staffops-otel-libs` (or equivalent org path).
   2. Tag `v0.x.x` release.

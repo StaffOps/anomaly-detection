@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	otelhelper "github.com/karlipegomes/staffops-otel-libs/go"
+	otelhelper "github.com/staffops/staffops-otel-libs/go"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"k8s.io/client-go/kubernetes"

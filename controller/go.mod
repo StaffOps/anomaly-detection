@@ -4,10 +4,10 @@ go 1.25.0
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/karlipegomes/staffops-otel-libs/go v0.0.0-20260614202017-6c1db77ab29c
 	github.com/prometheus/client_golang v1.19.0
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/sony/gobreaker v1.0.0
+	github.com/staffops/staffops-otel-libs/go v0.1.0
 	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1

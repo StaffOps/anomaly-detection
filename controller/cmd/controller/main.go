@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	otelhelper "github.com/karlipegomes/staffops-otel-libs/go"
+	otelhelper "github.com/staffops/staffops-otel-libs/go"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"

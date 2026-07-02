@@ -324,7 +324,7 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.13 | Move `github.com/karlipegomes/staffops-otel-libs/go` (personal repo, pseudo-version) to org repo with proper release tagging — `karli` username in import path is the same anti-pattern as the earlier `bigdatacorp` rename | security, dev |
+| PH.13 | ✅ **Done (2026-07-02)** — module moved to org: `github.com/staffops/staffops-otel-libs/go` tagged `v0.1.0` (was `karlipegomes/...` pseudo-version). Controller imports + go.mod updated; repo is public so GOPRIVATE/token auth removed from Dockerfile, CI (test/sast/build/release), AGENTS.md, start.sh | security, dev |
 | PH.14 | ✅ **Done in chart (PH.15)** — VM/Loki/Alertmanager/redis endpoints templated from Helm values (`config.datasources.*`), no longer hardcoded in an in-repo ConfigMap | gitops |
 
 ### Helm chart + GitOps (move from raw YAML to ApplicationSet)
