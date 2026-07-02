@@ -25,7 +25,35 @@ Work landed after controller 0.7.0, not yet released (still pre-production, no c
 
 ### infra / gitops
 
+**Changed — chart reconciliation + helmfile deploy (PH.16, PH.4) (2026-07-02)**
+- **Reconciled the duplicate chart**: the PH.15 chart built under
+  `staffops-anomaly-detection/helm-charts/` was in the wrong place — the canonical,
+  publishable chart lives in `06-STAFFOPS/helm-charts/charts/anomaly-detection`
+  (chart-releaser → `staffops.github.io/helm-charts`). **Removed the duplicate** from
+  this repo; the canonical chart is the single source of truth. What the duplicate
+  had extra was ported into the canonical chart (below).
+- **Ported into the canonical chart**:
+  - **PH.4** Redis AUTH — `templates/externalsecret-redis.yaml` (ESO
+    `external-secrets.io/v1`, ClusterSecretStore `aws`, sync-wave -1), `redis.auth.*`
+    values, helpers `redis.authSecretName`/`authEnabled`; `redis-server --requirepass`,
+    `REDIS_PASSWORD` env into controller/worker, `password: ${REDIS_PASSWORD}` in config.
+  - **PH.18** `templates/pdb.yaml` (controller `minAvailable:1` guarded to replicaCount>1;
+    worker `maxUnavailable:1` — drain-safe at any replica count).
+  - **PH.21** `templates/networkpolicy.yaml` (controller/redis/worker/ML ingress rules).
+  - **VMRule → PrometheusRule** (`monitoring.coreos.com/v1`) — more portable; vm-operator
+    auto-converts. Values key `vmRule` → `prometheusRule`.
+- **Deployment via helmfile** (BDC pattern, mirrors `aigent-squad`), NOT ArgoCD
+  ApplicationSet: added the `anomaly-detection` release + `anomaly-detection/values.yaml.gotmpl`
+  in `02-KUBE/00-CONFIG/k8s-setup/staffops/` targeting the canonical chart, namespace
+  `monitoring`, `controller.dryRun=true` for first bring-up. `helmfile template` renders
+  the full stack (4 Deployment, ExternalSecret, PVC, 2 PrometheusRule, 4 NetworkPolicy,
+  2 PDB, VMServiceScrape, dashboard, RBAC).
+- Reviewed by `code-review` (APPROVE-WITH-NITS): added controller NetworkPolicy,
+  clarified the ignored worker-PDB value, silenced the redis-cli auth warning.
+
 **Added — Helm chart `helm-charts/anomaly-detection/` (PH.15) (2026-07-02)**
+> ⚠️ Superseded by the reconciliation above — this duplicate chart was removed the
+> same day; see the canonical chart in `06-STAFFOPS/helm-charts/`.
 - Org-neutral: **no corp cost tags** (CostCenter/CostProject/CostScope) baked in —
   those are injected at deploy time by the corp overlay/ApplicationSet. Pod labels
   are `app.kubernetes.io/name`+`version` + runtime `Environment` only.

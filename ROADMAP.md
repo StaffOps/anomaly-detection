@@ -305,7 +305,7 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 | PH.1 | ✅ **Done in chart (PH.15)** — pod-level `securityContext` (runAsNonRoot, readOnlyRootFilesystem + emptyDir writable paths, drop:[ALL], allowPrivilegeEscalation:false, runAsUser 65534) on all 4 pods (controller/worker/redis/ML) | security, gitops |
 | PH.2 | 🟡 CI builds SHA-tagged images to Docker Hub; `:latest`/`REPLACE_ME_REGISTRY` removal in manifests pending Helm (PH.15) | security, gitops |
 | PH.3 | Migrate base images to BDC golden (apko-built, cosign-signed): `golang`, `alpine`, `redis`, `python` | security |
-| PH.4 | Enable Redis AUTH; mount password as file-secret via External Secrets Operator (12-factor IV) | security |
+| PH.4 | ✅ **Done in canonical chart (2026-07-02)** — Redis AUTH via ExternalSecret (ClusterSecretStore `aws`, ESO v1, sync-wave -1); `redis-server --requirepass`, `REDIS_PASSWORD` injected into controller/worker, `password: ${REDIS_PASSWORD}` in config. AWS secret `staffops/anomaly-detection/redis-password` created. Gated by `redis.auth.enabled` | security |
 | PH.5 | ✅ Done — multi-stage ML Dockerfile; runtime image drops `gcc`/`g++` and `grpcio-tools` | security |
 | PH.6 | ✅ **Done in chart (PH.15)** — `CostCenter`, `Environment`, `app.kubernetes.io/name`, `app.kubernetes.io/version` on all pod templates | gitops, security |
 | PH.7 | ✅ **Done in chart (PH.15)** — `preStop` (`sleep 5`) + `terminationGracePeriodSeconds: 30` on all deployments | gitops |
@@ -334,10 +334,10 @@ Currently rated **GitOps maturity 1.5/5**. To unblock cluster deploy:
 | # | Item | Source review |
 |---|------|---------------|
 | PH.15 | ✅ **Done (2026-07-02)** — `helm-charts/anomaly-detection/` created (18 files): controller, worker, redis (+PVC, AUTH via ExternalSecret), ML (PH.8), RBAC, VMRule, VMServiceScrape, PDB, NetworkPolicy, per-env overlays (dev/hml/prd). Folds in PH.1/PH.6/PH.7/PH.14/PH.20/PH.21/PH.23. `helm lint --strict` clean; renders valid YAML all envs. Delegated to `gitops`, reviewed by `code-review` (fixed a Redis-AUTH config-key blocker + PDB single-replica deadlock) | gitops |
-| PH.16 | Create ArgoCD `ApplicationSet` (matrix: cluster × env) targeting the Helm chart | gitops |
+| PH.16 | ✅ **Done (2026-07-02)** — deployment wired via **helmfile** (BDC pattern, mirrors aigent-squad) in `02-KUBE/00-CONFIG/k8s-setup/staffops/` — not ArgoCD ApplicationSet. Release + `anomaly-detection/values.yaml.gotmpl` (devops-core) target the **canonical** chart `06-STAFFOPS/helm-charts/charts/anomaly-detection`. `helmfile template` renders the full stack. NOTE: the PH.15 chart built under `staffops-anomaly-detection/helm-charts/` was a wrong-location duplicate — **removed**; canonical chart is SSOT | gitops |
 | PH.17 | Add `argocd.argoproj.io/sync-wave` annotations so Redis comes up before controller/worker | gitops |
 | PH.18 | Add `PodDisruptionBudget` (`minAvailable: 1` controller leader, `minAvailable: 2` workers) | gitops |
-| PH.19 | Replace `prometheus.io/scrape` annotations with `VMServiceScrape` CRDs | gitops |
+| PH.19 | ✅ **Done in canonical chart** — `VMServiceScrape` (+ optional `ServiceMonitor`) templates replace `prometheus.io/scrape` annotations; enabled via `vmServiceScrape.enabled` | gitops |
 | PH.20 | ✅ **Done in chart (PH.15)** — controller/worker have memory-only limits (no CPU limit); redis keeps a small CPU limit (not on the 60s detection path) | gitops |
 
 ### Network & secrets

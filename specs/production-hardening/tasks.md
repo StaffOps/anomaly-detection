@@ -26,7 +26,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   - Validate cosign chain via `cosign verify` against the golden image catalog.
   - **Effort: M** (image work + CI verification).
 
-- [ ] **PH.4** — Enable Redis AUTH with file-mounted secret.
+- [x] **PH.4** (DONE 2026-07-02, canonical chart) — Enable Redis AUTH with file-mounted secret.
   - Set `requirepass` in Redis config (sourced from secret).
   - Add `ExternalSecret` CRD: `redis-password` from AWS Secrets Manager.
   - Mount as file (`/etc/secrets/redis-password`); update controller/worker
@@ -158,7 +158,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   All resources templated with values; absorbs PH.1, PH.6, PH.7, PH.14, PH.18, PH.19, PH.21.
   **Effort: M-L**.
 
-- [ ] **PH.16** — Create ArgoCD `ApplicationSet` (matrix generator: cluster ×
+- [x] **PH.16** (DONE 2026-07-02 via helmfile, not ApplicationSet) — Create ArgoCD `ApplicationSet` (matrix generator: cluster ×
   env). Reference Helm values per env. Include `automated.prune`,
   `automated.selfHeal`, `retry.limit: 3`. **Effort: M**.
 
