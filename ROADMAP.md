@@ -22,7 +22,17 @@ recall lower-bound and FP upper-bound **without** needing labeled historical inc
 Infra already exists (replay mode). This is the cheapest, highest-value item and the
 prerequisite for everything algorithmic. **Without numbers, every detector swap is faith.**
 
-**Spec**: [`specs/synthetic-injection/`](specs/synthetic-injection/) — spec ready, not executed.
+**Spec**: [`specs/synthetic-injection/`](specs/synthetic-injection/).
+
+**Status (2026-07-03)**: 🟡 **harness built, gate execution in progress** — NOT done.
+- ✅ Phases 1-4 (Tasks 1-21): injection core (`internal/replay/inject/`: spike/ramp/step/silence
+  + ground truth + scorer), replay hook, `--inject` CLI flag, `--inject=none` FP baseline (US-5),
+  JSON schema extension. 98.3% coverage, `code-review` APPROVE-WITH-NITS.
+- 🟡 Phase 5 (Tasks 22-25) — the actual measurement — **in progress**. Surfaced + fixed a latent
+  bug (`SamplesAt` passed non-finite ratio-query values → `+Inf` broke JSON); Loki endpoint slow
+  (metrics-only injection unaffected). **No recall/FP number produced yet** — do NOT mark P0.1 done
+  until Phase 5 yields real numbers (per spec: "harness compiles ≠ number exists").
+- ⬜ Phase 6 (Tasks 26-29) — feed the number back into Decision 8 + hypothesis doc.
 
 ### 🎯 P0.2 — Competitive teardown experiment
 

@@ -10,6 +10,36 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
 
+### detection / measurement
+
+**Added — Synthetic fault-injection harness (P0.1, Phases 1-4) (2026-07-03)**
+- New `internal/replay/inject/`: injects `spike`/`ramp`/`step`/`silence` faults into real
+  clean series **in memory** (between `QueryRange` and detection), records ground truth,
+  and scores detector precision/recall/F1 + recall-by-type + detection latency against it.
+  Deterministic by seed. Extends the replay JSON with `injection` + `scoring` blocks.
+- `--inject=<profile.yaml>` CLI flag; `--inject=none` runs the FP upper-bound baseline over
+  a clean window (all detections scored as FP). Inherits all replay invariants (no
+  Redis/AM/gRPC/ML; in-memory only). 98.3% coverage; `code-review` APPROVE-WITH-NITS.
+- **Not done**: the gate itself (Phase 5 — real recall/FP numbers) + Phase 6 (feed back into
+  Decision 8). Do not mark P0.1 done until numbers exist.
+
+**Fixed — non-finite sample values crash replay JSON (2026-07-03)**
+- `SamplesAt` now skips NaN/±Inf points. PromQL ratio rules (`usage / limit`) return `+Inf`
+  when a workload has no limit; that flowed into the anomaly `Score` and broke
+  `json.Marshal` for **any** replay touching a limitless workload (surfaced by the
+  `--inject=none` baseline run). Latent bug, not injection-specific.
+
+**Changed — vendor-neutral Prometheus datasource naming (2026-07-02)**
+- Controller config contract `datasources.victoriametrics` → `datasources.prometheus`
+  (struct + yaml + `config.yaml`), `grafana_vm_datasource_uid` →
+  `grafana_prometheus_datasource_uid`, enrichment `source: "vm"` → `"prometheus"`,
+  metric labels `"vm"`/`"vm_range"` → `"prometheus"`/`"prometheus_range"`, replay report
+  fields `VMQueries*` → `PromQueries*`, `readiness/vm.go` → `prometheus.go`
+  (`VMChecker`→`PromChecker`), `preflightVM`→`preflightProm`. Prometheus is the open
+  standard (PromQL); the backend (VM/Thanos/Cortex/Mimir) is an environment choice.
+  Left: `VMServiceScrape` (real vm-operator CRD) and the integration-test VM image.
+  (Committed 044b213 without a CHANGELOG entry — recorded here retroactively.)
+
 ### deps / supply chain
 
 **Changed — otel-helper Go module moved to org (PH.13) (2026-07-02)**

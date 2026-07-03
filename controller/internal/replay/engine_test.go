@@ -57,7 +57,7 @@ func TestRun_EmptyQueries_ReturnsReport(t *testing.T) {
 	rcfg.MaxAnomalies = 10
 	rcfg.OutputPath = "" // no file output
 
-	report, err := Run(context.Background(), rcfg, cfg)
+	report, err := Run(context.Background(), rcfg, cfg, nil)
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestRun_VMError_GracefulSkip(t *testing.T) {
 	rcfg.To = now.Add(-1 * time.Hour)
 
 	// Run should not return an error even when VM/Loki are failing
-	report, err := Run(context.Background(), rcfg, cfg)
+	report, err := Run(context.Background(), rcfg, cfg, nil)
 	if err != nil {
 		t.Fatalf("Run should handle VM errors gracefully: %v", err)
 	}

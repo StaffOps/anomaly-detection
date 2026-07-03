@@ -31,6 +31,7 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/readiness"
 	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 	"github.com/staffops/staffops-anomaly-detection/internal/replay"
+	"github.com/staffops/staffops-anomaly-detection/internal/replay/inject"
 	"github.com/staffops/staffops-anomaly-detection/internal/version"
 	pb "github.com/staffops/staffops-anomaly-detection/proto"
 )
@@ -47,12 +48,13 @@ func main() {
 	replayWarmup := flag.Float64("warmup-fraction", 0.2, "fraction of window used for baseline warmup")
 	replayMaxRange := flag.String("max-range", "7d", "maximum allowed replay window duration")
 	replayMaxAnomalies := flag.Int("max-anomalies", 1000, "maximum anomalies in report output")
+	replayInject := flag.String("inject", "", "path to injection profile YAML for synthetic fault injection scoring (empty or 'none' = no injection)")
 
 	flag.Parse()
 
 	// --- REPLAY MODE: short-circuit before any prod infrastructure ---
 	if *replayMode {
-		runReplay(*configPath, *replayFrom, *replayTo, *replayOutput, *replayWarmup, *replayMaxRange, *replayMaxAnomalies)
+		runReplay(*configPath, *replayFrom, *replayTo, *replayOutput, *replayWarmup, *replayMaxRange, *replayMaxAnomalies, *replayInject)
 		return
 	}
 
@@ -450,7 +452,7 @@ func buildJobBatch(cfg *config.Config) *pb.JobBatch {
 }
 
 // runReplay handles the --replay mode: parse window, pre-flight checks, run engine, write output.
-func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction float64, maxRangeStr string, maxAnomalies int) {
+func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction float64, maxRangeStr string, maxAnomalies int, injectPath string) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
@@ -475,6 +477,27 @@ func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction flo
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
+	}
+
+	// Load injection profile (if specified).
+	var injector *inject.Injector
+	switch injectPath {
+	case "":
+		// No flag → normal replay, no scoring block.
+	case "none":
+		// US-5: FP upper-bound baseline over a clean window. An empty injector
+		// records zero ground truths, so the scorer classifies every detection
+		// as a false positive — the detector's base noise on clean data.
+		injector = inject.NewInjector(&inject.InjectionConfig{})
+		slog.Info("[REPLAY] injection=none — FP upper-bound baseline (all detections scored as FP)")
+	default:
+		injCfg, err := inject.LoadConfig(injectPath)
+		if err != nil {
+			slog.Error("failed to load injection profile", "path", injectPath, "error", err)
+			os.Exit(1)
+		}
+		injector = inject.NewInjector(injCfg)
+		slog.Info("[REPLAY] injection active", "profile", injectPath, "seed", injCfg.Seed, "injections", len(injCfg.Injections))
 	}
 
 	// Banner.
@@ -520,7 +543,7 @@ func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction flo
 	}
 
 	ctx := context.Background()
-	report, err := replay.Run(ctx, rcfg, cfg)
+	report, err := replay.Run(ctx, rcfg, cfg, injector)
 	if err != nil {
 		slog.Error("replay failed", "error", err)
 		os.Exit(1)

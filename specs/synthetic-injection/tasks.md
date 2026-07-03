@@ -9,36 +9,36 @@
 
 ## Phase 1: Injection core (`internal/replay/inject/`)
 
-- [ ] Task 1: `InjectionConfig` + parse YAML do perfil (targets, type, window, magnitude, seed)
-- [ ] Task 2: `GroundTruth` struct + registro acumulado por run (depends on: Task 1)
-- [ ] Task 3: `faultFunc` para `spike` — pico transiente em janela curta (depends on: Task 1)
-- [ ] Task 4: `faultFunc` para `ramp` — crescimento linear 0→magnitude na janela (o caso crítico) (depends on: Task 1)
-- [ ] Task 5: `faultFunc` para `step` — salto de nível sustentado (depends on: Task 1)
-- [ ] Task 6: `faultFunc` para `silence` — remoção de pontos na janela (depends on: Task 1)
-- [ ] Task 7: `Injector.Apply([]TimeSeries) []TimeSeries` — aplica fault funcs às séries-alvo, emite GroundTruth, no-op sem perfil, determinístico por seed (depends on: Task 2-6)
+- [x] Task 1: `InjectionConfig` + parse YAML do perfil (targets, type, window, magnitude, seed)
+- [x] Task 2: `GroundTruth` struct + registro acumulado por run (depends on: Task 1)
+- [x] Task 3: `faultFunc` para `spike` — pico transiente em janela curta (depends on: Task 1)
+- [x] Task 4: `faultFunc` para `ramp` — crescimento linear 0→magnitude na janela (o caso crítico) (depends on: Task 1)
+- [x] Task 5: `faultFunc` para `step` — salto de nível sustentado (depends on: Task 1)
+- [x] Task 6: `faultFunc` para `silence` — remoção de pontos na janela (depends on: Task 1)
+- [x] Task 7: `Injector.Apply([]TimeSeries) []TimeSeries` — aplica fault funcs às séries-alvo, emite GroundTruth, no-op sem perfil, determinístico por seed (depends on: Task 2-6)
 
 ## Phase 2: Scoring (`internal/replay/inject/scorer.go`)
 
-- [ ] Task 8: Fingerprint normalizado de target (metric + labels) pro matching (depends on: Task 2)
-- [ ] Task 9: `Scorer.Score(report, []GroundTruth)` — classifica TP/FP/FN com grace window (depends on: Task 8)
-- [ ] Task 10: Computar precision/recall/F1 + recall_by_type + detection_latency (depends on: Task 9)
+- [x] Task 8: Fingerprint normalizado de target (metric + labels) pro matching (depends on: Task 2)
+- [x] Task 9: `Scorer.Score(report, []GroundTruth)` — classifica TP/FP/FN com grace window (depends on: Task 8)
+- [x] Task 10: Computar precision/recall/F1 + recall_by_type + detection_latency (depends on: Task 9)
 
 ## Phase 3: Integração no replay
 
-- [ ] Task 11: Hook em `replay.Run` — chamar `Injector.Apply` após `QueryRange`, antes de acumular metricSeries; no-op quando sem `--inject` (depends on: Task 7)
-- [ ] Task 12: Flag CLI `--inject=<perfil>|none` em `cmd/controller/main.go` (depends on: Task 11)
-- [ ] Task 13: Chamar `Scorer` após o loop; anexar blocos `injection` + `scoring` ao Report (depends on: Task 10, Task 11)
-- [ ] Task 14: Estender serializador JSON do replay com os dois novos blocos (depends on: Task 13)
-- [ ] Task 15: Confirmar invariantes herdadas — sem Redis/AM/gRPC/ML; injeção só em memória (depends on: Task 11)
+- [x] Task 11: Hook em `replay.Run` — chamar `Injector.Apply` após `QueryRange`, antes de acumular metricSeries; no-op quando sem `--inject` (depends on: Task 7)
+- [x] Task 12: Flag CLI `--inject=<perfil>|none` em `cmd/controller/main.go` (depends on: Task 11)
+- [x] Task 13: Chamar `Scorer` após o loop; anexar blocos `injection` + `scoring` ao Report (depends on: Task 10, Task 11)
+- [x] Task 14: Estender serializador JSON do replay com os dois novos blocos (depends on: Task 13)
+- [x] Task 15: Confirmar invariantes herdadas — sem Redis/AM/gRPC/ML; injeção só em memória (depends on: Task 11)
 
 ## Phase 4: Testes (autor distinto — verification-independence)
 
-- [ ] Task 16: Testes de cada `faultFunc` — forma correta da perturbação, determinismo por seed (depends on: Task 3-6)
-- [ ] Task 17: Testes do `Injector` — no-op sem perfil, múltiplas injeções, ground truth correto (depends on: Task 7)
-- [ ] Task 18: Testes do `Scorer` — TP/FP/FN, grace window, recall_by_type, latency; casos de label mismatch (depends on: Task 9, Task 10)
-- [ ] Task 19: Teste de integração — replay+injeção end-to-end sobre série sintética conhecida: ramp injetada é detectada (ou não — registra o recall) (depends on: Task 13)
-- [ ] Task 20: Teste do caso `silence` — confirma recall ~0 esperado em V1 (baseline pra P2.10) (depends on: Task 13)
-- [ ] Task 21: Cobertura ≥90% no package `internal/replay/inject/` (depends on: Task 16-20)
+- [x] Task 16: Testes de cada `faultFunc` — forma correta da perturbação, determinismo por seed (depends on: Task 3-6)
+- [x] Task 17: Testes do `Injector` — no-op sem perfil, múltiplas injeções, ground truth correto (depends on: Task 7)
+- [x] Task 18: Testes do `Scorer` — TP/FP/FN, grace window, recall_by_type, latency; casos de label mismatch (depends on: Task 9, Task 10)
+- [x] Task 19: Teste de integração — replay+injeção end-to-end sobre série sintética conhecida: ramp injetada é detectada (ou não — registra o recall) (depends on: Task 13)
+- [x] Task 20: Teste do caso `silence` — confirma recall ~0 esperado em V1 (baseline pra P2.10) (depends on: Task 13)
+- [x] Task 21: Cobertura ≥90% no package `internal/replay/inject/` (depends on: Task 16-20)
 
 ## Phase 5: Execução do gate (o objetivo real)
 

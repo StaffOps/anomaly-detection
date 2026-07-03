@@ -86,7 +86,7 @@ func TestReplayIntegration(t *testing.T) {
 		MaxAnomalies:   500,
 	}
 
-	report, err := replay.Run(ctx, rcfg, cfg)
+	report, err := replay.Run(ctx, rcfg, cfg, nil)
 	if err != nil {
 		t.Fatalf("replay.Run failed: %v", err)
 	}
