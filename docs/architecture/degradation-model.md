@@ -1,4 +1,4 @@
-# Degradation Model — .NET, Python, Go
+# Degradation Model — .NET, Python, Go, Node.js
 
 This document encodes **how services fail, as causal chains** — not as a list of
 metrics, but as ordered sequences of "X causes Y causes Z". It is the core asset of
@@ -235,17 +235,93 @@ first? If yes → DB/pool root, not the service itself.
 
 ---
 
+## Node.js
+
+### Chain J1 — Blocked event loop → global stall → timeouts (🟢 established)
+
+**Trigger**: synchronous/CPU-bound work runs on the main thread (large `JSON.parse`,
+sync crypto/zlib/fs calls, catastrophic regex backtracking). Node executes JS on a
+single thread — blocking it stalls **everything**, not just one request.
+
+| # | Step | Observable signal | Metric already collected |
+|---|------|-------------------|--------------------------|
+| 1 | Event loop can't tick | event loop lag rises | ❌ not collected (gap) — `nodejs_eventloop_lag_p99_seconds` (prom-client default) |
+| 2 | ALL in-flight requests stall | latency rises — **p50 and p99 together** | `latency_p99_by_service` (spanmetrics) |
+| 3 | Health checks / requests exceed timeout | errors rise; liveness may kill the pod | `error_rate_by_service`, `restarts_5m` |
+| 4 | Clients retry | inbound rate rises → snowball | `request_rate_by_service` |
+
+**Leading signal**: event loop lag (step 1). **Lagging**: errors/restarts.
+
+**Distinguishing signature**: p50 and p99 rise *together* (a blocked loop stalls
+everyone equally). In queueing-type saturation (.NET N1) the tail (p99) rises first.
+Same symptom, different shape — and a different fix (offload CPU work vs. scale).
+
+**Validation hook**: in replay, find latency spikes where p50/p99 moved together on a
+Node service. Once event loop lag is collected, confirm it rose first.
+
+---
+
+### Chain J2 — Heap growth → major GC pressure → OOM/abort (🟢 established)
+
+**Trigger**: memory leak (closures retaining references, unbounded caches, listener
+leaks) or allocation spike grows the V8 old-space heap.
+
+| # | Step | Observable signal | Metric already collected |
+|---|------|-------------------|--------------------------|
+| 1 | Old-space heap grows | heap used climbs (monotonic = leak) | ❌ not collected (gap) — `nodejs_heap_size_used_bytes` |
+| 2 | Major (mark-sweep) GC runs more/longer | GC duration rises; **GC pauses block the event loop** | ❌ not collected (gap) — `nodejs_gc_duration_seconds{kind="major"}` |
+| 3 | Pauses stall requests | latency saw-tooth + event loop lag spikes | `latency_p99_by_service` |
+| 4 | Heap hits `--max-old-space-size` | V8 heap-OOM abort or OOMKilled → restart | `restarts_5m`, `oom_kills` (enrichment) |
+
+**Leading signal**: old-space growth (step 1). **Lagging**: restart (step 4).
+
+**Leak vs spike**: same shape-distinction as .NET N2 — monotonic growth over hours
+ending in restart = leak; GC duration correlated with request rate, heap stable =
+allocation pressure. Note Node's V8 heap limit is **independent of the container
+limit** — a pod can die of V8 abort with container memory to spare, which looks like
+a crash, not an OOMKill. The model must know both ceilings.
+
+**Validation hook**: replay windows ending in Node pod restarts — was heap growth
+monotonic? Did restarts happen *below* the container memory limit (→ V8 abort)?
+
+---
+
+### Chain J3 — libuv threadpool starvation → partial I/O latency (🟡 plausible)
+
+**Trigger**: heavy fs/dns/crypto/zlib load. These do **not** run on the event loop —
+they run on libuv's threadpool, which defaults to **4 threads** (`UV_THREADPOOL_SIZE`).
+
+| # | Step | Observable signal | Metric already collected |
+|---|------|-------------------|--------------------------|
+| 1 | Threadpool slots exhausted | fs/dns/crypto operations queue | ❌ not collected (no standard metric — deepest gap in Node observability) |
+| 2 | DNS lookups slow (dns.lookup uses the pool) | outbound HTTP latency rises (connect phase) | ❌ partial — outbound duration via spanmetrics if traced |
+| 3 | Only I/O-touching endpoints degrade | latency rises **selectively**, p99 first | `latency_p99_by_service` |
+| 4 | Waits exceed timeouts | errors on affected endpoints | `error_rate_by_service` |
+
+**Leading signal**: fs/dns operation duration (mostly invisible today). **Lagging**:
+selective endpoint errors.
+
+**Distinguishing signature vs J1**: J1 stalls *everything* (p50+p99 together); J3
+degrades *only endpoints that touch the pool* while pure-CPU/memory endpoints stay
+fast. Event loop lag stays **normal** in J3 — that contrast is the disambiguator.
+
+**Validation hook**: latency spike on a Node service where event loop lag stayed flat
+and only a subset of routes degraded → J3 candidate. Requires per-route latency or
+traces to confirm.
+
+---
+
 ## Cross-language patterns (the reusable shapes)
 
 Stepping back, the chains collapse into a few **archetypes** that repeat across
 languages with different metric names:
 
-| Archetype | .NET | Python | Go |
-|-----------|------|--------|-----|
-| **Saturation of the work executor** | threadpool (N1) | event loop (P1) | — (goroutines cheap; rarely the bottleneck) |
-| **CPU/serialization limit** | — | GIL (P2) | GC CPU (G2) |
-| **Memory growth → OOMKill** | heap leak (N2) | RSS leak (P3) | goroutine leak (G1) |
-| **Dependency / pool saturation** | HikariCP (N3) | (DB driver) | database/sql (G3) |
+| Archetype | .NET | Python | Go | Node.js |
+|-----------|------|--------|-----|---------|
+| **Saturation of the work executor** | threadpool (N1) | event loop (P1) | — (goroutines cheap; rarely the bottleneck) | event loop (J1) + libuv pool (J3) |
+| **CPU/serialization limit** | — | GIL (P2) | GC CPU (G2) | single JS thread (J1) |
+| **Memory growth → OOMKill** | heap leak (N2) | RSS leak (P3) | goroutine leak (G1) | V8 old-space leak (J2) |
+| **Dependency / pool saturation** | HikariCP (N3) | (DB driver) | database/sql (G3) | http.Agent sockets / DNS via libuv (J3) |
 
 **Why this matters for the build**: the *archetype* is shared, so the correlation
 engine can be generic; the *signals and ordering* are language-specific, so the
@@ -264,6 +340,9 @@ a leading (root-cause) signal currently invisible:
 | Event loop lag | Python | Root of P1; without it, P1 is only half-visible | Low (OTel metric) |
 | `go_goroutines` | Go | Root of G1; without it, leak looks like generic memory growth | Low (one gauge) |
 | GC CPU fraction | Go | Distinguishes G2 from generic CPU | Low |
+| `nodejs_eventloop_lag_p99_seconds` | Node.js | Root of J1; also the J1-vs-J3 disambiguator | Low (prom-client default — likely already exported, just not queried) |
+| `nodejs_heap_size_used_bytes` + `nodejs_gc_duration_seconds` | Node.js | Root of J2; V8 abort vs OOMKill distinction | Low (prom-client default) |
+| libuv threadpool queue/latency | Node.js | Root of J3; no standard exporter — deepest Node gap | Medium (needs app-side instrumentation) |
 
 These are concrete, cheap roadmap candidates — and they matter *because the causal
 model says so*, which is the model already earning its keep.
