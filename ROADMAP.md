@@ -65,6 +65,51 @@ Implemented `internal/enrichment/` with identity extraction, template substituti
 
 ---
 
+## Phase 1.5 — Detection intelligence sem IA (added 2026-07-04)
+
+Da rodada 2 da critical review (`docs/review-2026-07-04.md`). Metodologia completa,
+template de catálogo de sinais, métricas de qualidade e modelo de custo:
+[`docs/detection/methodology.md`](docs/detection/methodology.md). Itens 🔒 são
+detector-core → **gated por P0.1** (medição antes/depois obrigatória).
+
+### 🎯 P1.4 — Signal catalog (pode já, paralelo à Phase 0)
+
+Preencher o template do catálogo para **cada regra existente** no `config.yaml`:
+classe RED/USE, direção da maldade, teto, leading/lagging, ação, dono, FP budget.
+Vai revelar regras sem ação/dono (candidatas a remoção) e regras adaptativas que
+cabem em static/`predict_linear` (custo à toa). Saída: `docs/detection/catalog/`.
+
+### 🎯 P1.5 — Change-aware suppression (pode já; maior FP killer de k8s)
+
+Janela de supressão/rebaixamento pós-rollout por workload, detectada via K8s events
+já ingeridos (`ingestion/events.go`). Anomalia dentro da janela pós-deploy →
+downgrade para info + annotation `during_rollout=true`. Métrica: % de anomalias
+suprimidas por janela. Config: duração da janela (default ~10min pós-rollout).
+
+### 🎯 P1.6 — Direction-of-badness (pode já; pequeno)
+
+Metadado `direction: up_bad|down_bad|both_bad` por regra adaptativa; anomalia só
+dispara na direção declarada. Mata FP de melhorias (latência caiu, tráfego caiu).
+
+### 🎯 P1.7 🔒 — Persistência N-de-M + histerese
+
+Disparo exige anomalia em N de M ciclos (default 3/5); resolução exige M ciclos
+limpos. Elimina alertas de spike de ciclo único (`adaptive.go` decide hoje em 1
+sample). Trade-off consciente: +2-3 ciclos de latência de detecção.
+
+### 🎯 P1.8 🔒 — Estatística robusta (median/MAD)
+
+Substituir mean/stddev por median/MAD no z-score adaptativo. Imune a outliers →
+resolve grande parte do poisoning (P2.9) por construção. Medir antes/depois via P0.1.
+
+### 🎯 P1.9 🔒 — CUSUM para rampas
+
+Detector de mudança acumulada (CUSUM ou Page-Hinkley) ao lado do z-score — ataca a
+cegueira-a-rampa (Decision 8.4: EWMA persegue a subida). O(1) memória por série.
+`recall(ramp)` do P0.1 é a métrica de sucesso.
+
+---
+
 ## Phase 2 — ML maturity
 
 ### ✅ ~~P2.1 — Fix ML multivariate (proper feature vector)~~ — **DONE in controller 0.7.0**
@@ -546,6 +591,17 @@ Single consolidated milestone covering a day of iteration. See `CHANGELOG.md` fo
 - **2026-05-30**: Subagent tool (Kiro CLI parallel execution) verified non-functional in this environment (3 consecutive `No result` returns including minimal `summary`-only ping). Falling back to serial implementation by main agent. Will retry when environment changes.
 - **2026-05-30**: `eks_cluster` BDC-specific label removed from app code (was added briefly during P4.A.3, then reverted). Per `observability-principles.md` steering: app emits only `service.name` (here, `cluster`); environment-specific labels (`eks_cluster`, `environment`, `team`, `region`) belong at the scrape layer. Implemented via `static_configs.labels` per scrape job in `scripts/observability/prometheus.yml` for local dev; production uses `vmagent externalLabels`. Documented in `controller/README.md` "Multi-cluster labels" section. App stays org-agnostic — same as the `bigdatacorp` rename earlier.
 - **2026-05-30**: Created `code-review` subagent — rigorous quality-gate persona that reviews diffs against 7 gates (correctness, steering, idiomatic, readability, tests, performance, security). Does not implement; only reviews. Total subagent count now 10. Subagent tool spawning still broken in this env, but main agent can adopt the persona by reading the prompt directly.
+- **2026-07-04**: Critical review executada (agente, full-project) — report em
+  [`docs/review-2026-07-04.md`](docs/review-2026-07-04.md). Veredito: risco nº 1 é
+  planejamento à frente da execução — gates P0.1/P0.2 com spec pronta desde 2026-06-14
+  e não executados. Decisões aprovadas: (a) branch model **trunk-based** (→ ADR-0009);
+  (b) **freeze da escalada de severidade via ML** até P0.1 dar números (→ ADR-0010) —
+  o Isolation Forest treina só sobre amostras já anômalas, sem persistência, histórico
+  ilimitado; (c) nenhuma spec de produto nova até P0.1/P0.2 rodarem; (d) PRD "eval
+  harness como produto" só após números de P0.1. Novo spec de habilitação:
+  [`specs/agent-native-execution/`](specs/agent-native-execution/) (scripts/dev/,
+  permissões versionadas, skills, ADRs, higiene CI) — pré-passo curto que destrava a
+  execução dos gates por agentes.
 - **2026-06-16**: Multi-specialist evaluation executed (`dev`, `security`, `gitops`,
   `anomaly-detection` in parallel via the now-functional subagent tool). Findings:
   GitOps maturity 1.5/5; Go controller coverage **35%** vs steering gate **≥90%**;

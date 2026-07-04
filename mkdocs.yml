@@ -65,8 +65,10 @@ nav:
       - Threat Model & Limitations: threat-model-and-limitations.md
       - Evaluation Scorecard: evaluation-scorecard.md
       - Product Hypothesis (gated): hypothesis-causal-origination.md
+      - Critical Review (2026-07-04): review-2026-07-04.md
   - Detection:
       - detection/index.md
+      - Methodology (signal definition): detection/methodology.md
       - Static Thresholds: detection/static.md
       - Adaptive Z-Score: detection/adaptive.md
       - Log Patterns: detection/logs.md
