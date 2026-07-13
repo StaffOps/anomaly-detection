@@ -49,8 +49,8 @@ func TestMetricsCollector(t *testing.T) {
 	mc.recordTick()
 	mc.recordTick()
 	mc.recordSkip()
-	mc.recordVMQuery(100 * time.Millisecond)
-	mc.recordVMQuery(200 * time.Millisecond)
+	mc.recordPromQuery(100 * time.Millisecond)
+	mc.recordPromQuery(200 * time.Millisecond)
 	mc.recordLokiQuery()
 	mc.sampleMemory()
 
@@ -61,8 +61,8 @@ func TestMetricsCollector(t *testing.T) {
 	if snap.TicksSkippedQueryError != 1 {
 		t.Errorf("skipped = %d, want 1", snap.TicksSkippedQueryError)
 	}
-	if snap.VMQueriesTotal != 2 {
-		t.Errorf("vm queries = %d, want 2", snap.VMQueriesTotal)
+	if snap.PromQueriesTotal != 2 {
+		t.Errorf("prometheus queries = %d, want 2", snap.PromQueriesTotal)
 	}
 	if snap.LokiQueriesTotal != 1 {
 		t.Errorf("loki queries = %d, want 1", snap.LokiQueriesTotal)

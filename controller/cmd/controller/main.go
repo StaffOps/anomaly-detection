@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
-	otelhelper "github.com/karlipegomes/staffops-otel-libs/go"
+	otelhelper "github.com/staffops/staffops-otel-libs/go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -29,10 +29,11 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 	"github.com/staffops/staffops-anomaly-detection/internal/ml"
 	"github.com/staffops/staffops-anomaly-detection/internal/readiness"
+	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 	"github.com/staffops/staffops-anomaly-detection/internal/replay"
+	"github.com/staffops/staffops-anomaly-detection/internal/replay/inject"
 	"github.com/staffops/staffops-anomaly-detection/internal/version"
 	pb "github.com/staffops/staffops-anomaly-detection/proto"
-	redisclient "github.com/staffops/staffops-anomaly-detection/internal/redis"
 )
 
 func main() {
@@ -47,12 +48,13 @@ func main() {
 	replayWarmup := flag.Float64("warmup-fraction", 0.2, "fraction of window used for baseline warmup")
 	replayMaxRange := flag.String("max-range", "7d", "maximum allowed replay window duration")
 	replayMaxAnomalies := flag.Int("max-anomalies", 1000, "maximum anomalies in report output")
+	replayInject := flag.String("inject", "", "path to injection profile YAML for synthetic fault injection scoring (empty or 'none' = no injection)")
 
 	flag.Parse()
 
 	// --- REPLAY MODE: short-circuit before any prod infrastructure ---
 	if *replayMode {
-		runReplay(*configPath, *replayFrom, *replayTo, *replayOutput, *replayWarmup, *replayMaxRange, *replayMaxAnomalies)
+		runReplay(*configPath, *replayFrom, *replayTo, *replayOutput, *replayWarmup, *replayMaxRange, *replayMaxAnomalies, *replayInject)
 		return
 	}
 
@@ -114,7 +116,7 @@ func main() {
 	dispatcher := alert.NewDispatcher(cfg.Datasources.Alertmanager, *dryRun, cfg.Cluster, linkBuilder)
 
 	// Enrichment engine (label-based pivot for alert context)
-	vmPoller := ingestion.NewMetricsPoller(cfg.Datasources.VictoriaMetrics)
+	vmPoller := ingestion.NewMetricsPoller(cfg.Datasources.Prometheus)
 	lokiPoller := ingestion.NewLogsPoller(cfg.Datasources.Loki)
 	enricher := enrichment.NewEngine(cfg.Enrichment, vmPoller, lokiPoller, redis)
 
@@ -145,7 +147,7 @@ func main() {
 	defer mlClient.Close()
 
 	// Wire readiness checks for all upstream dependencies.
-	metricsSrv.AddReadinessCheck(readiness.VMChecker(cfg.Datasources.VictoriaMetrics))
+	metricsSrv.AddReadinessCheck(readiness.PromChecker(cfg.Datasources.Prometheus))
 	metricsSrv.AddReadinessCheck(readiness.LokiChecker(cfg.Datasources.Loki))
 	metricsSrv.AddReadinessCheck(readiness.AlertmanagerChecker(cfg.Datasources.Alertmanager))
 	metricsSrv.AddReadinessCheck(readiness.MLChecker(mlClient))
@@ -268,14 +270,49 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 
 	// Feed anomalies into correlator (ML multivariate runs after correlation+enrichment,
 	// so the feature vector includes contextual signals not just the triggering metric).
+	//
+	// FDR (Benjamini-Hochberg): filter adaptive anomalies to control false discovery
+	// rate from multiple comparisons (~400 series at z>3 ≈ ~1000+ FP/day without).
+	fdr := detection.NewFDR(cfg.Controller.FDRTarget)
+	var allAnomalies []*detection.Anomaly
 	for _, a := range results.Anomalies {
+		allAnomalies = append(allAnomalies, &detection.Anomaly{
+			MetricName: a.MetricName,
+			Labels:     a.Labels,
+			Value:      a.CurrentValue,
+			Mean:       a.BaselineMean,
+			Stddev:     a.BaselineStddev,
+			Score:      a.AnomalyScore,
+			Severity:   a.Severity,
+			Signal:     a.Signal,
+			Detector:   a.Detector,
+			Timestamp:  time.Unix(a.Timestamp, 0),
+		})
+	}
+
+	accepted, rejected := fdr.Apply(allAnomalies)
+	metrics.FDRAccepted.Add(float64(len(accepted)))
+	metrics.FDRRejected.Add(float64(rejected))
+	if rejected > 0 {
+		slog.Info("fdr_applied", "accepted", len(accepted), "rejected", rejected, "target", cfg.Controller.FDRTarget)
+	}
+
+	for _, a := range accepted {
 		metrics.AnomalyDetected.WithLabelValues(a.Severity, a.Signal).Inc()
 
 		// AnomalyByWorkload: bounded labels for dashboards (top noisy workloads).
-		// Extracts deployment/statefulset/daemonset name from pod, falls back to
-		// service_name for service-level anomalies. Empty values normalized to
-		// "unknown" to keep cardinality bounded even on degenerate inputs.
+		// Namespace resolution: try namespace → deployment_environment → service_namespace.
+		// For span metrics that lack k8s namespace, service_name is the best identifier.
 		ns := a.Labels["namespace"]
+		if ns == "" {
+			ns = a.Labels["deployment_environment"]
+		}
+		if ns == "" {
+			ns = a.Labels["service_namespace"]
+		}
+		if ns == "" {
+			ns = a.Labels["destination_workload_namespace"]
+		}
 		if ns == "" {
 			ns = "unknown"
 		}
@@ -297,10 +334,10 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 			"namespace", a.Labels["namespace"],
 			"pod", a.Labels["pod"],
 			"service_name", a.Labels["service_name"],
-			"value", a.CurrentValue,
-			"baseline_mean", a.BaselineMean,
-			"baseline_stddev", a.BaselineStddev,
-			"score", a.AnomalyScore,
+			"value", a.Value,
+			"baseline_mean", a.Mean,
+			"baseline_stddev", a.Stddev,
+			"score", a.Score,
 			"severity", a.Severity,
 			"signal", a.Signal,
 			"detector", a.Detector,
@@ -309,14 +346,14 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 		correlator.Add(detection.Anomaly{
 			MetricName: a.MetricName,
 			Labels:     a.Labels,
-			Value:      a.CurrentValue,
-			Mean:       a.BaselineMean,
-			Stddev:     a.BaselineStddev,
-			Score:      a.AnomalyScore,
+			Value:      a.Value,
+			Mean:       a.Mean,
+			Stddev:     a.Stddev,
+			Score:      a.Score,
 			Severity:   a.Severity,
 			Signal:     a.Signal,
 			Detector:   a.Detector,
-			Timestamp:  time.Unix(a.Timestamp, 0),
+			Timestamp:  a.Timestamp,
 		})
 	}
 
@@ -415,7 +452,7 @@ func buildJobBatch(cfg *config.Config) *pb.JobBatch {
 }
 
 // runReplay handles the --replay mode: parse window, pre-flight checks, run engine, write output.
-func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction float64, maxRangeStr string, maxAnomalies int) {
+func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction float64, maxRangeStr string, maxAnomalies int, injectPath string) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
@@ -442,6 +479,27 @@ func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction flo
 		os.Exit(1)
 	}
 
+	// Load injection profile (if specified).
+	var injector *inject.Injector
+	switch injectPath {
+	case "":
+		// No flag → normal replay, no scoring block.
+	case "none":
+		// US-5: FP upper-bound baseline over a clean window. An empty injector
+		// records zero ground truths, so the scorer classifies every detection
+		// as a false positive — the detector's base noise on clean data.
+		injector = inject.NewInjector(&inject.InjectionConfig{})
+		slog.Info("[REPLAY] injection=none — FP upper-bound baseline (all detections scored as FP)")
+	default:
+		injCfg, err := inject.LoadConfig(injectPath)
+		if err != nil {
+			slog.Error("failed to load injection profile", "path", injectPath, "error", err)
+			os.Exit(1)
+		}
+		injector = inject.NewInjector(injCfg)
+		slog.Info("[REPLAY] injection active", "profile", injectPath, "seed", injCfg.Seed, "injections", len(injCfg.Injections))
+	}
+
 	// Banner.
 	warmupDur := time.Duration(float64(to.Sub(from)) * warmupFraction)
 	minWarmup := time.Duration(cfg.Baseline.WarmUpSamples) * cfg.Controller.JobInterval
@@ -461,8 +519,8 @@ func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction flo
 	fmt.Println()
 
 	// Pre-flight checks.
-	if err := preflightVM(cfg.Datasources.VictoriaMetrics); err != nil {
-		slog.Error("pre-flight: VM unreachable", "error", err)
+	if err := preflightProm(cfg.Datasources.Prometheus); err != nil {
+		slog.Error("pre-flight: Prometheus-compatible TSDB unreachable", "error", err)
 		os.Exit(1)
 	}
 	if err := preflightLoki(cfg.Datasources.Loki); err != nil {
@@ -485,7 +543,7 @@ func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction flo
 	}
 
 	ctx := context.Background()
-	report, err := replay.Run(ctx, rcfg, cfg)
+	report, err := replay.Run(ctx, rcfg, cfg, injector)
 	if err != nil {
 		slog.Error("replay failed", "error", err)
 		os.Exit(1)
@@ -544,17 +602,17 @@ func parseDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-// preflightVM checks VM is reachable with query=up.
-func preflightVM(ds config.DatasourceEndpoint) error {
+// preflightProm checks the Prometheus-compatible TSDB is reachable with query=up.
+func preflightProm(ds config.DatasourceEndpoint) error {
 	url := strings.TrimRight(ds.URL, "/") + "/api/v1/query?query=up"
 	client := &http.Client{Timeout: ds.Timeout}
 	resp, err := client.Get(url)
 	if err != nil {
-		return fmt.Errorf("VM query failed: %w", err)
+		return fmt.Errorf("prometheus query failed: %w", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("VM returned status %d", resp.StatusCode)
+		return fmt.Errorf("prometheus returned status %d", resp.StatusCode)
 	}
 	return nil
 }

@@ -15,7 +15,7 @@ import (
 const MinWindow = 150 * time.Minute // 2.5h
 
 // DefaultMaxWindow is the default maximum replay range. Operators can override
-// via --max-range, but ranges beyond a week typically exceed VictoriaMetrics
+// via --max-range, but ranges beyond a week typically exceed Prometheus-compatible TSDB
 // retention or produce baselines that drift too much for meaningful comparison.
 const DefaultMaxWindow = 7 * 24 * time.Hour
 

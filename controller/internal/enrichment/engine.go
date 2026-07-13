@@ -145,13 +145,13 @@ func (e *Engine) runOne(ctx context.Context, id Identity, q config.EnrichmentQue
 	rendered := substitute(q.Query, id)
 	source := q.Source
 	if source == "" {
-		source = "vm"
+		source = "prometheus"
 	}
 
 	r := Result{Name: q.Name, Source: source}
 
 	switch source {
-	case "vm":
+	case "prometheus":
 		samples, err := e.vmPoll.Query(ctx, rendered)
 		if err != nil {
 			metrics.EnrichmentQueryErrors.WithLabelValues(source).Inc()

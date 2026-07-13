@@ -1,21 +1,11 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.22-alpine AS builder
-
-# git: needed to fetch the private staffops-otel-libs module over HTTPS.
-RUN apk add --no-cache git
-
-# Private module: bypass the public proxy/checksum DB. Auth uses an HTTPS
-# token mounted as a BuildKit secret (id=github_token) — never baked into a
-# layer. Same DOCS_DEPLOY_TOKEN pattern used across the org's repos.
-ENV GOPRIVATE=github.com/karlipegomes/*
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN --mount=type=secret,id=github_token \
-    git config --global credential.helper store \
- && printf "https://x-access-token:%s@github.com\n" "$(cat /run/secrets/github_token)" > ~/.git-credentials \
- && go mod download \
- && rm -f ~/.git-credentials
+# staffops-otel-libs is a public org module now — no GOPRIVATE / token needed;
+# fetched via the default Go proxy.
+RUN go mod download
 
 COPY . .
 

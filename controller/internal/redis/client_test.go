@@ -21,8 +21,10 @@ func newUnreachableClient(t *testing.T) *Client {
 	return c
 }
 
-func ctx() context.Context {
-	c, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
+func ctx(t *testing.T) context.Context {
+	t.Helper()
+	c, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	t.Cleanup(cancel)
 	return c
 }
 
@@ -63,7 +65,7 @@ func TestClose_NoOp_NoConnected(t *testing.T) {
 func TestPing_Unreachable_ReturnsError(t *testing.T) {
 	c := newUnreachableClient(t)
 	defer c.Close()
-	err := c.Ping(ctx())
+	err := c.Ping(ctx(t))
 	if err == nil {
 		t.Error("Ping to unreachable server should return error")
 	}
@@ -72,7 +74,7 @@ func TestPing_Unreachable_ReturnsError(t *testing.T) {
 func TestHSet_Unreachable_ReturnsError(t *testing.T) {
 	c := newUnreachableClient(t)
 	defer c.Close()
-	err := c.HSet(ctx(), "testkey", map[string]interface{}{"field": "value"})
+	err := c.HSet(ctx(t), "testkey", map[string]interface{}{"field": "value"})
 	if err == nil {
 		t.Error("HSet to unreachable server should return error")
 	}
@@ -81,7 +83,7 @@ func TestHSet_Unreachable_ReturnsError(t *testing.T) {
 func TestHGetAll_Unreachable_ReturnsError(t *testing.T) {
 	c := newUnreachableClient(t)
 	defer c.Close()
-	_, err := c.HGetAll(ctx(), "testkey")
+	_, err := c.HGetAll(ctx(t), "testkey")
 	if err == nil {
 		t.Error("HGetAll to unreachable server should return error")
 	}
@@ -90,7 +92,7 @@ func TestHGetAll_Unreachable_ReturnsError(t *testing.T) {
 func TestSetWithTTL_Unreachable_ReturnsError(t *testing.T) {
 	c := newUnreachableClient(t)
 	defer c.Close()
-	err := c.SetWithTTL(ctx(), "key", "value", time.Minute)
+	err := c.SetWithTTL(ctx(t), "key", "value", time.Minute)
 	if err == nil {
 		t.Error("SetWithTTL to unreachable server should return error")
 	}
@@ -99,7 +101,7 @@ func TestSetWithTTL_Unreachable_ReturnsError(t *testing.T) {
 func TestExists_Unreachable_ReturnsError(t *testing.T) {
 	c := newUnreachableClient(t)
 	defer c.Close()
-	_, err := c.Exists(ctx(), "key")
+	_, err := c.Exists(ctx(t), "key")
 	if err == nil {
 		t.Error("Exists to unreachable server should return error")
 	}
@@ -108,7 +110,7 @@ func TestExists_Unreachable_ReturnsError(t *testing.T) {
 func TestGet_Unreachable_ReturnsError(t *testing.T) {
 	c := newUnreachableClient(t)
 	defer c.Close()
-	_, err := c.Get(ctx(), "key")
+	_, err := c.Get(ctx(t), "key")
 	if err == nil {
 		t.Error("Get to unreachable server should return error")
 	}
@@ -119,7 +121,7 @@ func TestReadinessCheck_Invocation_ReturnsError(t *testing.T) {
 	defer c.Close()
 	check := c.ReadinessCheck()
 	// Invoking the readiness check on unreachable Redis should return error
-	err := check(ctx())
+	err := check(ctx(t))
 	if err == nil {
 		t.Error("readiness check against unreachable Redis should fail")
 	}

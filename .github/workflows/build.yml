@@ -54,14 +54,13 @@ jobs:
           load: true
           push: false
           tags: ${{ steps.img.outputs.ref }}:${{ steps.sha.outputs.short }}
-          secrets: |
-            github_token=${{ secrets.DOCS_DEPLOY_TOKEN }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
-      # 2) GATE — report-only during rollout (build local → scan → report).
-      # TODO: flip exit-code back to "1" once grpc/otel/stdlib + base-image CVEs
-      # are cleared, so a vulnerable image can no longer reach the registry.
+      # 2) GATE — report-only. Go/dependency CVEs cleared (Go 1.25, 2026-07-01);
+      # dep_scan armed. This IMAGE gate stays report-only until PH.3 (golden apko
+      # bases) — the ML image still inherits python:3.11-slim (debian) perl-base
+      # CVEs that are fix_deferred upstream. Flip exit-code to "1" after PH.3.
       - name: Trivy scan (report-only gate)
         uses: aquasecurity/trivy-action@master
         with:
@@ -82,8 +81,6 @@ jobs:
           tags: |
             ${{ steps.img.outputs.ref }}:latest
             ${{ steps.img.outputs.ref }}:${{ steps.sha.outputs.short }}
-          secrets: |
-            github_token=${{ secrets.DOCS_DEPLOY_TOKEN }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 

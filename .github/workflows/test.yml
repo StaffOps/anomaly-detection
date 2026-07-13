@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-env:
-  # Private Go module pulled by controller/worker.
-  GOPRIVATE: github.com/karlipegomes/*
-
 jobs:
   # main accepts PRs ONLY from dev (branch protection can't enforce source branch).
   # Required check on main only — never runs on dev PRs, so it never hangs them.
@@ -32,16 +28,13 @@ jobs:
 
   lint-go:
     runs-on: ubuntu-latest
-    # TODO: remove once gofmt/vet debt is cleared — gate is report-only for now.
-    continue-on-error: true
+    # Armed 2026-07-02: gofmt (18 files) + go vet (redis context leak) debt cleared.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.25"
           cache-dependency-path: controller/go.sum
-      - name: Configure git for private module
-        run: git config --global url."https://x-access-token:${{ secrets.DOCS_DEPLOY_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: gofmt
         working-directory: controller
         run: |
@@ -69,8 +62,7 @@ jobs:
   # SCA — vulnerable dependencies (go.sum + Python). No image build; fast PR feedback.
   dep_scan:
     runs-on: ubuntu-latest
-    # TODO: report-only — flip to blocking once grpc/otel/stdlib CVEs are cleared.
-    continue-on-error: true
+    # Armed 2026-07-01: all Go/Python dependency CVEs cleared (Go 1.25 migration).
     steps:
       - uses: actions/checkout@v4
       - name: Trivy filesystem (dependencies)
@@ -90,10 +82,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.25"
           cache-dependency-path: controller/go.sum
-      - name: Configure git for private module
-        run: git config --global url."https://x-access-token:${{ secrets.DOCS_DEPLOY_TOKEN }}@github.com/".insteadOf "https://github.com/"
       - name: Test with coverage
         working-directory: controller
         run: |
@@ -101,8 +91,8 @@ jobs:
           pct=$(go tool cover -func=cov.out | tail -1 | awk '{print $3}')
           echo "### Go coverage: ${pct}" >> "$GITHUB_STEP_SUMMARY"
           go tool cover -func=cov.out | tail -1
-          # TODO(PH.9): flip to a hard gate once ≥90%:
-          #   v=${pct%\%}; awk "BEGIN{exit !($v>=90)}" || { echo "::error::coverage ${pct} < 90%"; exit 1; }
+          # PH.9: hard gate — controller coverage must stay ≥90%.
+          v=${pct%\%}; awk "BEGIN{exit !($v>=90)}" || { echo "::error::coverage ${pct} < 90%"; exit 1; }
 
   test-ml:
     runs-on: ubuntu-latest
@@ -117,7 +107,4 @@ jobs:
         run: pip install -e '.[dev]' -q
       - name: Test with coverage
         working-directory: ml
-        run: |
-          # tests/ still empty (PH.10) — pytest exits 5 with no tests; allow it.
-          # TODO(PH.10): add --cov --cov-fail-under=90 once tests exist.
-          pytest tests/ -q || test $? -eq 5
+        run: pytest tests/ -q

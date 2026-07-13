@@ -225,13 +225,13 @@ blinding the pipeline) but **does not address attacks on the detector's own imag
 and dependencies**. Concrete gaps observed in `controller/Dockerfile`,
 `ml/Dockerfile`, and `go.mod`:
 
-- Base images are `golang:1.22-alpine`, `alpine:3.20`, `python:3.11-slim` — **not
+- Base images are `golang:1.25-alpine`, `alpine:3.20`, `python:3.11-slim` — **not
   golden apko-built and not cosign-signed**. A compromised upstream image (or its
   registry) ships malicious code into every replica.
-- `go.mod` imports `github.com/karlipegomes/staffops-otel-libs/go` at a
-  pseudo-version — a personal GitHub repository. Single account compromise →
-  every consumer inherits the payload. There is no Harbor proxy mitigation
-  because the dep is not in the org repo.
+- ~~`go.mod` imports `github.com/karlipegomes/staffops-otel-libs/go` at a
+  pseudo-version — a personal GitHub repository.~~ **Resolved (2026-07-02, PH.13)**:
+  moved to the org module `github.com/staffops/staffops-otel-libs/go` at tagged
+  release `v0.1.0`. No longer a personal-account single-point-of-compromise.
 - ~~The ML image keeps `gcc/g++` in the runtime layer (single-stage).~~ **Resolved
   (PH.5)**: the ML image is now multi-stage — the runtime layer has no compiler or
   build tooling.

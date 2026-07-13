@@ -16,7 +16,7 @@ func testLinks() config.Links {
 		TempoBaseURL:              "https://grafana.test",
 		LokiBaseURL:               "https://grafana.test",
 		RunbookBaseURL:            "https://docs.test/runbooks",
-		GrafanaVMDatasourceUID:    "vm-uid",
+		GrafanaPromDatasourceUID:  "vm-uid",
 		GrafanaTempoDatasourceUID: "tempo-uid",
 		GrafanaLokiDatasourceUID:  "loki-uid",
 	}

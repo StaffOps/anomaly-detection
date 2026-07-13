@@ -273,7 +273,7 @@ normalizado, testado.
 
 | Serviço | Propósito | Operação |
 |---------|-----------|----------|
-| VictoriaMetrics | Séries reais limpas (base da injeção) | `GET /api/v1/query_range` (herda do replay) |
+| Prometheus-compatible TSDB | Séries reais limpas (base da injeção) | `GET /api/v1/query_range` (herda do replay) |
 | Loki | (V2 — injeção em logs fora de escopo V1) | — |
 | Redis/Alertmanager/Workers/ML | **NÃO acessados** | — |
 

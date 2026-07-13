@@ -22,7 +22,17 @@ recall lower-bound and FP upper-bound **without** needing labeled historical inc
 Infra already exists (replay mode). This is the cheapest, highest-value item and the
 prerequisite for everything algorithmic. **Without numbers, every detector swap is faith.**
 
-**Spec**: [`specs/synthetic-injection/`](specs/synthetic-injection/) — spec ready, not executed.
+**Spec**: [`specs/synthetic-injection/`](specs/synthetic-injection/).
+
+**Status (2026-07-03)**: 🟡 **harness built, gate execution in progress** — NOT done.
+- ✅ Phases 1-4 (Tasks 1-21): injection core (`internal/replay/inject/`: spike/ramp/step/silence
+  + ground truth + scorer), replay hook, `--inject` CLI flag, `--inject=none` FP baseline (US-5),
+  JSON schema extension. 98.3% coverage, `code-review` APPROVE-WITH-NITS.
+- 🟡 Phase 5 (Tasks 22-25) — the actual measurement — **in progress**. Surfaced + fixed a latent
+  bug (`SamplesAt` passed non-finite ratio-query values → `+Inf` broke JSON); Loki endpoint slow
+  (metrics-only injection unaffected). **No recall/FP number produced yet** — do NOT mark P0.1 done
+  until Phase 5 yields real numbers (per spec: "harness compiles ≠ number exists").
+- ⬜ Phase 6 (Tasks 26-29) — feed the number back into Decision 8 + hypothesis doc.
 
 ### 🎯 P0.2 — Competitive teardown experiment
 
@@ -39,13 +49,20 @@ Confirm the causal chains in `docs/architecture/degradation-model.md` against re
 incidents via replay (walk each chain backwards from symptom, check leading→lagging
 ordering). Until done, the model is a written hypothesis, not ground truth.
 
-### 🎯 P0.4 — FDR (Benjamini-Hochberg) over per-cycle series
+### ✅ ~~P0.4 — FDR (Benjamini-Hochberg) over per-cycle series~~ — **DONE (2026-06-22)**
 
 Independent of which thesis wins: ~400 adaptive series at fixed z>3 ≈ ~1000+ FP/day
-from multiple comparisons alone. Apply FDR control before dispatch. Cheap, attacks the
+from multiple comparisons alone. Applied FDR control before dispatch. Cheap, attacks the
 largest FP source. **Read as diagnostic**: that the best detector fix is a generic
 statistical correction unrelated to .NET/k8s/trace confirms the value was never in the
 detector.
+
+**Implementation**: `internal/detection/fdr.go` — Benjamini-Hochberg on p-values derived
+from z-scores, applied per cycle after adaptive detection, before correlation. Only
+adaptive results filtered; static/pattern pass through. Config: `controller.fdr_target`
+(default 0.05). Metrics: `staffops_ad_detection_fdr_{accepted,rejected}_total`. 100% test
+coverage (20 unit tests). Remaining: T6-T7 (replay before/after comparison to quantify
+real FP reduction).
 
 ---
 
@@ -194,37 +211,27 @@ Aggregate anomalies by namespace, run multivariate on `{count_anomalous_pods, di
 
 Three independent gaps surfaced by [`docs/threat-model-and-limitations.md`](docs/threat-model-and-limitations.md). They degrade the **reliability** product, not just any future security framing — so they belong here, not in a security-only phase. All three are code-grounded (verified against `internal/baseline/store.go`).
 
-#### 🎯 P2.8 — Workload-identity baseline keying
+#### ✅ ~~P2.8 — Workload-identity baseline keying~~ — **DONE (2026-06-22)**
 
-`baselineKey()` hashes the raw sorted label set. If `pod` is in the labels, the baseline **dies on every pod restart** (pods are cattle, ephemeral UIDs) → cold-start blindness on every rollout. `correlation.ExtractWorkload()` already exists (Deployment/StatefulSet/DaemonSet from pod name) but is used in correlation, **not** in the baseline key.
+`baselineKey()` now normalizes labels before hashing: extracts workload from pod name via
+regex (same patterns as `correlation.ExtractWorkload`), drops configurable ephemeral labels.
+Same workload pods share a baseline across restarts. Config: `baseline.ephemeral_labels`.
+15 unit tests (key stability verified).
 
-**Fix**: derive a stable entity key (workload, not pod) for baselining. Normalize the label set through `ExtractWorkload` before hashing; drop `pod`/ephemeral labels from the key.
+#### ✅ ~~P2.9 — Outlier rejection before baseline update (anti-poisoning)~~ — **DONE (2026-06-22)**
 
-**Watch-out**: legitimately per-pod signals (e.g. a specific replica leaking) would be smoothed — confirm the workload-level baseline still catches single-replica outliers, or keep a two-tier baseline (workload + per-replica deviation from siblings).
+Z-score computed BEFORE updating baseline. When z > `poison_threshold` (default 4.0), update
+is skipped entirely — prevents slow-ramp attacks from dragging baseline until malicious load
+reads as normal. Zero-stddev handling uses 1% of EWMA as floor. Warm-up samples always update.
+Config: `baseline.poison_threshold`. Metric: `staffops_ad_worker_baseline_poison_rejected_total`.
 
-**Effort**: medium. Touches baseline key + warm-up semantics + tests.
+#### ✅ ~~P2.10 — Absence-of-signal ("dead man's switch") detection~~ — **DONE (2026-06-22)**
 
-#### 🎯 P2.9 — Outlier rejection before baseline update (anti-poisoning)
-
-`Store.Evaluate()` updates EWMA/mean/stddev **unconditionally** on every sample, including anomalous ones. Consequences:
-- **Benign**: a slow organic ramp is absorbed and stops alerting.
-- **Adversarial**: low-and-slow activity drags the baseline until malicious load reads as normal (baseline poisoning).
-
-**Fix**: gate the baseline update — e.g. skip (or down-weight) the update when the sample is already flagged anomalous beyond a hard multiple of stddev; optionally a "frozen baseline" window after a confirmed anomaly.
-
-**Watch-out**: don't freeze so aggressively that genuine regime changes (intentional capacity increase) never re-baseline — pair with a slow-path acceptance after N sustained samples.
-
-**Effort**: small-medium. Localized to `Evaluate()` + tests for the poisoning scenario.
-
-#### 🎯 P2.10 — Absence-of-signal ("dead man's switch") detection
-
-`/readyz` checks the detector's **own** dependencies, not whether an *expected* signal went silent. "This workload always emits N logs/min and stopped" raises nothing today. Misses both adversarial pipeline-blinding and genuine reliability events (a crashed exporter looks like calm).
-
-**Fix**: track expected emission rate per workload/series; alert when a previously-active series goes silent for > threshold. Reuses the baseline store (a series with history that drops to zero samples is the signal).
-
-**Watch-out**: legitimate scale-to-zero (KEDA, cronjobs idle) must not page — needs the same suppression/seasonality awareness as the positive-direction detectors. Cardinality: bound by tracked-series count, same guard as P5.4.
-
-**Effort**: medium. New detector mode + careful FP control.
+New `internal/absence/` package. Tracks series liveness via `AbsenceRecorder` interface
+called on every baseline evaluation. Background checker fires alerts when previously-active
+series go silent for > threshold (default 5m). Suppresses known-idle namespaces via pattern
+config (`batch-*`, `keda-*`). Startup grace period (2× threshold) prevents false alerts on
+controller restart. 11 unit tests.
 
 ---
 
@@ -350,21 +357,21 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.1 | 🟡 Images run nonroot (`USER 65534`); pod-level `securityContext` (runAsNonRoot, readOnlyRootFilesystem, drop:[ALL], allowPrivilegeEscalation:false) for controller/worker/redis/ML still pending in manifests/Helm (PH.15) | security, gitops |
+| PH.1 | ✅ **Done in chart (PH.15)** — pod-level `securityContext` (runAsNonRoot, readOnlyRootFilesystem + emptyDir writable paths, drop:[ALL], allowPrivilegeEscalation:false, runAsUser 65534) on all 4 pods (controller/worker/redis/ML) | security, gitops |
 | PH.2 | 🟡 CI builds SHA-tagged images to Docker Hub; `:latest`/`REPLACE_ME_REGISTRY` removal in manifests pending Helm (PH.15) | security, gitops |
 | PH.3 | Migrate base images to BDC golden (apko-built, cosign-signed): `golang`, `alpine`, `redis`, `python` | security |
-| PH.4 | Enable Redis AUTH; mount password as file-secret via External Secrets Operator (12-factor IV) | security |
+| PH.4 | ✅ **Done in canonical chart (2026-07-02)** — Redis AUTH via ExternalSecret (ClusterSecretStore `aws`, ESO v1, sync-wave -1); `redis-server --requirepass`, `REDIS_PASSWORD` injected into controller/worker, `password: ${REDIS_PASSWORD}` in config. AWS secret `staffops/anomaly-detection/redis-password` created. Gated by `redis.auth.enabled` | security |
 | PH.5 | ✅ Done — multi-stage ML Dockerfile; runtime image drops `gcc`/`g++` and `grpcio-tools` | security |
-| PH.6 | Add mandatory labels (`CostCenter`, `Environment`, `app.kubernetes.io/version`) to all pod templates | gitops, security |
-| PH.7 | Add `preStop` hook (`sleep 5`) and `terminationGracePeriodSeconds: 30` to all deployments | gitops |
-| PH.8 | Create K8s manifest for the ML service (today exists only in `docker-compose`) | gitops |
+| PH.6 | ✅ **Done in chart (PH.15)** — `CostCenter`, `Environment`, `app.kubernetes.io/name`, `app.kubernetes.io/version` on all pod templates | gitops, security |
+| PH.7 | ✅ **Done in chart (PH.15)** — `preStop` (`sleep 5`) + `terminationGracePeriodSeconds: 30` on all deployments | gitops |
+| PH.8 | ✅ **Done in chart (PH.15)** — ML Service + Deployment templated (`ml.enabled`, on in prd) | gitops |
 
 ### Test & CI gates (steering `dev-environment.md` ≥90%)
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.9 | 🟡 Go controller coverage **~89.4%** (`./internal/...`) → ≥90%: remaining laggards are `readiness` (~12%), `ml` (~29%), `leader` (~49%) | dev |
-| PH.10 | Bring ML service coverage from **0% → ≥90%**: `ml/tests/` is currently empty (`__init__.py` 0 bytes). Need unit + gRPC integration tests for forecaster, multivariate, server | dev |
+| PH.9 | ✅ **Done (2026-06-30)** — Go controller coverage **89.5% → 90.4%** (`./internal/...`). Added error-path/branch tests to `internal/ml` (81→94%), `internal/baseline` (→97%), `internal/readiness` (91.9→96.8%). CI `test-go` coverage gate armed (hard fail < 90%) | dev |
+| PH.10 | ✅ **Done (2026-06-30)** — ML service coverage **0% → 98.44%** (gate ≥90%). `ml/tests/` now has `test_forecaster.py` (Prophet mocked), `test_multivariate.py` (Isolation Forest injected fake), `test_server.py` (servicer + `serve()`). `pytest-cov` + `--cov-fail-under=90` in `pyproject.toml`; CI `test-ml` gate armed | dev |
 | PH.11 | ✅ Done — `replay/window_test.go` `TestParseWindow_MixedDurationAndTimestamp` fixed; full Go suite green | dev |
 | PH.12 | 🟡 CI added (GitHub Actions: `test`/`sast`/`build`/`release`/`docs`): build/push SHA-tagged images to Docker Hub; private-module auth via `DOCS_DEPLOY_TOKEN`. Security/lint + coverage gates report-only during rollout (see "CI/CD rollout debt"). | dev |
 
@@ -372,8 +379,8 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.13 | Move `github.com/karlipegomes/staffops-otel-libs/go` (personal repo, pseudo-version) to org repo with proper release tagging — `karli` username in import path is the same anti-pattern as the earlier `bigdatacorp` rename | security, dev |
-| PH.14 | Move BDC-specific URLs out of `controller/deploy/redis.yaml` ConfigMap (`vm-cluster-vmselect.monitoring:8481`, `loki-gateway.monitoring:80`) into Helm values | gitops |
+| PH.13 | ✅ **Done (2026-07-02)** — module moved to org: `github.com/staffops/staffops-otel-libs/go` tagged `v0.1.0` (was `karlipegomes/...` pseudo-version). Controller imports + go.mod updated; repo is public so GOPRIVATE/token auth removed from Dockerfile, CI (test/sast/build/release), AGENTS.md, start.sh | security, dev |
+| PH.14 | ✅ **Done in chart (PH.15)** — VM/Loki/Alertmanager/redis endpoints templated from Helm values (`config.datasources.*`), no longer hardcoded in an in-repo ConfigMap | gitops |
 
 ### Helm chart + GitOps (move from raw YAML to ApplicationSet)
 
@@ -381,20 +388,20 @@ Currently rated **GitOps maturity 1.5/5**. To unblock cluster deploy:
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.15 | Create `helm-charts/anomaly-detection/` with `templates/` + `values.yaml` + per-env overrides; covers controller, worker, redis (with PVC), ML, RBAC, VMRule, VMServiceScrape, PDB | gitops |
-| PH.16 | Create ArgoCD `ApplicationSet` (matrix: cluster × env) targeting the Helm chart | gitops |
+| PH.15 | ✅ **Done (2026-07-02)** — `helm-charts/anomaly-detection/` created (18 files): controller, worker, redis (+PVC, AUTH via ExternalSecret), ML (PH.8), RBAC, VMRule, VMServiceScrape, PDB, NetworkPolicy, per-env overlays (dev/hml/prd). Folds in PH.1/PH.6/PH.7/PH.14/PH.20/PH.21/PH.23. `helm lint --strict` clean; renders valid YAML all envs. Delegated to `gitops`, reviewed by `code-review` (fixed a Redis-AUTH config-key blocker + PDB single-replica deadlock) | gitops |
+| PH.16 | ✅ **Done (2026-07-02)** — deployment wired via **helmfile** (BDC pattern, mirrors aigent-squad) in `02-KUBE/00-CONFIG/k8s-setup/staffops/` — not ArgoCD ApplicationSet. Release + `anomaly-detection/values.yaml.gotmpl` (devops-core) target the **canonical** chart `06-STAFFOPS/helm-charts/charts/anomaly-detection`. `helmfile template` renders the full stack. NOTE: the PH.15 chart built under `staffops-anomaly-detection/helm-charts/` was a wrong-location duplicate — **removed**; canonical chart is SSOT | gitops |
 | PH.17 | Add `argocd.argoproj.io/sync-wave` annotations so Redis comes up before controller/worker | gitops |
 | PH.18 | Add `PodDisruptionBudget` (`minAvailable: 1` controller leader, `minAvailable: 2` workers) | gitops |
-| PH.19 | Replace `prometheus.io/scrape` annotations with `VMServiceScrape` CRDs | gitops |
-| PH.20 | Remove explicit CPU limits from controller/worker (ScaleOps manages; throttling risk on the 60s detection cycle is real) | gitops |
+| PH.19 | ✅ **Done in canonical chart** — `VMServiceScrape` (+ optional `ServiceMonitor`) templates replace `prometheus.io/scrape` annotations; enabled via `vmServiceScrape.enabled` | gitops |
+| PH.20 | ✅ **Done in chart (PH.15)** — controller/worker have memory-only limits (no CPU limit); redis keeps a small CPU limit (not on the 60s detection path) | gitops |
 
 ### Network & secrets
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.21 | Add `NetworkPolicy`: redis ← only controller+worker; worker gRPC ← only controller; ML gRPC ← only controller | security |
+| PH.21 | ✅ **Done in chart (PH.15)** — `NetworkPolicy`: redis ← controller+worker; worker gRPC ← controller; ML gRPC ← controller (selectors verified against pod labels) | security |
 | PH.22 | Pre-provision a zero-permission IRSA role for the controller ServiceAccount (`eks.amazonaws.com/role-arn` annotation). Scoped policies added later when ML S3 model storage lands | security, gitops |
-| PH.23 | Worker RBAC: drop `events list/watch` (only the controller uses `EventWatcher`; this is a copy-paste from controller RBAC) | security |
+| PH.23 | ✅ **Done in chart (PH.15)** — worker chart has no Role/RoleBinding (events `list/watch` dropped; only the controller keeps `EventWatcher` RBAC) | security |
 
 ### Dependency hygiene
 
@@ -415,17 +422,35 @@ auth via `DOCS_DEPLOY_TOKEN`) landed with security/lint gates as
 **report-only** (`continue-on-error` / Trivy `exit-code: 0`) so they surface debt without
 blocking `main`. Re-arm each gate (flip the flag in the workflow) as its debt clears:
 
-- [ ] **gofmt** — 16 unformatted files; `gofmt -w` then drop `continue-on-error` on `lint-go`.
-- [ ] **go vet** — context leak in `internal/redis/client_test.go:25` (cancel func discarded).
-- [ ] **Trivy (deps + images)** — `google.golang.org/grpc` 1.67.1 → 1.79.3 (CVE-2026-33186,
-      CRITICAL), `go.opentelemetry.io/otel/sdk` (CVE-2026-24051), `net/url` (CVE-2025-61726);
-      ML base `python:3.11-slim` (debian) CVEs. Then set Trivy `exit-code: 1` (re-arm
-      `release.yml` first — a versioned image must never ship vulnerable).
+- [x] **gofmt** — ✅ done 2026-07-02: `gofmt -w` applied to 18 files (comment-alignment
+      only, no semantic change); `gofmt -l` clean. `lint-go` armed (`continue-on-error` dropped).
+- [x] **go vet** — ✅ fixed 2026-07-01: context leak in `internal/redis/client_test.go`
+      resolved (`ctx(t)` now registers `cancel` via `t.Cleanup`). `go vet ./...` clean on Go 1.25.
+- [x] **Trivy (deps)** — ✅ armed 2026-07-01. All 11 Go CVEs cleared via the **Go 1.25
+      migration**: `grpc` 1.67.1 → 1.81.1 (CVE-2026-33186 CRITICAL), `otel/sdk` 1.31 → 1.44
+      (CVE-2026-24051/-39883), `golang.org/x/net` 0.30 → 0.55 (6 CVEs), `golang.org/x/oauth2`
+      0.22 → 0.36 (CVE-2025-22868). `dep_scan` (fs) now blocking (`continue-on-error` removed).
+      **Image** gates (`build.yml`/`release.yml`) stay report-only until **PH.3** — the ML
+      `python:3.11-slim` (debian) `perl-base` CVEs are `fix_deferred`/`affected` upstream and
+      only clear when the ML image moves to a golden apko base.
 - [ ] **gosec / bandit** — triage findings, suppress reviewed FPs inline, drop `continue-on-error`.
-- [ ] **Coverage gate** — enforce once PH.9 (Go ~89.4% → ≥90%) and PH.10 (ML 0% → ≥90%) land.
+- [x] **Coverage gate** — ✅ armed both sides: ML `test-ml` (`--cov-fail-under=90`, PH.10)
+      and Go `test-go` (hard fail < 90%, PH.9, controller at 90.4%).
 - [x] **`test-ml`** — fixed 2026-06-22 (hatch wheel `packages=["server"]`; grpcio aligned to 1.65.4).
 - [x] **Private-module auth in CI** — `DOCS_DEPLOY_TOKEN` confirmed to read `staffops-otel-libs`
       (`test-go` green in CI 2026-06-22); no dedicated deploy key needed.
+
+**Follow-up debt from the Go 1.25 migration (2026-07-01, non-blocking):**
+
+- [ ] **`grpc.Dial` → `grpc.NewClient`** — `Dial` is soft-deprecated since grpc-go 1.68
+      (still works in 1.81). Call sites: `cmd/controller/main.go`, `internal/ml/client.go`,
+      and two ml test helpers. Behavior is already lazy, so migration is mechanical.
+- [ ] **OTel exporter/contrib version skew** — `otelgrpc` v0.56 + `otlp*grpc` v1.31 lag core
+      v1.44. Backward-compatible (build green), but they'll align when `staffops-otel-libs`
+      (PH.13) is next bumped; revisit then.
+- [ ] **Image Trivy gate** — when revisiting before PH.3, consider `exit-code: 1` +
+      `ignore-unfixed: true` to arm against *fixable* image CVEs while still passing the
+      upstream-deferred debian `perl-base` findings.
 
 **Open decision — branch model.** The workflows were modeled on staffops-aigent-squad,
 which uses a `main`+`dev` model with a `guard` job (PRs to `main` must come from `dev`).

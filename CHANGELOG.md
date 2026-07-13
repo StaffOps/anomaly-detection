@@ -10,6 +10,193 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
 
+### detection / measurement
+
+**Added — Synthetic fault-injection harness (P0.1, Phases 1-4) (2026-07-03)**
+- New `internal/replay/inject/`: injects `spike`/`ramp`/`step`/`silence` faults into real
+  clean series **in memory** (between `QueryRange` and detection), records ground truth,
+  and scores detector precision/recall/F1 + recall-by-type + detection latency against it.
+  Deterministic by seed. Extends the replay JSON with `injection` + `scoring` blocks.
+- `--inject=<profile.yaml>` CLI flag; `--inject=none` runs the FP upper-bound baseline over
+  a clean window (all detections scored as FP). Inherits all replay invariants (no
+  Redis/AM/gRPC/ML; in-memory only). 98.3% coverage; `code-review` APPROVE-WITH-NITS.
+- **Not done**: the gate itself (Phase 5 — real recall/FP numbers) + Phase 6 (feed back into
+  Decision 8). Do not mark P0.1 done until numbers exist.
+
+**Fixed — non-finite sample values crash replay JSON (2026-07-03)**
+- `SamplesAt` now skips NaN/±Inf points. PromQL ratio rules (`usage / limit`) return `+Inf`
+  when a workload has no limit; that flowed into the anomaly `Score` and broke
+  `json.Marshal` for **any** replay touching a limitless workload (surfaced by the
+  `--inject=none` baseline run). Latent bug, not injection-specific.
+
+**Changed — vendor-neutral Prometheus datasource naming (2026-07-02)**
+- Controller config contract `datasources.victoriametrics` → `datasources.prometheus`
+  (struct + yaml + `config.yaml`), `grafana_vm_datasource_uid` →
+  `grafana_prometheus_datasource_uid`, enrichment `source: "vm"` → `"prometheus"`,
+  metric labels `"vm"`/`"vm_range"` → `"prometheus"`/`"prometheus_range"`, replay report
+  fields `VMQueries*` → `PromQueries*`, `readiness/vm.go` → `prometheus.go`
+  (`VMChecker`→`PromChecker`), `preflightVM`→`preflightProm`. Prometheus is the open
+  standard (PromQL); the backend (VM/Thanos/Cortex/Mimir) is an environment choice.
+  Left: `VMServiceScrape` (real vm-operator CRD) and the integration-test VM image.
+  (Committed 044b213 without a CHANGELOG entry — recorded here retroactively.)
+
+### deps / supply chain
+
+**Changed — otel-helper Go module moved to org (PH.13) (2026-07-02)**
+- Dependency moved off the personal account: `github.com/karlipegomes/staffops-otel-libs/go`
+  (pseudo-version) → `github.com/staffops/staffops-otel-libs/go` at tagged release **v0.1.0**.
+  (Companion commit + tag `go/v0.1.0` pushed to the `StaffOps/staffops-otel-libs` repo.)
+- Controller/worker imports + `go.mod` updated; build + full test suite green on Go 1.25.
+- The module is now a **public org module**, so all private-module auth was removed:
+  Dockerfile (GOPRIVATE + `--mount=type=secret` git-credential dance + `apk add git`),
+  CI `test`/`sast`/`build`/`release` (GOPRIVATE env, "Configure git for private module"
+  steps, `github_token` build secret), `AGENTS.md`, and `scripts/start.sh` (SSH mount).
+- Closes the threat-model "personal-account single-point-of-compromise" finding.
+
+### infra / gitops
+
+**Changed — chart reconciliation + helmfile deploy (PH.16, PH.4) (2026-07-02)**
+- **Reconciled the duplicate chart**: the PH.15 chart built under
+  `staffops-anomaly-detection/helm-charts/` was in the wrong place — the canonical,
+  publishable chart lives in `06-STAFFOPS/helm-charts/charts/anomaly-detection`
+  (chart-releaser → `staffops.github.io/helm-charts`). **Removed the duplicate** from
+  this repo; the canonical chart is the single source of truth. What the duplicate
+  had extra was ported into the canonical chart (below).
+- **Ported into the canonical chart**:
+  - **PH.4** Redis AUTH — `templates/externalsecret-redis.yaml` (ESO
+    `external-secrets.io/v1`, ClusterSecretStore `aws`, sync-wave -1), `redis.auth.*`
+    values, helpers `redis.authSecretName`/`authEnabled`; `redis-server --requirepass`,
+    `REDIS_PASSWORD` env into controller/worker, `password: ${REDIS_PASSWORD}` in config.
+  - **PH.18** `templates/pdb.yaml` (controller `minAvailable:1` guarded to replicaCount>1;
+    worker `maxUnavailable:1` — drain-safe at any replica count).
+  - **PH.21** `templates/networkpolicy.yaml` (controller/redis/worker/ML ingress rules).
+  - **VMRule → PrometheusRule** (`monitoring.coreos.com/v1`) — more portable; vm-operator
+    auto-converts. Values key `vmRule` → `prometheusRule`.
+- **Deployment via helmfile** (BDC pattern, mirrors `aigent-squad`), NOT ArgoCD
+  ApplicationSet: added the `anomaly-detection` release + `anomaly-detection/values.yaml.gotmpl`
+  in `02-KUBE/00-CONFIG/k8s-setup/staffops/` targeting the canonical chart, namespace
+  `monitoring`, `controller.dryRun=true` for first bring-up. `helmfile template` renders
+  the full stack (4 Deployment, ExternalSecret, PVC, 2 PrometheusRule, 4 NetworkPolicy,
+  2 PDB, VMServiceScrape, dashboard, RBAC).
+- Reviewed by `code-review` (APPROVE-WITH-NITS): added controller NetworkPolicy,
+  clarified the ignored worker-PDB value, silenced the redis-cli auth warning.
+
+**Added — Helm chart `helm-charts/anomaly-detection/` (PH.15) (2026-07-02)**
+> ⚠️ Superseded by the reconciliation above — this duplicate chart was removed the
+> same day; see the canonical chart in `06-STAFFOPS/helm-charts/`.
+- Org-neutral: **no corp cost tags** (CostCenter/CostProject/CostScope) baked in —
+  those are injected at deploy time by the corp overlay/ApplicationSet. Pod labels
+  are `app.kubernetes.io/name`+`version` + runtime `Environment` only.
+- ESO wired to the real `core` cluster: `ClusterSecretStore` **`aws`** (verified),
+  `external-secrets.io/v1` API, region us-east-1. AWS secret
+  `staffops/anomaly-detection/redis-password` created to homologate. Redis PVC 10Gi.
+- Full chart (18 files) replacing the raw `controller/deploy/*.yaml`: templates for
+  controller, worker, redis (+PVC), ML service, RBAC, ConfigMap, VMRule,
+  VMServiceScrape, PDB, NetworkPolicy, ExternalSecret; per-env overlays
+  `values-{dev,hml,prd}.yaml`. `helm lint --strict` clean; renders valid YAML in all envs.
+- Folds in the pod-template hard-fails as chart-native: **PH.1** (securityContext
+  runAsNonRoot/readOnlyRootFilesystem+emptyDir/drop-ALL/runAsUser 65534 on all 4 pods),
+  **PH.6** (CostCenter/Environment/name/version labels), **PH.7** (preStop + grace 30s),
+  **PH.8** (ML manifest, previously docker-compose only), **PH.14** (datasource URLs
+  templated from values, not a hardcoded ConfigMap), **PH.20** (memory-only limits on
+  controller/worker), **PH.21** (NetworkPolicy: redis←controller+worker, worker←controller,
+  ML←controller), **PH.23** (worker has no events RBAC).
+- Redis AUTH (**PH.4**) via ExternalSecret (AWS Secrets Manager) + `password: ${REDIS_PASSWORD}`
+  consumed through the Go config's env expansion; sync-wave orders ESO→redis→RBAC→workloads.
+- Worker PDB uses `maxUnavailable: 1` and controller PDB is suppressed at replicas=1 —
+  avoids node-drain deadlock in DEV.
+- Delegated to the `gitops` specialist; independently reviewed by `code-review`
+  (caught + fixed a Redis-AUTH config-key mismatch and a single-replica PDB deadlock).
+- Not included: ArgoCD ApplicationSet (**PH.16**, next). ML/base images still on
+  upstream tags until **PH.3** (golden apko).
+
+### test / ci
+
+**Changed — gofmt across controller + `lint-go` armed (2026-07-02)**
+- `gofmt -w` applied to 18 files (comment-alignment / spacing only — no semantic
+  change; `go build`/`vet`/`test` all green after). `gofmt -l` now clean.
+- CI `lint-go` gate armed (dropped `continue-on-error`): gofmt + go vet now block.
+
+**Changed — Go 1.25 migration + CVE remediation (2026-07-01)**
+- Migrated the controller toolchain **Go 1.22 → 1.25** to remediate 11 dependency
+  CVEs whose fixes require a newer Go. Cleared (Trivy `go.mod` scan: 0 CRITICAL/HIGH):
+  - `google.golang.org/grpc` 1.67.1 → **1.81.1** — CVE-2026-33186 (**CRITICAL**, authz
+    bypass via missing leading slash; controller does not use `grpc/authz`, but the
+    versioned image must not ship a CRITICAL).
+  - `go.opentelemetry.io/otel/*` 1.31 → **1.44** (log family 0.7 → 0.20) — CVE-2026-24051,
+    CVE-2026-39883 (PATH-hijack code exec).
+  - `golang.org/x/net` 0.30 → **0.55** — 6 CVEs (HTML parse DoS, http2, idna).
+  - `golang.org/x/oauth2` 0.22 → **0.36** — CVE-2025-22868 (jws memory exhaustion).
+  - Transitive refresh: `protobuf` 1.35 → 1.36.11, `genproto`, `grpc-gateway` 2.22 → 2.29.
+- `controller/Dockerfile` builder `golang:1.22-alpine` → `golang:1.25-alpine`;
+  CI `go-version` `1.22` → `1.25` (`test.yml` ×2, `sast.yml`).
+- Full build + test suite green on Go 1.25; controller coverage preserved (90.4%).
+- Fixed the pre-existing `go vet` context leak in `internal/redis/client_test.go`
+  (`ctx(t)` registers `cancel` via `t.Cleanup`) — clears a CI rollout-debt item.
+- **Gates**: `dep_scan` (Trivy fs) armed (blocking). Image-scan gates
+  (`build.yml`/`release.yml`) remain report-only until PH.3 (golden apko base) — the ML
+  `python:3.11-slim` debian `perl-base` CVEs are `fix_deferred`/`affected` upstream.
+
+**Added — Go controller coverage to ≥90% + gate armed (PH.9) (2026-06-30)**
+- Controller coverage **89.5% → 90.4%** (`./internal/...`).
+- `internal/ml/client_error_test.go`: enabled `New`/`Close` (lazy dial), RPC
+  error propagation (Health/Forecast/DetectMultivariate), disabled no-op guards
+  (`internal/ml` 81% → 94%).
+- `internal/baseline/absence_recorder_test.go`: `SetAbsenceRecorder` wiring +
+  `noopRecorder` zero-value path (`internal/baseline` → 97%).
+- `internal/readiness/ml_test.go`: enabled `MLChecker` branch (Health probe
+  against an unreachable endpoint) (`internal/readiness` 91.9% → 96.8%).
+- CI `test-go` coverage gate **armed** — hard fail below 90% (was report-only).
+
+**Added — ML service test suite (PH.10) (2026-06-30)**
+- ML service coverage **0% → 98.44%** (gate ≥90%). `ml/tests/` was empty.
+- `tests/test_forecaster.py`: Prophet mocked (slow + non-deterministic) — asserts
+  horizon slicing, breach decision, time-to-breach, confidence clamp, fit frame shape.
+- `tests/test_multivariate.py`: Isolation Forest replaced with a controllable fake —
+  canonical feature padding, warm-up threshold, periodic refit, contributor selection.
+- `tests/test_server.py`: gRPC servicer via a fake `ServicerContext` + injected stubs —
+  Forecast/DetectMultivariate happy + error paths (INTERNAL + empty response), Health,
+  and `serve()` bootstrap.
+- `pytest-cov==5.0.0` added; `--cov=server --cov-fail-under=90` in `pyproject.toml`,
+  `server/generated/*` omitted.
+- Fixed committed `server/generated/ml_pb2_grpc.py` to a package-relative import
+  (`from server.generated import ml_pb2`) — the stub was only importable inside the
+  Docker build (via a Dockerfile `sed`), breaking local/CI import. The `sed` is now a no-op.
+- CI `test-ml` coverage gate armed (dropped the "empty tests → exit 5" allowance).
+
+### detection
+
+**Added — FDR correction (P0.4) (2026-06-22)**
+- Benjamini-Hochberg False Discovery Rate control applied per detection cycle
+- Filters adaptive z-score anomalies to cut ~1000+ FP/day from multiple comparisons
+- Only adaptive results filtered; static/pattern pass through unchanged
+- Config: `controller.fdr_target` (default 0.05 = 5% expected false discoveries)
+- Metrics: `staffops_ad_detection_fdr_accepted_total`, `staffops_ad_detection_fdr_rejected_total`
+- 20 unit tests, 100% coverage on `internal/detection/fdr.go`
+
+### baseline
+
+**Added — Baseline robustness trio (P2.8, P2.9, P2.10) (2026-06-22)**
+- **P2.8 Workload-identity keying**: normalize labels before hashing baseline key — extract
+  workload from pod name via regex, drop configurable ephemeral labels. Same workload pods
+  now share a baseline across restarts. Config: `baseline.ephemeral_labels`.
+- **P2.9 Anti-poisoning gate**: compute z-score BEFORE updating baseline. Skip update when
+  z > `poison_threshold` (default 4.0). Prevents slow-ramp attacks from dragging baseline.
+  Zero-stddev handling: 1% of EWMA as floor. Metric: `staffops_ad_worker_baseline_poison_rejected_total`.
+- **P2.10 Absence-of-signal detection**: new `internal/absence/` package. Tracks series liveness
+  via `AbsenceRecorder` interface on every baseline evaluation. Background checker fires alerts
+  when previously-active series go silent for > threshold (default 5m). Suppresses known-idle
+  namespaces via pattern config. Startup grace period prevents false alerts on controller restart.
+  11 unit tests.
+
+### docs / specs
+
+**Added — Full spec coverage (2026-06-22)**
+- 21 specs covering every significant ROADMAP item (retroactive for completed + new for planned)
+- `specs/README.md` index with status tracking and project direction summary
+- MkDocs restructured to `docs/site/` pattern (aligned with staffops-aigent-squad)
+- All specs vendor-agnostic ("Prometheus-compatible TSDB" not VictoriaMetrics)
+
 ### ci / build
 
 **Added — GitHub Actions CI + hardened images (2026-06-21)**

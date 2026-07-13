@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]          # deploy to prod ONLY from main
     paths:
-      - "docs/**"
+      - "docs/site/**"
       - "mkdocs.yml"
   pull_request:
     branches: [main, dev]     # validate on PRs (no deploy)
     paths:
-      - "docs/**"
+      - "docs/site/**"
       - "mkdocs.yml"
   workflow_dispatch:
 

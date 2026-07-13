@@ -24,7 +24,7 @@ func NewLinkBuilder(cfg config.Links) *LinkBuilder {
 }
 
 // Grafana returns a Grafana Explore URL focused on the workload, ±15min
-// around the anomaly timestamp, querying VictoriaMetrics via the configured
+// around the anomaly timestamp, querying a Prometheus-compatible TSDB via the configured
 // datasource UID.
 func (b *LinkBuilder) Grafana(a detection.Anomaly) string {
 	if b.cfg.GrafanaBaseURL == "" {
@@ -37,7 +37,7 @@ func (b *LinkBuilder) Grafana(a detection.Anomaly) string {
 	// Grafana Explore URL format (left-pane JSON-encoded).
 	pane := fmt.Sprintf(
 		`{"datasource":"%s","queries":[{"refId":"A","expr":%q,"datasource":{"type":"prometheus","uid":"%s"}}],"range":{"from":"%d","to":"%d"}}`,
-		b.cfg.GrafanaVMDatasourceUID, expr, b.cfg.GrafanaVMDatasourceUID, from, to,
+		b.cfg.GrafanaPromDatasourceUID, expr, b.cfg.GrafanaPromDatasourceUID, from, to,
 	)
 	q := url.Values{}
 	q.Set("panes", `{"a":`+pane+`}`)

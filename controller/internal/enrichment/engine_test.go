@@ -63,7 +63,7 @@ func podEnrichmentCfg() config.Enrichment {
 		QueryTimeout:  time.Second,
 		CacheTTL:      time.Minute,
 		PodBundle: []config.EnrichmentQuery{
-			{Name: "cpu_ratio", Source: "vm", Query: "cpu{pod=\"$pod\"}"},
+			{Name: "cpu_ratio", Source: "prometheus", Query: "cpu{pod=\"$pod\"}"},
 		},
 	}
 }
@@ -212,7 +212,7 @@ func TestEngine_Run_ServiceBundle(t *testing.T) {
 		QueryTimeout:  time.Second,
 		CacheTTL:      time.Minute,
 		ServiceBundle: []config.EnrichmentQuery{
-			{Name: "error_rate", Source: "vm", Query: "error_rate{service=\"$service_name\"}"},
+			{Name: "error_rate", Source: "prometheus", Query: "error_rate{service=\"$service_name\"}"},
 		},
 	}
 	vm := &fakeVMQuerier{samples: []ingestion.Sample{{Value: 0.05}}}

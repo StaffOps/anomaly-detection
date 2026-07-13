@@ -2,7 +2,7 @@
 
 ## Overview
 
-The project uses Go 1.22 (controller/workers) and Python 3.11 (ML service). **All builds run via Docker** — no local language SDKs required.
+The project uses Go 1.25 (controller/workers) and Python 3.11 (ML service). **All builds run via Docker** — no local language SDKs required.
 
 ## Prerequisites
 

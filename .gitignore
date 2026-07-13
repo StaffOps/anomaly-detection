@@ -40,8 +40,8 @@ Thumbs.db
 # Docker volumes
 redis-data/
 
-# MkDocs build output
-site/
+# MkDocs build output (root site_dir only — NOT the docs/site source)
+/site/
 
 # Local env (12-factor — NEVER commit)
 .env

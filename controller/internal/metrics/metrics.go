@@ -182,6 +182,16 @@ var (
 		Help: "Anomaly groups produced by the correlator",
 	}, []string{"severity"})
 
+	// FDR (Benjamini-Hochberg) metrics
+	FDRAccepted = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staffops_ad_detection_fdr_accepted_total",
+		Help: "Adaptive anomalies accepted after FDR correction",
+	})
+	FDRRejected = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staffops_ad_detection_fdr_rejected_total",
+		Help: "Adaptive anomalies rejected by FDR correction",
+	})
+
 	WorkloadPatterns = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "staffops_ad_detection_workload_patterns_total",
 		Help: "Workload-level patterns detected (≥N replicas of same workload anomalous)",
@@ -291,6 +301,11 @@ var (
 		Help: "Baseline updates written to Redis",
 	})
 
+	WorkerBaselinePoisonRejected = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "staffops_ad_worker_baseline_poison_rejected_total",
+		Help: "Baseline updates skipped due to anti-poisoning gate (sample too anomalous)",
+	})
+
 	WorkerBaselineSeries = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "staffops_ad_worker_baseline_series_tracked",
 		Help: "Number of series with active baselines",
@@ -342,6 +357,7 @@ func MustRegisterController(reg prometheus.Registerer) {
 		AnomalyDetected, AnomalyCorrelated,
 		AnomalyByWorkload,
 		WorkloadPatterns, PodAlertsSuppressed,
+		FDRAccepted, FDRRejected,
 		AlertsFired, AlertsDeduplicated, AlertsDispatchErrors,
 		MLCalls, MLCallDuration,
 		EnrichmentRuns, EnrichmentDuration,
@@ -356,7 +372,7 @@ func MustRegisterWorker(reg prometheus.Registerer) {
 	reg.MustRegister(
 		WorkerJobsProcessed, WorkerJobDuration,
 		WorkerQueryDuration, WorkerQueryErrors,
-		WorkerDetections, WorkerBaselineUpdates, WorkerBaselineSeries,
+		WorkerDetections, WorkerBaselineUpdates, WorkerBaselinePoisonRejected, WorkerBaselineSeries,
 		WorkerEventsReceived,
 		WorkerRedisOps, WorkerRedisDuration, WorkerRedisErrors,
 		BuildInfo,

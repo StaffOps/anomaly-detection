@@ -7,7 +7,7 @@ ele pega) e **FP upper-bound** (quantos alarmes falsos dispara) — **sem precis
 incidentes históricos rotulados**.
 
 A ideia: pegar janelas históricas **limpas** (sem incidente conhecido) de
-VictoriaMetrics/Loki, **injetar falhas sintéticas** de forma controlada (a falha é o
+Prometheus-compatible TSDB/Loki, **injetar falhas sintéticas** de forma controlada (a falha é o
 ground truth, porque nós sabemos exatamente onde e quando a injetamos), rodar o
 detector via replay sobre os dados perturbados, e comparar o que ele detectou contra a
 verdade injetada.

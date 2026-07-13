@@ -13,7 +13,7 @@ que existe um produto na camada de **originação causal de incidente**
 
 Este experimento testa a hipótese pelo **caminho da invalidação**: pega cada pedaço de
 valor que o sistema atual entrega e **tenta reproduzi-lo** em duas ferramentas
-incumbentes — `predict_linear`/recording rules no VictoriaMetrics (que já temos) e um
+incumbentes — `predict_linear`/recording rules no Prometheus-compatible TSDB (que já temos) e um
 playbook do Robusta. 
 
 A lógica é binária e desconfortável de propósito:

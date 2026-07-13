@@ -28,7 +28,7 @@ feat(detection): add disk I/O adaptive metric
 fix(correlation): use service_name when pod is empty
 docs(replay): add CLI usage examples
 test(replay): add golden file test for markdown report
-chore(deps): bump golang from 1.22 to 1.23
+chore(deps): bump golang from 1.24 to 1.25
 ```
 
 ## Code Style
@@ -68,7 +68,7 @@ chore(deps): bump golang from 1.22 to 1.23
 2. Regenerate Go stubs:
    ```bash
    docker run --rm -v "$(pwd)/controller":/src -w /src \
-     golang:1.22-alpine sh -c \
+     golang:1.25-alpine sh -c \
      "go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
       go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest && \
       protoc --go_out=. --go-grpc_out=. proto/*.proto"

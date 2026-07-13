@@ -49,31 +49,20 @@ Backing: Redis (baselines, dedup), VictoriaMetrics (PromQL), Loki (LogQL)
 **No local Go or Python.** Every operation runs in a container.
 
 ```bash
-# All Go commands pull the PRIVATE module staffops-otel-libs, so the container needs
-# git + an HTTPS token. Locally use `gh auth token` (or your DOCS_DEPLOY_TOKEN); CI uses
-# the DOCS_DEPLOY_TOKEN secret — same pattern as the Dockerfile build secret (github_token).
-TOKEN=$(gh auth token)
+# staffops-otel-libs is a public org module — Go pulls it via the default proxy,
+# no token / GOPRIVATE / git config needed.
 
 # Go — build both binaries
-docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
-  apk add --no-cache git >/dev/null
-  export GOPRIVATE=github.com/karlipegomes/*
-  git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+# staffops-otel-libs is a public org module now — no token / GOPRIVATE needed.
+docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c '
   CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ &&
   CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/'
 
 # Go — tests
-docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
-  apk add --no-cache git >/dev/null
-  export GOPRIVATE=github.com/karlipegomes/*
-  git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
-  go test ./...'
+docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine go test ./...
 
-# Go — tests with coverage (≥90% gate is PH.9 — in progress; CI report-only for now)
-docker run --rm -v "$(pwd)/controller":/src -w /src -e TOKEN="$TOKEN" golang:1.22-alpine sh -c '
-  apk add --no-cache git >/dev/null
-  export GOPRIVATE=github.com/karlipegomes/*
-  git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+# Go — tests with coverage (≥90% gate is PH.9 — done; CI test-go enforces it)
+docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c '
   go test ./internal/... -coverprofile=cov.out && go tool cover -func=cov.out | tail -5'
 
 # Python ML — build image
@@ -370,9 +359,9 @@ Five workflows in `.github/workflows/` (org-standard layout, mirrors staffops-ai
   the org's Docker Hub account (same as staffops-aigent-squad). Needs the
   `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` secrets. Images:
   `<user>/staffops-anomaly-detection-{controller,worker,ml}`.
-- **Private module auth**: `DOCS_DEPLOY_TOKEN` secret, passed as the Docker build secret
-  `github_token` (HTTPS, `--mount=type=secret`) and as a git credential in test/lint jobs.
-  No SSH, no extra secret to provision.
+- **Go module `staffops-otel-libs`**: public org module
+  (`github.com/staffops/staffops-otel-libs/go`, tagged `v0.1.0`) — pulled via the
+  default Go proxy. No token, no GOPRIVATE, no SSH.
 - **Rollout = report-only gates**: `lint-*`, `dep_scan`, `gosec`, `bandit` run
   `continue-on-error`, and the Trivy image scan is `exit-code: 0`. They surface
   pre-existing debt (gofmt, `go vet`, grpc/otel/base-image CVEs) without blocking `main`.

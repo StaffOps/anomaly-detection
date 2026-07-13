@@ -17,22 +17,55 @@ type Report struct {
 	TopWorkloads []WorkloadCount `json:"top_workloads"`
 	Timeline     []TimelineEntry `json:"timeline"`
 	Anomalies    []AnomalyEntry  `json:"anomalies"`
+
+	// Injection and Scoring are populated only when --inject is used.
+	// They extend the replay JSON schema with ground truth and scoring blocks.
+	Injection *InjectionBlock `json:"injection,omitempty"`
+	Scoring   *ScoringBlock   `json:"scoring,omitempty"`
+}
+
+// InjectionBlock is the JSON-serializable injection metadata.
+type InjectionBlock struct {
+	Seed         int64              `json:"seed"`
+	GroundTruths []GroundTruthEntry `json:"ground_truths"`
+}
+
+// GroundTruthEntry is the JSON form of a ground truth record.
+type GroundTruthEntry struct {
+	Target    string  `json:"target"`
+	Type      string  `json:"type"`
+	Start     string  `json:"start"`
+	End       string  `json:"end"`
+	Magnitude float64 `json:"magnitude"`
+}
+
+// ScoringBlock is the JSON-serializable scoring result.
+type ScoringBlock struct {
+	Precision        float64            `json:"precision"`
+	Recall           float64            `json:"recall"`
+	F1               float64            `json:"f1"`
+	TP               int                `json:"tp"`
+	FP               int                `json:"fp"`
+	FN               int                `json:"fn"`
+	RecallByType     map[string]float64 `json:"recall_by_type"`
+	DetectionLatency map[string]float64 `json:"detection_latency_seconds"`
+	FPCaveat         string             `json:"fp_caveat"`
 }
 
 // Metadata holds replay run context.
 type Metadata struct {
-	SchemaVersion      string        `json:"schema_version"`
-	ControllerVersion  string        `json:"controller_version"`
-	RanAt              time.Time     `json:"ran_at"`
-	WindowStart        time.Time     `json:"window_start"`
-	WindowEnd          time.Time     `json:"window_end"`
-	WarmupStart        time.Time     `json:"warmup_start"`
-	WarmupEnd          time.Time     `json:"warmup_end"`
-	WarmupFraction     float64       `json:"warmup_fraction"`
-	TickIntervalSec    int           `json:"tick_interval_seconds"`
-	ResultStatus       string        `json:"result_status"`
-	ConfigSummary      ConfigSummary `json:"config_summary"`
-	ExecutionMetrics   ExecutionMetrics `json:"execution_metrics"`
+	SchemaVersion     string           `json:"schema_version"`
+	ControllerVersion string           `json:"controller_version"`
+	RanAt             time.Time        `json:"ran_at"`
+	WindowStart       time.Time        `json:"window_start"`
+	WindowEnd         time.Time        `json:"window_end"`
+	WarmupStart       time.Time        `json:"warmup_start"`
+	WarmupEnd         time.Time        `json:"warmup_end"`
+	WarmupFraction    float64          `json:"warmup_fraction"`
+	TickIntervalSec   int              `json:"tick_interval_seconds"`
+	ResultStatus      string           `json:"result_status"`
+	ConfigSummary     ConfigSummary    `json:"config_summary"`
+	ExecutionMetrics  ExecutionMetrics `json:"execution_metrics"`
 }
 
 // ConfigSummary counts detection rules in the config.
@@ -44,13 +77,13 @@ type ConfigSummary struct {
 
 // Totals aggregates anomaly counts.
 type Totals struct {
-	Anomalies      int            `json:"anomalies"`
-	BySeverity     map[string]int `json:"by_severity"`
-	BySignal       map[string]int `json:"by_signal"`
-	ByDetector     map[string]int `json:"by_detector"`
-	ByKind         map[string]int `json:"by_kind"`
-	WarmupSkipped  int            `json:"warmup_skipped"`
-	QueryErrors    int            `json:"query_errors"`
+	Anomalies     int            `json:"anomalies"`
+	BySeverity    map[string]int `json:"by_severity"`
+	BySignal      map[string]int `json:"by_signal"`
+	ByDetector    map[string]int `json:"by_detector"`
+	ByKind        map[string]int `json:"by_kind"`
+	WarmupSkipped int            `json:"warmup_skipped"`
+	QueryErrors   int            `json:"query_errors"`
 }
 
 // WorkloadCount is a top-workload entry.
@@ -69,17 +102,18 @@ type TimelineEntry struct {
 
 // AnomalyEntry is the JSON-serializable form of a detection.Anomaly.
 type AnomalyEntry struct {
-	Timestamp    time.Time `json:"timestamp"`
-	Namespace    string    `json:"namespace"`
-	Pod          string    `json:"pod,omitempty"`
-	Workload     string    `json:"workload,omitempty"`
-	Metric       string    `json:"metric"`
-	Severity     string    `json:"severity"`
-	Signal       string    `json:"signal"`
-	Detector     string    `json:"detector"`
-	Score        float64   `json:"score"`
-	Current      float64   `json:"current"`
-	BaselineMean float64   `json:"baseline_mean"`
+	Timestamp    time.Time         `json:"timestamp"`
+	Namespace    string            `json:"namespace"`
+	Pod          string            `json:"pod,omitempty"`
+	Workload     string            `json:"workload,omitempty"`
+	Metric       string            `json:"metric"`
+	Severity     string            `json:"severity"`
+	Signal       string            `json:"signal"`
+	Detector     string            `json:"detector"`
+	Score        float64           `json:"score"`
+	Current      float64           `json:"current"`
+	BaselineMean float64           `json:"baseline_mean"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 
 // WriteJSON serializes the report as indented JSON to w.
@@ -239,6 +273,7 @@ func toAnomalyEntry(a detection.Anomaly) AnomalyEntry {
 		Score:        a.Score,
 		Current:      a.Value,
 		BaselineMean: a.Mean,
+		Labels:       a.Labels,
 	}
 }
 

@@ -12,7 +12,7 @@ redis:
   password: ${REDIS_PASSWORD:}
 
 datasources:
-  victoriametrics:
+  prometheus:
     url: ${VM_URL}
     timeout: ${VM_TIMEOUT:30s}
   loki:
@@ -30,6 +30,7 @@ controller:
   job_interval: 60s
   correlation_window: 2m
   cooldown: 5m
+  fdr_target: 0.05  # Benjamini-Hochberg FDR control (0.05 = 5% expected false discoveries)
   lease_name: anomaly-controller-leader
   lease_namespace: ${CONTROLLER_LEASE_NAMESPACE:monitoring}
   metrics_port: 8080
@@ -59,6 +60,7 @@ baseline:
   window_size: 60
   ewma_alpha: 0.3
   zscore_threshold: 3.0
+  poison_threshold: 4.0  # Skip baseline update when z > this (anti-poisoning). 0 = disabled.
   warm_up_samples: 60
   seasonal_min_days: 7
 
@@ -113,6 +115,8 @@ detection:
   # These learn baseline per series and alert on deviations.
   adaptive_metrics:
     # RED metrics from spanmetrics (30+ services)
+    # Note: spanmetrics lack k8s namespace — only service_name available.
+    # namespace shows as "unknown" in dashboards for these.
     - name: error_rate_by_service
       query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[1m])) by (service_name)
       group_by: [service_name]
@@ -230,6 +234,6 @@ links:
   tempo_base_url: ${TEMPO_BASE_URL:}
   loki_base_url: ${LOKI_BASE_URL:}
   runbook_base_url: ${RUNBOOK_BASE_URL:}
-  grafana_vm_datasource_uid: ${GRAFANA_VM_DATASOURCE_UID:}
+  grafana_prometheus_datasource_uid: ${GRAFANA_PROMETHEUS_DATASOURCE_UID:}
   grafana_tempo_datasource_uid: ${GRAFANA_TEMPO_DATASOURCE_UID:}
   grafana_loki_datasource_uid: ${GRAFANA_LOKI_DATASOURCE_UID:}

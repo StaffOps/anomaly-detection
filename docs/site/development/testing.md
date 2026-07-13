@@ -4,16 +4,16 @@
 
 ```bash
 # Run all tests
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.22-alpine go test ./...
+docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine go test ./...
 
 # Verbose output
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.22-alpine go test -v ./...
+docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine go test -v ./...
 
 # Specific package
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.22-alpine go test -v ./internal/replay/...
+docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine go test -v ./internal/replay/...
 
 # With coverage
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.22-alpine sh -c \
+docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c \
   "go test ./... -coverprofile=cov.out -covermode=atomic && go tool cover -func=cov.out | tail -1"
 ```
 
@@ -75,7 +75,7 @@ Integration tests require the full stack running and use build tag `integration`
 ```bash
 # Run integration tests (requires stack up)
 docker run --rm --network=host \
-  -v "$(pwd)/controller":/src -w /src golang:1.22-alpine \
+  -v "$(pwd)/controller":/src -w /src golang:1.25-alpine \
   go test -tags=integration ./internal/replay/...
 ```
 

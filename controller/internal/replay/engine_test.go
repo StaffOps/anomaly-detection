@@ -10,15 +10,15 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 )
 
-// emptyRangeResponse is a valid but empty VictoriaMetrics/Loki range response.
+// emptyRangeResponse is a valid but empty Prometheus-compatible/Loki range response.
 const emptyRangeResponse = `{"status":"success","data":{"resultType":"matrix","result":[]}}`
 
 func newReplayConfig(vmURL, lokiURL string) *config.Config {
 	return &config.Config{
 		Cluster: "test",
 		Datasources: config.Datasources{
-			VictoriaMetrics: config.DatasourceEndpoint{URL: vmURL, Timeout: time.Second},
-			Loki:            config.DatasourceEndpoint{URL: lokiURL, Timeout: time.Second},
+			Prometheus: config.DatasourceEndpoint{URL: vmURL, Timeout: time.Second},
+			Loki:       config.DatasourceEndpoint{URL: lokiURL, Timeout: time.Second},
 		},
 		Controller: config.Controller{
 			JobInterval: 30 * time.Minute, // large step = few ticks in test
@@ -29,9 +29,9 @@ func newReplayConfig(vmURL, lokiURL string) *config.Config {
 			WarmUpSamples:   1, // minimal warmup for tests
 		},
 		Detection: config.Detection{
-			StaticRules:   []config.StaticRule{},
+			StaticRules:     []config.StaticRule{},
 			AdaptiveMetrics: []config.AdaptiveMetric{},
-			LogPatterns:   []config.LogPattern{},
+			LogPatterns:     []config.LogPattern{},
 		},
 	}
 }
@@ -57,7 +57,7 @@ func TestRun_EmptyQueries_ReturnsReport(t *testing.T) {
 	rcfg.MaxAnomalies = 10
 	rcfg.OutputPath = "" // no file output
 
-	report, err := Run(context.Background(), rcfg, cfg)
+	report, err := Run(context.Background(), rcfg, cfg, nil)
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestRun_VMError_GracefulSkip(t *testing.T) {
 	rcfg.To = now.Add(-1 * time.Hour)
 
 	// Run should not return an error even when VM/Loki are failing
-	report, err := Run(context.Background(), rcfg, cfg)
+	report, err := Run(context.Background(), rcfg, cfg, nil)
 	if err != nil {
 		t.Fatalf("Run should handle VM errors gracefully: %v", err)
 	}

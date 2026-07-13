@@ -215,10 +215,10 @@ func identityOf(ca correlation.CorrelatedAlert, rep detection.Anomaly) string {
 // cardinality explosion if the metric ever joins on this label.
 //
 // Resolution order:
-//   1. KindWorkload → ca.Workload (already bounded by correlator)
-//   2. KindPod with pod label → correlation.ExtractWorkload(pod)
-//   3. service_name → as-is (bounded by service count)
-//   4. ca.Workload → last resort (may be a pod name in current correlator)
+//  1. KindWorkload → ca.Workload (already bounded by correlator)
+//  2. KindPod with pod label → correlation.ExtractWorkload(pod)
+//  3. service_name → as-is (bounded by service count)
+//  4. ca.Workload → last resort (may be a pod name in current correlator)
 //
 // The full pod identity is preserved separately in the `pod` annotation
 // and the `summary` text — this only affects the indexed AM label.

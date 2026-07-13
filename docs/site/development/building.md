@@ -4,7 +4,7 @@
 
 ```bash
 # Build both binaries
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.22-alpine sh -c \
+docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c \
   "CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ && \
    CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/"
 ```
@@ -39,7 +39,7 @@ docker compose -f scripts/docker-compose.yaml up --build -d
 ### Controller/Worker Dockerfile
 
 ```dockerfile
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

@@ -4,7 +4,7 @@
 
 O controller de anomaly-detection passa a consumir eventos do **Falco** (runtime
 security via eBPF/syscalls) como uma **nova fonte de sinal**, ao lado das três já
-existentes: métricas (VictoriaMetrics), logs (Loki) e eventos do K8s. Hoje o
+existentes: métricas (Prometheus-compatible TSDB), logs (Loki) e eventos do K8s. Hoje o
 sistema enxerga *saturação e erro* (CPU, memória, latência, error rate, restarts).
 Falco adiciona uma dimensão ortogonal: *comportamento suspeito em runtime* — shell
 aberto em container, escrita em path sensível, escalação de privilégio, conexão de

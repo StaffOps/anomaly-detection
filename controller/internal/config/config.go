@@ -33,9 +33,9 @@ type Redis struct {
 }
 
 type Datasources struct {
-	VictoriaMetrics DatasourceEndpoint `yaml:"victoriametrics"`
-	Loki            DatasourceEndpoint `yaml:"loki"`
-	Alertmanager    DatasourceEndpoint `yaml:"alertmanager"`
+	Prometheus   DatasourceEndpoint `yaml:"prometheus"`
+	Loki         DatasourceEndpoint `yaml:"loki"`
+	Alertmanager DatasourceEndpoint `yaml:"alertmanager"`
 }
 
 type DatasourceEndpoint struct {
@@ -50,15 +50,16 @@ type ML struct {
 }
 
 type Controller struct {
-	JobInterval               time.Duration `yaml:"job_interval"`
-	CorrelationWindow         time.Duration `yaml:"correlation_window"`
-	Cooldown                  time.Duration `yaml:"cooldown"`
-	LeaseName                 string        `yaml:"lease_name"`
-	LeaseNamespace            string        `yaml:"lease_namespace"`
-	MetricsPort               int           `yaml:"metrics_port"`
-	WorkerEndpoint            string        `yaml:"worker_endpoint"`
-	WorkloadPatternMinPods    int           `yaml:"workload_pattern_min_pods"`
-	LeaderElection            LeaderElection `yaml:"leader_election"`
+	JobInterval            time.Duration  `yaml:"job_interval"`
+	CorrelationWindow      time.Duration  `yaml:"correlation_window"`
+	Cooldown               time.Duration  `yaml:"cooldown"`
+	FDRTarget              float64        `yaml:"fdr_target"`
+	LeaseName              string         `yaml:"lease_name"`
+	LeaseNamespace         string         `yaml:"lease_namespace"`
+	MetricsPort            int            `yaml:"metrics_port"`
+	WorkerEndpoint         string         `yaml:"worker_endpoint"`
+	WorkloadPatternMinPods int            `yaml:"workload_pattern_min_pods"`
+	LeaderElection         LeaderElection `yaml:"leader_election"`
 }
 
 // LeaderElection controls K8s Lease-based leader election for HA.
@@ -74,10 +75,10 @@ type Controller struct {
 // gives a ~17s worst-case failover window.
 type LeaderElection struct {
 	Enabled       bool          `yaml:"enabled"`
-	Identity      string        `yaml:"identity"`        // defaults to POD_NAME or hostname
-	LeaseDuration time.Duration `yaml:"lease_duration"`  // default 15s
-	RenewDeadline time.Duration `yaml:"renew_deadline"`  // default 10s
-	RetryPeriod   time.Duration `yaml:"retry_period"`    // default 2s
+	Identity      string        `yaml:"identity"`       // defaults to POD_NAME or hostname
+	LeaseDuration time.Duration `yaml:"lease_duration"` // default 15s
+	RenewDeadline time.Duration `yaml:"renew_deadline"` // default 10s
+	RetryPeriod   time.Duration `yaml:"retry_period"`   // default 2s
 }
 
 type Worker struct {
@@ -87,11 +88,13 @@ type Worker struct {
 }
 
 type Baseline struct {
-	WindowSize     int     `yaml:"window_size"`
-	EWMAAlpha      float64 `yaml:"ewma_alpha"`
-	ZScoreThreshold float64 `yaml:"zscore_threshold"`
-	WarmUpSamples  int     `yaml:"warm_up_samples"`
-	SeasonalMinDays int    `yaml:"seasonal_min_days"`
+	WindowSize      int      `yaml:"window_size"`
+	EWMAAlpha       float64  `yaml:"ewma_alpha"`
+	ZScoreThreshold float64  `yaml:"zscore_threshold"`
+	PoisonThreshold float64  `yaml:"poison_threshold"`
+	WarmUpSamples   int      `yaml:"warm_up_samples"`
+	SeasonalMinDays int      `yaml:"seasonal_min_days"`
+	EphemeralLabels []string `yaml:"ephemeral_labels"`
 }
 
 type Detection struct {
@@ -141,20 +144,20 @@ type Suppression struct {
 // service-level) with template-substituted queries (e.g. $pod, $namespace,
 // $service_name) to build a diagnostic context attached to the alert payload.
 type Enrichment struct {
-	Enabled       bool                 `yaml:"enabled"`
-	CacheTTL      time.Duration        `yaml:"cache_ttl"`       // dedup repeat queries
-	QueryTimeout  time.Duration        `yaml:"query_timeout"`   // per-query timeout
-	MaxConcurrent int                  `yaml:"max_concurrent"`  // cap parallelism
-	PodBundle     []EnrichmentQuery    `yaml:"pod_bundle"`
-	ServiceBundle []EnrichmentQuery    `yaml:"service_bundle"`
+	Enabled       bool              `yaml:"enabled"`
+	CacheTTL      time.Duration     `yaml:"cache_ttl"`      // dedup repeat queries
+	QueryTimeout  time.Duration     `yaml:"query_timeout"`  // per-query timeout
+	MaxConcurrent int               `yaml:"max_concurrent"` // cap parallelism
+	PodBundle     []EnrichmentQuery `yaml:"pod_bundle"`
+	ServiceBundle []EnrichmentQuery `yaml:"service_bundle"`
 }
 
 // EnrichmentQuery is a single query in an enrichment bundle.
-// Source can be "vm" (VictoriaMetrics) or "loki" (Loki). Default: vm.
+// Source can be "prometheus" (Prometheus-compatible TSDB) or "loki" (Loki). Default: prometheus.
 type EnrichmentQuery struct {
 	Name   string `yaml:"name"`
 	Query  string `yaml:"query"`
-	Source string `yaml:"source"` // "vm" or "loki"
+	Source string `yaml:"source"` // "prometheus" or "loki"
 }
 
 // Links configures URL templates rendered into Alertmanager annotations
@@ -164,7 +167,7 @@ type Links struct {
 	TempoBaseURL              string `yaml:"tempo_base_url"`
 	LokiBaseURL               string `yaml:"loki_base_url"`
 	RunbookBaseURL            string `yaml:"runbook_base_url"`
-	GrafanaVMDatasourceUID    string `yaml:"grafana_vm_datasource_uid"`
+	GrafanaPromDatasourceUID  string `yaml:"grafana_prometheus_datasource_uid"`
 	GrafanaTempoDatasourceUID string `yaml:"grafana_tempo_datasource_uid"`
 	GrafanaLokiDatasourceUID  string `yaml:"grafana_loki_datasource_uid"`
 }
@@ -293,8 +296,8 @@ func setDefaults(cfg *Config) {
 	if cfg.Baseline.SeasonalMinDays == 0 {
 		cfg.Baseline.SeasonalMinDays = 7
 	}
-	if cfg.Datasources.VictoriaMetrics.Timeout == 0 {
-		cfg.Datasources.VictoriaMetrics.Timeout = 10 * time.Second
+	if cfg.Datasources.Prometheus.Timeout == 0 {
+		cfg.Datasources.Prometheus.Timeout = 10 * time.Second
 	}
 	if cfg.Datasources.Loki.Timeout == 0 {
 		cfg.Datasources.Loki.Timeout = 15 * time.Second

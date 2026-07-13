@@ -10,14 +10,18 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/detection"
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
+	"github.com/staffops/staffops-anomaly-detection/internal/replay/inject"
 )
 
 // Run executes the replay tick simulator over the configured window.
 // It loads metric/log data in 1h chunks, iterates ticks from warmup_end to To,
 // and runs detection on each tick's samples.
 //
+// When injector is non-nil, it perturbs series in-memory after query and before
+// detection. Scoring is computed at the end and attached to the Report.
+//
 // No side effects: no Redis, no Alertmanager, no gRPC workers, no ML calls.
-func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, error) {
+func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *inject.Injector) (*Report, error) {
 	mc := newMetricsCollector()
 
 	// Set up signal handling for graceful partial flush.
@@ -42,7 +46,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 	)
 
 	// Initialize pollers and in-memory baseline.
-	vm := ingestion.NewMetricsPoller(cfg.Datasources.VictoriaMetrics)
+	vm := ingestion.NewMetricsPoller(cfg.Datasources.Prometheus)
 	loki := ingestion.NewLogsPoller(cfg.Datasources.Loki)
 	store := NewInMemStore(cfg.Baseline)
 	engine := detection.NewEngine(cfg.Detection, store)
@@ -85,7 +89,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 			for _, am := range cfg.Detection.AdaptiveMetrics {
 				qStart := time.Now()
 				series, err := vm.QueryRange(ctx, am.Query, chunkStart, tick, step)
-				mc.recordVMQuery(time.Since(qStart))
+				mc.recordPromQuery(time.Since(qStart))
 				if err != nil {
 					slog.Warn("[REPLAY] vm query failed, skipping tick",
 						"tick", tick.Format(time.RFC3339), "metric", am.Name, "error", err)
@@ -93,6 +97,10 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 					mc.recordSkip()
 					skipTick = true
 					break
+				}
+				// Inject synthetic faults in-memory (no-op when injector is nil).
+				if injector != nil {
+					series = injector.Apply(am.Name, series)
 				}
 				metricSeries = append(metricSeries, series...)
 			}
@@ -119,7 +127,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config) (*Report, e
 		for _, rule := range cfg.Detection.StaticRules {
 			qStart := time.Now()
 			series, err := vm.QueryRange(ctx, rule.Query, chunkStart, tick, step)
-			mc.recordVMQuery(time.Since(qStart))
+			mc.recordPromQuery(time.Since(qStart))
 			if err != nil {
 				slog.Warn("[REPLAY] vm static query failed",
 					"tick", tick.Format(time.RFC3339), "rule", rule.Name, "error", err)
@@ -187,7 +195,52 @@ done:
 	}
 
 	report := rb.build(meta)
+	// Attach injection scoring when injector is active.
+	if injector != nil {
+		truths := injector.GroundTruths()
+		// Convert report anomalies to DetectedAnomaly for the scorer.
+		detected := make([]inject.DetectedAnomaly, len(report.Anomalies))
+		for i, ae := range report.Anomalies {
+			detected[i] = inject.DetectedAnomaly{
+				Metric:    ae.Metric,
+				Labels:    ae.Labels,
+				Timestamp: ae.Timestamp,
+			}
+		}
+		scoring := inject.Score(detected, truths, step)
+		injResult := inject.BuildInjectionResult(injector.Seed(), truths)
+
+		report.Injection = &InjectionBlock{
+			Seed:         injResult.Seed,
+			GroundTruths: convertGroundTruths(injResult.GroundTruths),
+		}
+		report.Scoring = &ScoringBlock{
+			Precision:        scoring.Precision,
+			Recall:           scoring.Recall,
+			F1:               scoring.F1,
+			TP:               scoring.TP,
+			FP:               scoring.FP,
+			FN:               scoring.FN,
+			RecallByType:     scoring.RecallByType,
+			DetectionLatency: scoring.DetectionLatency,
+			FPCaveat:         scoring.FPCaveat,
+		}
+	}
 	return report, nil
+}
+
+func convertGroundTruths(gts []inject.GroundTruthJSON) []GroundTruthEntry {
+	out := make([]GroundTruthEntry, len(gts))
+	for i, gt := range gts {
+		out[i] = GroundTruthEntry{
+			Target:    gt.Target,
+			Type:      gt.Type,
+			Start:     gt.Start,
+			End:       gt.End,
+			Magnitude: gt.Magnitude,
+		}
+	}
+	return out
 }
 
 func addAll(rb *reportBuilder, anomalies []detection.Anomaly) {

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,30 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 )
+
+// Pod name patterns for workload extraction (same as correlation package).
+var (
+	deployPat = regexp.MustCompile(`^(.+)-[a-f0-9]{8,10}-[a-z0-9]{5}$`)
+	stsPat    = regexp.MustCompile(`^(.+)-(\d+)$`)
+	dsPat     = regexp.MustCompile(`^(.+)-[a-z0-9]{5}$`)
+)
+
+// extractWorkload derives workload name from pod name.
+func extractWorkload(pod string) string {
+	if pod == "" {
+		return ""
+	}
+	if m := deployPat.FindStringSubmatch(pod); len(m) > 1 {
+		return m[1]
+	}
+	if m := stsPat.FindStringSubmatch(pod); len(m) > 1 {
+		return m[1]
+	}
+	if m := dsPat.FindStringSubmatch(pod); len(m) > 1 {
+		return m[1]
+	}
+	return pod
+}
 
 // Stats holds the baseline statistics for a single series.
 type Stats struct {
@@ -25,12 +50,12 @@ type Stats struct {
 
 // Result is the output of evaluating a value against its baseline.
 type Result struct {
-	IsAnomaly  bool
-	ZScore     float64
-	Value      float64
-	Mean       float64
-	Stddev     float64
-	EWMA       float64
+	IsAnomaly   bool
+	ZScore      float64
+	Value       float64
+	Mean        float64
+	Stddev      float64
+	EWMA        float64
 	IsWarmingUp bool
 }
 
@@ -56,20 +81,44 @@ type hashStore interface {
 
 // Store manages baselines in Redis.
 type Store struct {
-	redis hashStore
-	cfg   config.Baseline
+	redis           hashStore
+	cfg             config.Baseline
+	ephemeralLabels map[string]struct{}
+	absence         AbsenceRecorder
 }
+
+// AbsenceRecorder is called on every sample to track series liveness.
+type AbsenceRecorder interface {
+	RecordSample(metric string, labels map[string]string)
+}
+
+// noopRecorder is used when no absence tracker is configured.
+type noopRecorder struct{}
+
+func (noopRecorder) RecordSample(string, map[string]string) {}
 
 // Compile-time check that Store satisfies Evaluator.
 var _ Evaluator = (*Store)(nil)
 
 func NewStore(redis hashStore, cfg config.Baseline) *Store {
-	return &Store{redis: redis, cfg: cfg}
+	eph := make(map[string]struct{}, len(cfg.EphemeralLabels))
+	for _, l := range cfg.EphemeralLabels {
+		eph[l] = struct{}{}
+	}
+	return &Store{redis: redis, cfg: cfg, ephemeralLabels: eph, absence: noopRecorder{}}
+}
+
+// SetAbsenceRecorder attaches an absence tracker to the store.
+func (s *Store) SetAbsenceRecorder(r AbsenceRecorder) {
+	s.absence = r
 }
 
 // Evaluate updates the baseline for a series and returns whether the value is anomalous.
 func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]string, value float64) (*Result, error) {
-	key := baselineKey(metric, labels)
+	key := baselineKey(metric, s.normalizeLabels(labels))
+
+	// Track series liveness for absence-of-signal detection.
+	s.absence.RecordSample(metric, labels)
 
 	stats, err := s.load(ctx, key)
 	if err != nil {
@@ -91,61 +140,90 @@ func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]s
 		return &Result{IsWarmingUp: true, Value: value, Mean: value, EWMA: value}, nil
 	}
 
-	// Update EWMA
-	alpha := s.cfg.EWMAAlpha
-	newEWMA := alpha*value + (1-alpha)*stats.EWMA
-
-	// Update running mean and stddev (Welford's algorithm)
-	newCount := stats.Count + 1
-	delta := value - stats.Mean
-	newMean := stats.Mean + delta/float64(newCount)
-	delta2 := value - newMean
-	// Running variance: M2 = stddev^2 * (count-1)
-	m2 := stats.Stddev * stats.Stddev * float64(stats.Count)
-	newM2 := m2 + delta*delta2
-	var newStddev float64
-	if newCount > 1 {
-		newStddev = math.Sqrt(newM2 / float64(newCount))
+	// Compute Z-Score against CURRENT baseline (before any update).
+	// When stddev is 0 (all identical samples), use a minimum floor to avoid
+	// infinite z-score on trivial deviations. Floor = 1% of EWMA or absolute
+	// value (whichever is larger), minimum 1e-9. When both EWMA and stddev are 0
+	// (cold series that only saw zeros), any non-zero value is genuinely anomalous
+	// but we cap at a sane z-score to avoid billions.
+	var zscore float64
+	stddev := stats.Stddev
+	if stddev == 0 {
+		floor := math.Max(math.Abs(stats.EWMA)*0.01, math.Abs(value)*0.01)
+		stddev = math.Max(floor, 1e-9)
 	}
+	zscore = math.Abs(value-stats.EWMA) / stddev
 
-	updated := &Stats{
-		Mean:       newMean,
-		Stddev:     newStddev,
-		EWMA:       newEWMA,
-		Count:      newCount,
-		LastUpdate: time.Now(),
-	}
+	// Anti-poisoning gate: skip baseline update when the sample is extremely
+	// anomalous (z > poison_threshold). Prevents slow-ramp attacks from dragging
+	// the baseline until malicious load reads as normal.
+	// A poison_threshold of 0 disables the gate (always update).
+	poisoned := s.cfg.PoisonThreshold > 0 && zscore > s.cfg.PoisonThreshold
 
-	if err := s.save(ctx, key, updated); err != nil {
-		return nil, err
-	}
+	// Warm-up phase: always update (need samples to establish baseline).
+	isWarmingUp := stats.Count < int64(s.cfg.WarmUpSamples)
 
-	metrics.WorkerBaselineUpdates.Inc()
+	if !poisoned || isWarmingUp {
+		// Update EWMA
+		alpha := s.cfg.EWMAAlpha
+		newEWMA := alpha*value + (1-alpha)*stats.EWMA
 
-	// Warm-up: not enough samples for reliable detection
-	if newCount < int64(s.cfg.WarmUpSamples) {
+		// Update running mean and stddev (Welford's algorithm)
+		newCount := stats.Count + 1
+		delta := value - stats.Mean
+		newMean := stats.Mean + delta/float64(newCount)
+		delta2 := value - newMean
+		m2 := stats.Stddev * stats.Stddev * float64(stats.Count)
+		newM2 := m2 + delta*delta2
+		var newStddev float64
+		if newCount > 1 {
+			newStddev = math.Sqrt(newM2 / float64(newCount))
+		}
+
+		updated := &Stats{
+			Mean:       newMean,
+			Stddev:     newStddev,
+			EWMA:       newEWMA,
+			Count:      newCount,
+			LastUpdate: time.Now(),
+		}
+		if err := s.save(ctx, key, updated); err != nil {
+			return nil, err
+		}
+		metrics.WorkerBaselineUpdates.Inc()
+
+		// Return warm-up result (no anomaly detection yet)
+		if isWarmingUp {
+			return &Result{
+				IsWarmingUp: true,
+				Value:       value,
+				Mean:        newMean,
+				Stddev:      newStddev,
+				EWMA:        newEWMA,
+			}, nil
+		}
+
+		// Use updated stats for the result
 		return &Result{
-			IsWarmingUp: true,
-			Value:       value,
-			Mean:        newMean,
-			Stddev:      newStddev,
-			EWMA:        newEWMA,
+			IsAnomaly: zscore > s.cfg.ZScoreThreshold,
+			ZScore:    zscore,
+			Value:     value,
+			Mean:      newMean,
+			Stddev:    newStddev,
+			EWMA:      newEWMA,
 		}, nil
 	}
 
-	// Z-Score against EWMA baseline
-	var zscore float64
-	if newStddev > 0 {
-		zscore = math.Abs(value-newEWMA) / newStddev
-	}
+	// Poisoned: return anomaly result WITHOUT updating baseline.
+	metrics.WorkerBaselinePoisonRejected.Inc()
 
 	return &Result{
 		IsAnomaly: zscore > s.cfg.ZScoreThreshold,
 		ZScore:    zscore,
 		Value:     value,
-		Mean:      newMean,
-		Stddev:    newStddev,
-		EWMA:      newEWMA,
+		Mean:      stats.Mean,
+		Stddev:    stats.Stddev,
+		EWMA:      stats.EWMA,
 	}, nil
 }
 
@@ -179,6 +257,27 @@ func parseStats(data map[string]string) *Stats {
 	ts, _ := strconv.ParseInt(data["last_update"], 10, 64)
 	s.LastUpdate = time.Unix(ts, 0)
 	return s
+}
+
+// normalizeLabels returns a stable label set for baseline keying:
+// 1. Replaces "pod" value with extracted workload name (survives pod restarts)
+// 2. Drops ephemeral labels configured in baseline.ephemeral_labels
+func (s *Store) normalizeLabels(labels map[string]string) map[string]string {
+	if len(labels) == 0 {
+		return labels
+	}
+	normalized := make(map[string]string, len(labels))
+	for k, v := range labels {
+		if _, ephemeral := s.ephemeralLabels[k]; ephemeral {
+			continue
+		}
+		if k == "pod" && v != "" {
+			normalized["pod"] = extractWorkload(v)
+			continue
+		}
+		normalized[k] = v
+	}
+	return normalized
 }
 
 func baselineKey(metric string, labels map[string]string) string {
