@@ -131,10 +131,17 @@ type LogPattern struct {
 type Suppression struct {
 	ExcludeNamespacesCSV string `yaml:"exclude_namespaces_csv"`
 	ExcludeStaticOnlyCSV string `yaml:"exclude_static_only_csv"`
+	// Workloads whose ADAPTIVE (EWMA Z-Score) detections are suppressed while
+	// static/log detections still fire. For inherently bursty infra (message
+	// brokers, telemetry collectors, service mesh) that the adaptive detector
+	// flags constantly — the dominant false-positive source. Matched against the
+	// workload extracted from the pod name (see correlation.ExtractWorkload).
+	ExcludeAdaptiveWorkloadsCSV string `yaml:"exclude_adaptive_workloads_csv"`
 
 	// Populated by setDefaults from the CSVs.
-	ExcludeNamespaces []string `yaml:"-"`
-	ExcludeStaticOnly []string `yaml:"-"`
+	ExcludeNamespaces        []string `yaml:"-"`
+	ExcludeStaticOnly        []string `yaml:"-"`
+	ExcludeAdaptiveWorkloads []string `yaml:"-"`
 }
 
 // Enrichment configures contextual queries that fan out when an anomaly fires.
@@ -321,6 +328,7 @@ func setDefaults(cfg *Config) {
 	// Parse suppression CSVs into list slices. Empty CSV → empty list.
 	cfg.Suppression.ExcludeNamespaces = splitCSV(cfg.Suppression.ExcludeNamespacesCSV)
 	cfg.Suppression.ExcludeStaticOnly = splitCSV(cfg.Suppression.ExcludeStaticOnlyCSV)
+	cfg.Suppression.ExcludeAdaptiveWorkloads = splitCSV(cfg.Suppression.ExcludeAdaptiveWorkloadsCSV)
 }
 
 // splitCSV parses a comma-separated string, trimming whitespace and dropping empty entries.

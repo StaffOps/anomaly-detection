@@ -194,8 +194,17 @@ func (s *workerServer) ProcessJobs(ctx context.Context, batch *pb.JobBatch) (*pb
 			continue
 		}
 
-		// Apply suppression filter
-		anomalies = s.suppression.FilterAnomalies(anomalies)
+		// Apply suppression filter, counting drops by detector + reason so the
+		// effect is observable (staffops_ad_worker_anomalies_suppressed_total).
+		kept := anomalies[:0]
+		for _, a := range anomalies {
+			if reason := s.suppression.SuppressReason(a); reason != "" {
+				metrics.WorkerAnomaliesSuppressed.WithLabelValues(a.Detector, reason).Inc()
+				continue
+			}
+			kept = append(kept, a)
+		}
+		anomalies = kept
 
 		for _, a := range anomalies {
 			// Update seasonal profile

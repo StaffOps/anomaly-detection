@@ -89,6 +89,79 @@ func TestShouldSuppress_NoNamespaceLabel(t *testing.T) {
 	}
 }
 
+func anomalyPod(ns, detector, pod string) detection.Anomaly {
+	return detection.Anomaly{
+		Labels:   map[string]string{"namespace": ns, "pod": pod},
+		Detector: detector,
+	}
+}
+
+func TestShouldSuppress_ExcludeAdaptiveWorkload(t *testing.T) {
+	f := NewFilter(config.Suppression{
+		ExcludeAdaptiveWorkloads: []string{"strimzi-kafka-brokers", "otel-agent-logs-collector"},
+	})
+
+	cases := []struct {
+		name     string
+		detector string
+		pod      string
+		want     bool
+	}{
+		// Adaptive noise from a listed workload is silenced (pod → workload via regex).
+		{"adaptive excluded (statefulset pod)", "adaptive", "strimzi-kafka-brokers-2", true},
+		{"adaptive excluded (deployment pod)", "adaptive", "otel-agent-logs-collector-558596ddb7-4db97", true},
+		// Static / log signals from the same workload still fire.
+		{"static from excluded workload fires", "static", "strimzi-kafka-brokers-2", false},
+		{"pattern from excluded workload fires", "pattern", "strimzi-kafka-brokers-2", false},
+		// Adaptive from a non-listed workload fires.
+		{"adaptive non-excluded", "adaptive", "my-app-558596ddb7-4db97", false},
+	}
+	for _, c := range cases {
+		got := f.ShouldSuppress(anomalyPod("staffops", c.detector, c.pod))
+		if got != c.want {
+			t.Errorf("%s: want suppress=%v got %v", c.name, c.want, got)
+		}
+	}
+}
+
+func TestShouldSuppress_ExcludeAdaptiveWorkload_ServiceNameFallback(t *testing.T) {
+	// Span-metric anomalies (error_rate_by_service) carry service_name but no pod.
+	// Must match the exclude list the same way the controller's by-workload metric
+	// does — otherwise these bypass suppression (the homolog bug of 2026-07-14).
+	f := NewFilter(config.Suppression{
+		ExcludeAdaptiveWorkloads: []string{"strimzi-kafka-brokers"},
+	})
+	svcAnomaly := detection.Anomaly{
+		Labels:   map[string]string{"service_name": "strimzi-kafka-brokers"},
+		Detector: "adaptive",
+	}
+	if !f.ShouldSuppress(svcAnomaly) {
+		t.Error("adaptive anomaly keyed by service_name (no pod) must be suppressed")
+	}
+	// Static signal from the same service still fires.
+	svcStatic := detection.Anomaly{
+		Labels:   map[string]string{"service_name": "strimzi-kafka-brokers"},
+		Detector: "static",
+	}
+	if f.ShouldSuppress(svcStatic) {
+		t.Error("static signal must NOT be suppressed even for excluded workload")
+	}
+}
+
+func TestShouldSuppress_ExcludeAdaptiveWorkload_NamespaceIndependent(t *testing.T) {
+	f := NewFilter(config.Suppression{
+		ExcludeAdaptiveWorkloads: []string{"istiod"},
+	})
+	// Same workload suppressed regardless of namespace — the whole point is that
+	// bursty infra shares a namespace with real workloads.
+	if !f.ShouldSuppress(anomalyPod("staffops", "adaptive", "istiod-abcde")) {
+		t.Error("expected suppression in staffops")
+	}
+	if !f.ShouldSuppress(anomalyPod("istio-system", "adaptive", "istiod-abcde")) {
+		t.Error("expected suppression in istio-system too (namespace-independent)")
+	}
+}
+
 func TestFilterAnomalies(t *testing.T) {
 	f := NewFilter(config.Suppression{
 		ExcludeNamespaces: []string{"kube-system"},

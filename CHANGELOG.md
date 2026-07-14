@@ -8,7 +8,25 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ## [Unreleased]
 
-Work landed after controller 0.7.0, not yet released (still pre-production, no cluster deploy — no version bump per `version-management.md`).
+Work landed after controller 0.8.0.
+
+## controller — [0.8.0] — 2026-07-14
+
+First homolog deployment (cluster `devops-core`, namespace `staffops`, dry-run) via the
+Helm chart, and the first false-positive-reduction lever.
+
+### detection
+
+**Added — per-workload adaptive suppression + observability (2026-07-14)**
+- `suppression.exclude_adaptive_workloads_csv`: silences the **adaptive** (EWMA Z-Score)
+  detector for named workloads while their static/log signals still fire. Targets
+  inherently bursty infra (message brokers, telemetry collectors, service mesh) — measured
+  as ~49% of adaptive detections in homolog, the dominant false-positive source. Matches the
+  workload the same way the by-workload metric does (`pod` via `ExtractWorkload`, falling
+  back to `service_name` for span-metric anomalies with no pod label).
+- New `staffops_ad_worker_anomalies_suppressed_total{detector,reason}` counter so the
+  suppression effect is directly observable (reasons: `namespace_all`, `namespace_static`,
+  `adaptive_workload`).
 
 ### detection / measurement
 

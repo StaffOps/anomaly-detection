@@ -293,8 +293,14 @@ var (
 
 	WorkerDetections = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "staffops_ad_worker_detections_total",
-		Help: "Anomalies detected by detector type (worker-side)",
+		Help: "Anomalies detected by detector type (worker-side, pre-suppression)",
 	}, []string{"detector"})
+
+	WorkerAnomaliesSuppressed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "staffops_ad_worker_anomalies_suppressed_total",
+		Help: "Anomalies dropped by the suppression filter, by detector and reason " +
+			"(namespace_all, namespace_static, adaptive_workload)",
+	}, []string{"detector", "reason"})
 
 	WorkerBaselineUpdates = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "staffops_ad_worker_baseline_updates_total",
@@ -372,7 +378,7 @@ func MustRegisterWorker(reg prometheus.Registerer) {
 	reg.MustRegister(
 		WorkerJobsProcessed, WorkerJobDuration,
 		WorkerQueryDuration, WorkerQueryErrors,
-		WorkerDetections, WorkerBaselineUpdates, WorkerBaselinePoisonRejected, WorkerBaselineSeries,
+		WorkerDetections, WorkerAnomaliesSuppressed, WorkerBaselineUpdates, WorkerBaselinePoisonRejected, WorkerBaselineSeries,
 		WorkerEventsReceived,
 		WorkerRedisOps, WorkerRedisDuration, WorkerRedisErrors,
 		BuildInfo,

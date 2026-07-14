@@ -198,6 +198,9 @@ detection:
 suppression:
   exclude_namespaces_csv: ${EXCLUDE_NAMESPACES_CSV:kube-system}
   exclude_static_only_csv: ${EXCLUDE_STATIC_ONLY_CSV:}
+  # Workloads whose adaptive (Z-Score) noise is silenced while static/log signals
+  # still fire — for inherently bursty infra (brokers, collectors, service mesh).
+  exclude_adaptive_workloads_csv: ${EXCLUDE_ADAPTIVE_WORKLOADS_CSV:}
 
 enrichment:
   enabled: true
