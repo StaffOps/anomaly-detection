@@ -345,12 +345,13 @@ detection:
 
 ## Suppression
 
-Suppression rules prevent detection from running in, or alerting on, specific namespaces.
+Suppression rules prevent detection from running in, or alerting on, specific namespaces or workloads.
 
 | Key | Default | Type | Description |
 |---|---|---|---|
 | `suppression.excludeNamespaces` | `["kube-system"]` | list | Namespaces fully excluded from all detection. No queries are run, no alerts are fired. |
 | `suppression.excludeStaticOnly` | `[]` | list | Namespaces where static threshold rules are suppressed, but adaptive and ML-based detection still run and alert. |
+| `suppression.excludeAdaptiveWorkloads` | `[]` | list | Workloads whose adaptive (Z-Score) detections are suppressed while static/log signals still fire. For inherently bursty infra (brokers, collectors, service mesh). Namespace-independent. |
 
 ```yaml
 suppression:
@@ -365,10 +366,19 @@ suppression:
   excludeStaticOnly:
     - staging
     - qa
+
+  # Silence adaptive noise from bursty infra workloads (static/logs still fire)
+  excludeAdaptiveWorkloads:
+    - strimzi-kafka-brokers
+    - otel-agent-logs-collector
+    - istiod
 ```
 
 !!! note "excludeStaticOnly use case"
     `excludeStaticOnly` is designed for staging or QA environments where hard threshold rules produce too many false positives (e.g., intentional load tests breaching CPU thresholds), but unusual behavioral patterns — detected by Z-Score or Isolation Forest — should still be flagged.
+
+!!! tip "excludeAdaptiveWorkloads use case"
+    Use this for individual infrastructure workloads (Kafka brokers, OTel collectors, Istio, Pyroscope) that are inherently bursty and dominate false positives, but share a namespace with real application workloads — so namespace-level suppression is too blunt. Only their adaptive signal is silenced; static breaches (OOM, restart loops) and log patterns still alert. The effect is observable via `staffops_ad_worker_anomalies_suppressed_total{reason="adaptive_workload"}`.
 
 ---
 

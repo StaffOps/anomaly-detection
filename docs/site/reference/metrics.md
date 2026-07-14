@@ -224,6 +224,25 @@ rate(staffops_ad_worker_jobs_total{result="error"}[5m])
 
 ---
 
+### `staffops_ad_worker_anomalies_suppressed_total`
+
+| Property | Value |
+|---|---|
+| Type | Counter |
+| Labels | `cluster`, `pod`, `detector`, `reason` |
+| Description | Anomalies dropped by the suppression filter before reaching the controller. `reason` is `namespace_all` (namespace fully excluded), `namespace_static` (static-only namespace), or `adaptive_workload` (workload on the adaptive exclude list). Pair with `staffops_ad_worker_detections_total` (pre-suppression) to see the suppression rate. See [Suppression](../configuration/suppression.md). |
+
+```promql
+# Suppression rate by reason
+sum by (reason) (rate(staffops_ad_worker_anomalies_suppressed_total[10m]))
+
+# Fraction of adaptive detections silenced by the workload exclude list
+sum(rate(staffops_ad_worker_anomalies_suppressed_total{reason="adaptive_workload"}[10m]))
+  / sum(rate(staffops_ad_worker_detections_total{detector="adaptive"}[10m]))
+```
+
+---
+
 ### `staffops_ad_worker_query_duration_seconds`
 
 | Property | Value |
