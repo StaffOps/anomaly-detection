@@ -47,6 +47,9 @@ redis-data/
 .env
 **/.env
 !.env.example
+
+# Homolog/prod helm values (environment-specific, hold cluster endpoints — NEVER commit)
+/values.yaml
 tmp-replay/
 replay-*.json
 replay-*.md
