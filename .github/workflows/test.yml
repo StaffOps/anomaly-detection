@@ -2,30 +2,14 @@ name: Test
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  # main accepts PRs ONLY from dev (branch protection can't enforce source branch).
-  # Required check on main only — never runs on dev PRs, so it never hangs them.
-  guard:
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Enforce PR source is dev
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          if [ "$HEAD_REF" != "dev" ]; then
-            echo "::error::main only accepts PRs from 'dev' (got '$HEAD_REF')"
-            exit 1
-          fi
-          echo "OK: PR from dev → main"
-
   lint-go:
     runs-on: ubuntu-latest
     # Armed 2026-07-02: gofmt (18 files) + go vet (redis context leak) debt cleared.

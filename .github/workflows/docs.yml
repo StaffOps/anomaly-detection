@@ -7,7 +7,7 @@ on:
       - "docs/site/**"
       - "mkdocs.yml"
   pull_request:
-    branches: [main, dev]     # validate on PRs (no deploy)
+    branches: [main]          # validate on PRs (no deploy)
     paths:
       - "docs/site/**"
       - "mkdocs.yml"
