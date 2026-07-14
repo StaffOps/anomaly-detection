@@ -7,8 +7,10 @@ Distributed anomaly detection for Kubernetes: **Go controller + Go workers + Pyt
 Detects statistical anomalies (EWMA Z-Score), static threshold breaches, log rate spikes, and
 ML-confirmed multivariate failures. Dispatches to Alertmanager (dry-run by default).
 
-> **Status**: v0.7.0 — MVP complete. Core detection functional. 25 production blockers tracked
-> (PH.1–PH.25). Do NOT deploy to cluster yet. Work scoped to `controller/` and `ml/` modules.
+> **Status**: v0.7.0 — deployed to **homolog** (cluster `devops-core`, namespace `staffops`,
+> **dry-run**) via the Helm chart. Core detection + FDR + ML live. Most PH/P0/P2 blockers
+> cleared (see below); remaining work: exit dry-run, CI-published images, docs sync.
+> Trunk-based on `main` (branch `dev` retired 2026-07-13).
 
 ---
 
@@ -68,7 +70,7 @@ docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c '
 # Python ML — build image
 docker build -t staffops-anomaly-ml ./ml
 
-# Python ML — tests (empty, 0% coverage — PH.10 blocker)
+# Python ML — tests (PH.10 done — ~98% coverage)
 docker run --rm -v "$(pwd)/ml":/app -w /app python:3.11-slim sh -c \
   "pip install -e '.[dev]' -q && pytest tests/ -v"
 
@@ -187,7 +189,7 @@ Main config at `controller/config.yaml` — supports `${ENV_VAR:default}` substi
 |----------|---------|
 | `CLUSTER_NAME` | `unknown` |
 | `REDIS_ADDR` | `redis:6379` |
-| `REDIS_PASSWORD` | `` (no auth — PH.4 blocker) |
+| `REDIS_PASSWORD` | `` (PH.4 done — synced from AWS Secrets Manager via ESO when `redis.auth.enabled`) |
 | `ML_ENDPOINT` | `ml:50051` |
 | `ML_ENABLED` | `true` |
 | `WORKER_ENDPOINT` | `dns:///worker:50052` |
@@ -257,27 +259,32 @@ pod name). Add labels only if they are in {severity, signal, detector, kind, nam
 Work on these in the order listed. Never mark a blocker done without validating it.
 
 ### Critical (Kyverno hard-fails — cluster deploy blocked)
-- **PH.1** 🟡 *partial* — images now run as nonroot (`USER 65534` in controller/worker/ml
-  Dockerfiles, validated). Pod-level `runAsNonRoot`, `readOnlyRootFilesystem`,
-  `drop:[ALL]` still pending — they live in the K8s manifests/Helm chart (PH.15).
-- **PH.2** 🟡 *partial* — CI (GitHub Actions) builds SHA-tagged images to Docker Hub.
-  `:latest`/`REPLACE_ME_REGISTRY` removal still pending in manifests (PH.15).
-- **PH.4** Redis no auth → External Secrets Operator + mounted password
-- **PH.5** ✅ *done* — ML Dockerfile is multi-stage; runtime image has no gcc/grpcio-tools
-  (validated: builds, imports, server starts).
+- **PH.1** ✅ *done* — images run as nonroot (`USER 65534`) and the Helm chart sets pod/container
+  `runAsNonRoot`, `readOnlyRootFilesystem`, `drop:[ALL]` (validated in the deployed manifest).
+- **PH.2** 🟡 *partial* — deployed image is a local Harbor build (`0.7.0-homolog-<sha>`), no
+  `:latest`. Chart pulls registry/tag from values (no `REPLACE_ME`). **Remaining**: point at a
+  CI-published versioned image and settle the canonical registry (Docker Hub CI vs Harbor deploy).
+- **PH.4** ✅ *done* — in-cluster Redis AUTH via External Secrets Operator (ClusterSecretStore
+  `aws`); chart renders `externalsecret-redis.yaml`, password injected as `REDIS_PASSWORD`.
+- **PH.5** ✅ *done* — ML Dockerfile is multi-stage; runtime image has no gcc/grpcio-tools.
 
 ### Test gates (CI blocked)
-- **PH.9** 🟡 *in progress* — internal pkgs mostly ≥90% (alert, baseline, config,
-  correlation, detection, ratelimit, suppression). Laggards drag the total down:
-  `readiness` ~12%, `ml` ~29%, `leader` ~49%. CI gate is report-only until ≥90%.
-- **PH.10** ML coverage 0% → ≥90% (`ml/tests/` is empty)
+- **PH.9** ✅ *done* — Go total coverage **90.4%**; `test-go` gate armed (blocking).
+- **PH.10** ✅ *done* — ML test suite added, ~98% coverage.
 - **PH.11** ✅ *done* — `replay/window_test.go` and full Go suite pass (validated).
 
 ### Before calling it production-ready
-- **PH.15** Create Helm chart (needed by GitOps deploy) — also carries PH.1/PH.2 manifest items
-- **PH.19** Replace `prometheus.io/scrape` with VMServiceScrape CRDs
+- **PH.15** ✅ *done* — Helm chart is canonical in the `helm-charts` repo
+  (`charts/anomaly-detection`) and deployed to homolog. Carries the PH.1 securityContext.
+- **PH.19** ✅ *done* — chart renders `VMServiceScrape` (enabled on the VM monitoring stack).
 - **PH.24** ✅ *done* — runtime `grpcio` bumped to 1.65.4 (CVE-2024-7246). `grpcio-tools`
   stays 1.62.1 (build-time only; avoids forcing protobuf 5.x + stub regen).
+
+### Remaining before production
+- **Exit dry-run** — controller runs `--dry-run`; ~12.8k alerts/day in homolog with FDR
+  rejecting 0 (it runs post-correlation on small batches). Reposition/throttle before flipping
+  `controller.dryRun: false`.
+- **CI-published image** (PH.2 tail) + settle canonical registry.
 
 ---
 
@@ -285,12 +292,12 @@ Work on these in the order listed. Never mark a blocker done without validating 
 
 | Issue | Where | Impact | Fix |
 |-------|-------|--------|-----|
-| Baseline resets on pod restart | `baseline/store.go` — key includes pod name | Cold-start after every rollout | P2.8: use workload-stable key |
-| Baseline poisoning | `store.go::Evaluate()` — EWMA updated even on anomalous samples | Slow drift → FP erosion | P2.9: skip update when anomaly fired |
+| Baseline resets on pod restart | `baseline/store.go` | Cold-start after every rollout | ✅ P2.8: workload-stable keying |
+| Baseline poisoning | `store.go::Evaluate()` — EWMA drift on anomalous samples | Slow FP erosion | ✅ P2.9: anti-poison gate skips update on extreme anomalies |
 | Enrichment cache hit = 0% | `enrichment/engine.go` | No caching benefit today | Planned removal |
-| FP rate from multiple comparisons | ~400 adaptive series, z > 3 → ~1000 FP/day | Alert fatigue | P0.4: FDR (Benjamini-Hochberg) |
-| ML feature dimension mismatch | Fixed with CANONICAL_FEATURES (10 fixed, 0.0 padding) | Was causing ~33% errors | Done — monitor score distribution |
-| Absence-of-signal undetected | No tracking of expected emission rate | Blind to metric dropout | P2.10 |
+| FP rate from multiple comparisons | ~400 adaptive series, z > 3 | Alert fatigue | 🟡 P0.4 FDR shipped but runs post-correlation on small batches (rejects ~0) — needs repositioning |
+| ML feature dimension mismatch | Fixed with CANONICAL_FEATURES (10 fixed, 0.0 padding) | Was causing ~33% errors | ✅ Done — monitor score distribution |
+| Absence-of-signal undetected | `absence/tracker.go` — dead man's switch | Blind to metric dropout | ✅ P2.10: shipped |
 | Prophet not wired | `ml/forecaster.py` ready, controller doesn't call Forecast | No predictive alerts | Needs baseline time-series export first |
 
 ---
@@ -349,8 +356,8 @@ Five workflows in `.github/workflows/` (org-standard layout, mirrors staffops-ai
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `test.yml` | push/PR `main`,`dev` | `guard` (PR→main only from `dev`), `lint-go` (gofmt+vet), `lint-ml` (ruff), `dep_scan` (Trivy fs), `test-go` + `test-ml` |
-| `sast.yml` | push/PR `main`,`dev` | `gosec` (Go) + `bandit` (ML) |
+| `test.yml` | push/PR `main` | `lint-go` (gofmt+vet), `lint-ml` (ruff), `dep_scan` (Trivy fs), `test-go` + `test-ml` |
+| `sast.yml` | push/PR `main` | `gosec` (Go) + `bandit` (ML) |
 | `build.yml` | push `main` | per image: build local → Trivy scan → push to Docker Hub `<img>:{sha,latest}` → SBOM |
 | `release.yml` | tag `v*` / manual | versioned immutable images + GitHub Release |
 | `docs.yml` | push/PR `main` | PR builds `--strict`; main deploys to gh-pages |
@@ -366,7 +373,8 @@ Five workflows in `.github/workflows/` (org-standard layout, mirrors staffops-ai
   `continue-on-error`, and the Trivy image scan is `exit-code: 0`. They surface
   pre-existing debt (gofmt, `go vet`, grpc/otel/base-image CVEs) without blocking `main`.
   Flip each back to blocking (`continue-on-error` off / `exit-code: 1`) as the debt clears.
-  Coverage gates are likewise report-only until PH.9 (Go ~89.4%) and PH.10 (ML 0%) land.
+  `lint-go` and the coverage gates (`test-go` at 90.4%, `test-ml`) are now **blocking** —
+  PH.9/PH.10 landed.
 
 ---
 
