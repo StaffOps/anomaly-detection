@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Pre-commit gate: behaviour/config changes must ship with documentation.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# (scripts/dev/doctor.sh wires this automatically.)
+#
+# Rationale: docs drift is the top complaint on this repo. If a change alters
+# user-facing behaviour, config, or metrics, the docs must move with it.
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# Behaviour/config the user would read about (ignore tests — they need no docs).
+code_changed=$(printf '%s\n' "$staged" \
+  | grep -E '^(controller/.*\.go|controller/config\.yaml|ml/server/.*\.py)$' \
+  | grep -vE '_test\.go$' || true)
+[ -z "$code_changed" ] && exit 0
+
+# Did the same commit touch documentation?
+docs_changed=$(printf '%s\n' "$staged" | grep -E '^(docs/site/|CHANGELOG\.md|AGENTS\.md)' || true)
+[ -n "$docs_changed" ] && exit 0
+
+cat >&2 <<'MSG'
+✗ pre-commit: code/config changed but no documentation was updated.
+
+  Update the docs that describe this change before committing:
+    - docs/site/**   (behaviour, configuration, reference/metrics)
+    - CHANGELOG.md   (notable changes)
+
+  Files that triggered this gate:
+MSG
+printf '%s\n' "$code_changed" | sed 's/^/    /' >&2
+cat >&2 <<'MSG'
+
+  If this change genuinely needs no docs (pure refactor), bypass explicitly:
+    git commit --no-verify
+MSG
+exit 1

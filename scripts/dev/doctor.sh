@@ -23,6 +23,17 @@ echo "== docker =="
 check "docker daemon reachable" docker info
 
 echo ""
+echo "== git hooks (docs-with-code pre-commit gate) =="
+want=".githooks"
+have="$(git -C "$(repo_root)" config core.hooksPath || true)"
+if [ "$have" = "$want" ]; then
+  echo "  core.hooksPath = .githooks                   OK"
+else
+  git -C "$(repo_root)" config core.hooksPath "$want"
+  echo "  core.hooksPath set to .githooks              FIXED"
+fi
+
+echo ""
 echo "== go modules (staffops-otel-libs is public — no token needed) =="
 # Sanity-check the public module resolves via the default proxy. A failure here
 # is network/proxy, not auth — surfaced so it doesn't blow up mid-build.

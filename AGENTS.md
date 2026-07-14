@@ -314,6 +314,13 @@ Work on these in the order listed. Never mark a blocker done without validating 
 - **Conventional commits** — `feat/fix/docs/test/chore(scope): description`
 - **Never commit** without explicit user approval
 - **In-code docs in English** (comments, identifiers, log strings)
+- **Docs move with code (pre-commit gate)** — any change to behaviour, config, or
+  metrics MUST update the matching page under `docs/site/**` and `CHANGELOG.md` in the
+  same commit. Enforced by `.githooks/pre-commit` (enable with
+  `git config core.hooksPath .githooks`; `scripts/dev/doctor.sh` wires it automatically).
+  A code-only commit is blocked unless you bypass with `git commit --no-verify`
+  (reserve that for pure refactors/tests). New knob → `configuration/`; new metric →
+  `reference/metrics.md`; new Helm value → `reference/helm.md`.
 
 ---
 
