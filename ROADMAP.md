@@ -96,6 +96,28 @@ classe RED/USE, direção da maldade, teto, leading/lagging, ação, dono, FP bu
 Vai revelar regras sem ação/dono (candidatas a remoção) e regras adaptativas que
 cabem em static/`predict_linear` (custo à toa). Saída: `docs/detection/catalog/`.
 
+### ✅ P1.4 — Per-workload adaptive suppression — **SHIPPED (2026-07-14, v0.8.0)**
+
+`suppression.exclude_adaptive_workloads_csv`: silences the adaptive (Z-Score) detector
+per workload while static/log signals still fire. Deployed to homolog (dry-run).
+Observable via `staffops_ad_worker_anomalies_suppressed_total{detector,reason}`.
+
+**Measured finding (reframes the FP problem)**: at steady state the homolog detection
+volume is **~74% static, ~26% adaptive**. The bursty infra workloads (Kafka, OTel, Istio)
+that dominate the "top noisy workloads" view fire mostly **static-rule** breaches
+(`high_cpu_ratio`, `high_memory_ratio`, `high_restart_rate`), which this lever keeps by
+design. So per-workload *adaptive* suppression cuts only **~5% of total detections** —
+correct and observable, but it attacks the minority. **The dominant FP source is static
+rules mis-tuned for infra, not adaptive noise.**
+
+**Next steps (unblock exit-dry-run — P5.3):**
+1. **Break down the static volume** by rule + workload — decide per rule: retune threshold
+   for infra (e.g. JVM memory normally >0.85) vs per-workload static suppression (risky:
+   static catches real OOM/restart loops). This is the real dry-run blocker.
+2. **Investigate the business-API outlier** `dcp-regulatoryenfor-api-btc` (~6.9k anomalies/day,
+   deliberately not suppressed) — genuine instability or per-rule tuning?
+3. **Run the P0.1 gate** (recall / ramp-blindness) — now in `main`, deployable.
+
 ### 🎯 P1.5 — Change-aware suppression (pode já; maior FP killer de k8s)
 
 Janela de supressão/rebaixamento pós-rollout por workload, detectada via K8s events
