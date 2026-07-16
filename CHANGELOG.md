@@ -8,7 +8,29 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ## [Unreleased]
 
-Work landed after controller 0.9.0.
+Work landed after controller 0.9.0 / ml 0.3.0.
+
+## ml — [0.3.0] — 2026-07-16
+
+### observability
+
+**Changed — ML service metrics now route through `otel_helper` (Python) (2026-07-16)**
+- All `staffops_ad_ml_*` instruments moved from direct `prometheus_client` usage to the OTel
+  Metrics API (`otel_helper.get_meter`), served via `otel_helper`'s Prometheus reader on the
+  existing `:8082/metrics` endpoint (`setup_telemetry(TelemetryOptions(metric_exporters=
+  ["prometheus"], prometheus_metrics_port=8082))`, called from `serve()`). Metric names and
+  label keys are unchanged; the histogram `.time()` context managers became manual
+  `time.perf_counter()` deltas recorded in a `finally` block (same coverage, both success and
+  error paths).
+- `otel_helper` isn't on PyPI — installed from a GitHub Release wheel with `--no-deps`. Its
+  core metadata mandates `opentelemetry-exporter-otlp-proto-grpc`, which requires
+  `protobuf>=5.0` — incompatible with this service's `protobuf==4.25.3` pin (`grpcio-tools`
+  build compat, see `Dockerfile`). Only the three `opentelemetry-*` packages actually
+  exercised in Prometheus-only mode are installed explicitly; every other `otel_helper`
+  feature (OTLP export, auto-instrumentation) degrades cleanly via its own
+  `try/except ImportError` guards. Full rationale in `ml/pyproject.toml`. Traces/OTLP push are
+  not wired up yet (tracked separately — sync gRPC server, `otel_helper` only auto-instruments
+  `grpc.aio`).
 
 ## controller — [0.9.0] — 2026-07-16
 

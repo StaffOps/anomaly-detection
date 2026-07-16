@@ -71,8 +71,13 @@ docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c '
 docker build -t staffops-anomaly-ml ./ml
 
 # Python ML — tests (PH.10 done — ~98% coverage)
+# otel_helper isn't on PyPI and core-requires protobuf>=5.0 (OTLP-grpc),
+# incompatible with this service's protobuf==4.25.3 pin — installed
+# --no-deps; see ml/pyproject.toml for the full rationale.
 docker run --rm -v "$(pwd)/ml":/app -w /app python:3.11-slim sh -c \
-  "pip install -e '.[dev]' -q && pytest tests/ -v"
+  "pip install -e '.[dev]' -q && \
+   pip install --no-deps -q https://github.com/StaffOps/staffops-otel-libs/releases/download/v0.2.0/otel_helper-0.2.0-py3-none-any.whl && \
+   pytest tests/ -v"
 
 # Full local stack (controller + 3 workers + redis + ml + prometheus + grafana + loki)
 cd scripts

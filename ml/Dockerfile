@@ -4,7 +4,7 @@ FROM python:3.11-slim AS builder
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ && rm -rf /var/lib/apt/lists/*
+    gcc g++ curl && rm -rf /var/lib/apt/lists/*
 
 # Install all deps including grpcio-tools (needed for proto compilation).
 # grpcio (runtime, C-core) bumped to 1.65.4 for CVE-2024-7246 (DoS) fix.
@@ -18,8 +18,26 @@ RUN pip install --no-cache-dir \
     prophet==1.3.0 \
     scikit-learn==1.4.2 \
     numpy==1.26.4 \
-    pandas==2.2.1 \
-    prometheus-client==0.20.0
+    pandas==2.2.1
+
+# otel_helper's Prometheus reader — the only piece we use (metric_exporters=
+# ["prometheus"]). "otel-helper"'s own metadata core-requires
+# opentelemetry-exporter-otlp-proto-grpc, which needs protobuf>=5.0 and would
+# collide with the protobuf==4.25.3 pin above, so install it --no-deps and
+# pull in only the three OTel packages actually exercised in this mode.
+# Every other otel_helper feature (OTLP export, auto-instrumentation) is
+# wrapped in try/except ImportError and degrades cleanly without its package
+# installed — see ml/pyproject.toml for the full rationale. pip requires the
+# canonical wheel filename (renaming it fails with "not a valid wheel
+# filename"), so -O keeps the upstream name instead of -o.
+RUN pip install --no-cache-dir \
+      "opentelemetry-api>=1.42,<2" \
+      "opentelemetry-sdk>=1.42,<2" \
+      "opentelemetry-exporter-prometheus>=0.63b0" && \
+    curl -fsSL -O \
+      https://github.com/StaffOps/staffops-otel-libs/releases/download/v0.2.0/otel_helper-0.2.0-py3-none-any.whl && \
+    pip install --no-cache-dir --no-deps otel_helper-0.2.0-py3-none-any.whl && \
+    rm otel_helper-0.2.0-py3-none-any.whl
 
 COPY proto/ proto/
 COPY server/ server/

@@ -1,6 +1,6 @@
 # Metrics Reference
 
-All three components — Controller, Workers, and the ML Service — expose Prometheus-compatible metrics on their HTTP `/metrics` endpoints (port `8080` for Go components, port `8000` for the ML service). Controller and worker metrics are OTel Metrics API instruments (`staffops-otel-libs/go`, `otelhelper.MetricsHandler()`) — no direct `client_golang` registration. The `cluster` (and any other org-specific) label is **not** emitted by the app; it's added at the scrape layer via the ServiceMonitor's `externalLabels` (vmagent) or your Prometheus `external_labels`/relabel config. Queries below assume that label is present from the scrape layer.
+All three components — Controller, Workers, and the ML Service — expose Prometheus-compatible metrics on their HTTP `/metrics` endpoints (port `8080` for Go components, port `8082` for the ML service). All three route through the org's OTel Metrics API helper library (`staffops-otel-libs`: `otelhelper.MetricsHandler()` in Go, `otel_helper`'s Prometheus reader in Python) — no direct `client_golang`/`prometheus_client` usage. The `cluster` (and any other org-specific) label is **not** emitted by the app; it's added at the scrape layer via the ServiceMonitor's `externalLabels` (vmagent) or your Prometheus `external_labels`/relabel config. Queries below assume that label is present from the scrape layer.
 
 ---
 

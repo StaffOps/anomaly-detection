@@ -88,7 +88,15 @@ jobs:
           python-version: "3.11"
       - name: Install
         working-directory: ml
-        run: pip install -e '.[dev]' -q
+        run: |
+          pip install -e '.[dev]' -q
+          # otel_helper isn't on PyPI and its metadata core-requires
+          # protobuf>=5.0 (OTLP-grpc exporter), incompatible with this
+          # service's protobuf==4.25.3 pin — install --no-deps, the three
+          # opentelemetry-* packages above already cover what we use
+          # (Prometheus-only). See pyproject.toml for the full rationale.
+          pip install --no-deps -q \
+            https://github.com/StaffOps/staffops-otel-libs/releases/download/v0.2.0/otel_helper-0.2.0-py3-none-any.whl
       - name: Test with coverage
         working-directory: ml
         run: pytest tests/ -q

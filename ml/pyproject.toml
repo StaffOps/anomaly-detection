@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "staffops-anomaly-ml"
-version = "0.2.0"
+version = "0.3.0"
 description = "ML service for anomaly detection (Prophet forecasting + Isolation Forest)"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,8 +15,30 @@ dependencies = [
     "scikit-learn==1.4.2",
     "numpy==1.26.4",
     "pandas==2.2.1",
-    "prometheus-client==0.20.0",
+    # otel_helper itself is NOT listed here — see "Installing otel_helper"
+    # below for why and how to install it. These three are its only runtime
+    # dependencies actually exercised in Prometheus-only mode (no protobuf
+    # conflict with the pin above).
+    "opentelemetry-api>=1.42,<2",
+    "opentelemetry-sdk>=1.42,<2",
+    "opentelemetry-exporter-prometheus>=0.63b0",
 ]
+
+# --- Installing otel_helper ---
+# otel_helper isn't on PyPI — distributed as a wheel attached to GitHub
+# Releases on the (public) staffops-otel-libs repo. Its *core* metadata
+# mandates opentelemetry-exporter-otlp-proto-grpc, which requires
+# protobuf>=5.0 — incompatible with the protobuf==4.25.3 pin above
+# (grpcio-tools==1.62.1 needs protobuf<5.0; see Dockerfile for why that pin
+# exists). We only use the Prometheus reader (metric_exporters=["prometheus"]),
+# so OTLP export and every auto-instrumentation module go unused —
+# otel_helper's instrumentation.py wraps each of them in try/except
+# ImportError, so it degrades cleanly when they're absent. Install it with
+# --no-deps as a separate step (see Dockerfile), after the three
+# opentelemetry-* packages above are already satisfied:
+#
+#   pip install --no-deps \
+#     https://github.com/StaffOps/staffops-otel-libs/releases/download/v0.2.0/otel_helper-0.2.0-py3-none-any.whl
 
 [project.optional-dependencies]
 dev = [

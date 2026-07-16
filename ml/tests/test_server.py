@@ -168,7 +168,14 @@ def test_serve_wires_server_metrics_and_gauges(monkeypatch):
 
     fake_server = _FakeServer()
 
-    monkeypatch.setattr(main, "start_http_server", lambda port: calls.setdefault("metrics_port", port))
+    def _fake_setup_telemetry(options):
+        calls["metrics_port"] = options.prometheus_metrics_port
+        calls["service_name"] = options.service_name
+
+    ready_calls = []
+
+    monkeypatch.setattr(main, "setup_telemetry", _fake_setup_telemetry)
+    monkeypatch.setattr(main.ML_READY, "set", lambda v, *a, **kw: ready_calls.append(v))
     monkeypatch.setattr(main.grpc, "server", lambda executor: fake_server)
     monkeypatch.setattr(
         main.ml_pb2_grpc,
@@ -179,9 +186,10 @@ def test_serve_wires_server_metrics_and_gauges(monkeypatch):
     main.serve(port=51000, metrics_port=8099)
 
     assert calls["metrics_port"] == 8099
+    assert calls["service_name"] == "staffops-ad-ml"
     assert calls["addr"] == "[::]:51000"
     assert calls["started"] is True
     assert calls["registered"] is True
     assert calls["waited"] is True
     # readiness gauge flipped on
-    assert main.ML_READY._value.get() == 1
+    assert ready_calls == [1]
