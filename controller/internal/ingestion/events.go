@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -67,7 +69,7 @@ func (w *EventWatcher) Watch(ctx context.Context, anomalies chan<- EventAnomaly)
 				continue
 			}
 
-			metrics.WorkerEventsReceived.WithLabelValues(event.Reason).Inc()
+			metrics.WorkerEventsReceived.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", event.Reason)))
 
 			anomalies <- EventAnomaly{
 				Reason:    event.Reason,

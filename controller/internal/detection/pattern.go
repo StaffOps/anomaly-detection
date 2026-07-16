@@ -1,6 +1,11 @@
 package detection
 
 import (
+	"context"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 )
@@ -39,7 +44,7 @@ func (d *PatternDetector) EvaluateEvent(event ingestion.EventAnomaly) *Anomaly {
 		severity = "warning"
 	}
 
-	metrics.WorkerDetections.WithLabelValues("pattern").Inc()
+	metrics.WorkerDetections.Add(context.Background(), 1, metric.WithAttributes(attribute.String("detector", "pattern")))
 
 	return &Anomaly{
 		MetricName: event.Reason,

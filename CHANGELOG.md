@@ -8,7 +8,33 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ## [Unreleased]
 
-Work landed after controller 0.8.0.
+Work landed after controller 0.9.0.
+
+## controller — [0.9.0] — 2026-07-16
+
+### observability
+
+**Changed — controller/worker metrics now route through `staffops-otel-libs/go` (2026-07-16)**
+- Bumped `staffops-otel-libs/go` 0.1.0 → 0.2.0.
+- All `staffops_ad_controller_*` / `staffops_ad_worker_*` / `staffops_ad_detection_*` /
+  `staffops_ad_alert_*` instruments moved from direct `client_golang` registration to the
+  OTel Metrics API (`otel.Meter`, via `otelhelper`), served through
+  `otelhelper.MetricsHandler()` on the existing `/metrics` endpoint. Metric names and label
+  keys are unchanged. Instruments are created eagerly at package load against the global
+  OTel meter, so they're safe to record on before `otelhelper.Setup()` runs (matches how the
+  OTel tracing API already behaves) — no separate init call needed, no behavior change for
+  components/tests that construct dependencies directly.
+- `otelhelper.Setup()` is now called unconditionally in both `main.go` entry points (previously
+  skipped entirely when `OTEL_EXPORTER_OTLP_ENDPOINT` was unset). Without a collector configured,
+  the library's own Prometheus fallback takes over — same effective behavior as before, now
+  going through one code path instead of a hand-rolled `else` branch.
+- Removed the app-side `cluster` constant-label wrap (`prometheus.WrapRegistererWith` in both
+  `main.go`). Cluster identity is scrape-layer-only now (ServiceMonitor `externalLabels` /
+  vmagent), consistent with how every other org-specific label was already handled — see
+  [Metrics Reference](docs/site/reference/metrics.md).
+- Helm chart: removed `vmServiceScrape` (VMServiceScrape/vm-operator-specific CRD) — vm-operator
+  honors the standard `ServiceMonitor` CRD directly, so `serviceMonitor.enabled` is now the
+  single scrape toggle for both Prometheus Operator and VictoriaMetrics clusters.
 
 ## controller — [0.8.0] — 2026-07-14
 

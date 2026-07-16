@@ -136,15 +136,15 @@ func Run(ctx context.Context, cfg Config, cb Callbacks) error {
 		RetryPeriod:     cfg.RetryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(leaderCtx context.Context) {
-				metrics.IsLeader.Set(1)
-				metrics.LeaderTransitions.Inc()
+				metrics.IsLeader.Record(leaderCtx, 1)
+				metrics.LeaderTransitions.Add(leaderCtx, 1)
 				slog.Info("leader: acquired leadership", "identity", cfg.Identity)
 				if cb.OnStartedLeading != nil {
 					cb.OnStartedLeading(leaderCtx)
 				}
 			},
 			OnStoppedLeading: func() {
-				metrics.IsLeader.Set(0)
+				metrics.IsLeader.Record(context.Background(), 0)
 				slog.Warn("leader: lost leadership", "identity", cfg.Identity)
 				if cb.OnStoppedLeading != nil {
 					cb.OnStoppedLeading()

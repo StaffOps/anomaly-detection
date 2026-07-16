@@ -11,8 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	otelhelper "github.com/staffops/staffops-otel-libs/go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -33,22 +34,21 @@ func main() {
 	configPath := flag.String("config", "config/config.local.yaml", "path to config file")
 	flag.Parse()
 
-	// OTel SDK: traces + logs via OTLP when collector is configured.
-	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	if otelEndpoint != "" {
-		otelShutdown, otelErr := otelhelper.Setup(context.Background(),
-			otelhelper.WithServiceName("staffops-ad-worker"),
-			otelhelper.WithDisabledSignals([]string{"metrics"}),
-		)
-		if otelErr != nil {
-			slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
-			slog.Warn("otel setup failed, using plain logger", "error", otelErr)
-		} else {
-			defer otelShutdown(context.Background())
-			slog.SetDefault(otelhelper.NewLogger(otelhelper.LOCAL, os.Getenv("OTEL_HELPER_DEBUG_LEVEL") == "true"))
-		}
-	} else {
+	// OTel SDK: traces + logs via OTLP when a collector is configured; metrics
+	// always route through the lib's Prometheus reader (otelhelper.MetricsHandler,
+	// mounted below). Without OTEL_EXPORTER_OTLP_ENDPOINT, the lib itself falls
+	// back to in-process traces + stdout logs (see otel-libs HOW-TO.md #13).
+	otelShutdown, otelErr := otelhelper.Setup(context.Background(),
+		otelhelper.WithServiceName("staffops-ad-worker"),
+		otelhelper.WithMetricExporters("prometheus"),
+		otelhelper.WithoutMetricsListener(), // mounted on our own mux instead
+	)
+	if otelErr != nil {
 		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+		slog.Warn("otel setup failed, using plain logger", "error", otelErr)
+	} else {
+		defer otelShutdown(context.Background())
+		slog.SetDefault(otelhelper.NewLogger(otelhelper.LOCAL, os.Getenv("OTEL_HELPER_DEBUG_LEVEL") == "true"))
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -60,13 +60,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Register metrics with `cluster` as a constant label. Org-specific labels
-	// belong at the scrape layer — see comment in cmd/controller/main.go.
-	constLabels := prometheus.Labels{
-		"cluster": cfg.Cluster,
-	}
-	metrics.MustRegisterWorker(prometheus.WrapRegistererWith(constLabels, metrics.WorkerRegistry))
-
 	// Redis
 	redis, err := redisclient.NewClient(cfg.Redis)
 	if err != nil {
@@ -76,7 +69,7 @@ func main() {
 	defer redis.Close()
 
 	// Metrics server
-	metricsSrv := metrics.NewServer(cfg.Worker.MetricsPort, metrics.WorkerRegistry)
+	metricsSrv := metrics.NewServer(cfg.Worker.MetricsPort, otelhelper.MetricsHandler())
 	metricsSrv.AddReadinessCheck(redis.ReadinessCheck())
 	metricsSrv.Start()
 
@@ -137,7 +130,7 @@ func main() {
 	pb.RegisterWorkerServiceServer(grpcServer, srv)
 
 	metricsSrv.SetReady(true)
-	metrics.BuildInfo.WithLabelValues(version.Version).Set(1)
+	metrics.BuildInfo.Record(ctx, 1, metric.WithAttributes(attribute.String("version", version.Version)))
 	slog.Info("worker started", "version", version.Version, "grpc_port", cfg.Worker.GRPCPort, "metrics_port", cfg.Worker.MetricsPort)
 
 	go func() {
@@ -190,7 +183,8 @@ func (s *workerServer) ProcessJobs(ctx context.Context, batch *pb.JobBatch) (*pb
 				JobId: job.Id,
 				Error: err.Error(),
 			})
-			metrics.WorkerJobsProcessed.WithLabelValues(job.Type.String(), "error").Inc()
+			metrics.WorkerJobsProcessed.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("type", job.Type.String()), attribute.String("status", "error")))
 			continue
 		}
 
@@ -199,7 +193,8 @@ func (s *workerServer) ProcessJobs(ctx context.Context, batch *pb.JobBatch) (*pb
 		kept := anomalies[:0]
 		for _, a := range anomalies {
 			if reason := s.suppression.SuppressReason(a); reason != "" {
-				metrics.WorkerAnomaliesSuppressed.WithLabelValues(a.Detector, reason).Inc()
+				metrics.WorkerAnomaliesSuppressed.Add(ctx, 1, metric.WithAttributes(
+					attribute.String("detector", a.Detector), attribute.String("reason", reason)))
 				continue
 			}
 			kept = append(kept, a)
@@ -225,8 +220,10 @@ func (s *workerServer) ProcessJobs(ctx context.Context, batch *pb.JobBatch) (*pb
 			})
 		}
 
-		metrics.WorkerJobsProcessed.WithLabelValues(job.Type.String(), "success").Inc()
-		metrics.WorkerJobDuration.WithLabelValues(job.Type.String()).Observe(time.Since(start).Seconds())
+		metrics.WorkerJobsProcessed.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("type", job.Type.String()), attribute.String("status", "success")))
+		metrics.WorkerJobDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(
+			attribute.String("type", job.Type.String())))
 	}
 
 	return results, nil

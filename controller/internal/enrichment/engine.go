@@ -17,6 +17,9 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
@@ -88,11 +91,11 @@ func (e *Engine) Run(ctx context.Context, id Identity) Bundle {
 
 	// Cache lookup
 	if cached, ok := e.loadCache(ctx, id); ok {
-		metrics.EnrichmentCacheHits.Inc()
+		metrics.EnrichmentCacheHits.Add(ctx, 1)
 		cached.Cached = true
 		return cached
 	}
-	metrics.EnrichmentCacheMisses.Inc()
+	metrics.EnrichmentCacheMisses.Add(ctx, 1)
 
 	// Fan out queries with bounded concurrency
 	start := time.Now()
@@ -102,8 +105,8 @@ func (e *Engine) Run(ctx context.Context, id Identity) Bundle {
 	// Cache successful runs (even partially, to dampen retries on failures)
 	e.storeCache(ctx, bundle)
 
-	metrics.EnrichmentRuns.WithLabelValues(kindLabel(id.Kind())).Inc()
-	metrics.EnrichmentDuration.WithLabelValues(kindLabel(id.Kind())).Observe(time.Since(start).Seconds())
+	metrics.EnrichmentRuns.Add(ctx, 1, metric.WithAttributes(attribute.String("kind", kindLabel(id.Kind()))))
+	metrics.EnrichmentDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(attribute.String("kind", kindLabel(id.Kind()))))
 	return bundle
 }
 
@@ -154,7 +157,7 @@ func (e *Engine) runOne(ctx context.Context, id Identity, q config.EnrichmentQue
 	case "prometheus":
 		samples, err := e.vmPoll.Query(ctx, rendered)
 		if err != nil {
-			metrics.EnrichmentQueryErrors.WithLabelValues(source).Inc()
+			metrics.EnrichmentQueryErrors.Add(ctx, 1, metric.WithAttributes(attribute.String("source", source)))
 			r.Error = err.Error()
 			return r
 		}
@@ -173,7 +176,7 @@ func (e *Engine) runOne(ctx context.Context, id Identity, q config.EnrichmentQue
 		}
 		samples, err := e.lokiPoll.QueryMetric(ctx, rendered)
 		if err != nil {
-			metrics.EnrichmentQueryErrors.WithLabelValues(source).Inc()
+			metrics.EnrichmentQueryErrors.Add(ctx, 1, metric.WithAttributes(attribute.String("source", source)))
 			r.Error = err.Error()
 			return r
 		}

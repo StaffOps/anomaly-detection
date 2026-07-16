@@ -14,7 +14,7 @@ func LokiChecker(cfg config.DatasourceEndpoint) metrics.ReadinessChecker {
 	url := cfg.URL + "/loki/api/v1/labels"
 	return func(ctx context.Context) error {
 		err := probeHTTP(ctx, client, url)
-		recordResult("loki", err)
+		recordResult(ctx, "loki", err)
 		return err
 	}
 }
@@ -25,7 +25,7 @@ func AlertmanagerChecker(cfg config.DatasourceEndpoint) metrics.ReadinessChecker
 	url := cfg.URL + "/api/v2/status"
 	return func(ctx context.Context) error {
 		err := probeHTTP(ctx, client, url)
-		recordResult("alertmanager", err)
+		recordResult(ctx, "alertmanager", err)
 		return err
 	}
 }

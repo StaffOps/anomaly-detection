@@ -12,6 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/correlation"
 	"github.com/staffops/staffops-anomaly-detection/internal/detection"
@@ -102,7 +105,7 @@ func (d *Dispatcher) FireCorrelated(ctx context.Context, ca correlation.Correlat
 	// Increment counter BEFORE the dry-run check so the counter measures intent
 	// (alerts that would have fired) rather than delivery. Dispatch errors are
 	// counted separately in metrics.AlertsDispatchErrors.
-	metrics.AlertsFired.WithLabelValues(ca.Severity).Inc()
+	metrics.AlertsFired.Add(ctx, 1, metric.WithAttributes(attribute.String("severity", ca.Severity)))
 
 	if d.dryRun {
 		return nil
@@ -144,7 +147,7 @@ func (d *Dispatcher) Fire(ctx context.Context, anomaly detection.Anomaly) error 
 	)
 
 	// Increment counter BEFORE the dry-run check (see FireCorrelated for rationale).
-	metrics.AlertsFired.WithLabelValues(anomaly.Severity).Inc()
+	metrics.AlertsFired.Add(ctx, 1, metric.WithAttributes(attribute.String("severity", anomaly.Severity)))
 
 	if d.dryRun {
 		return nil
@@ -166,13 +169,13 @@ func (d *Dispatcher) send(ctx context.Context, alert alertmanagerAlert, severity
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		metrics.AlertsDispatchErrors.Inc()
+		metrics.AlertsDispatchErrors.Add(ctx, 1)
 		return fmt.Errorf("post alertmanager: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		metrics.AlertsDispatchErrors.Inc()
+		metrics.AlertsDispatchErrors.Add(ctx, 1)
 		return fmt.Errorf("alertmanager returned %d", resp.StatusCode)
 	}
 

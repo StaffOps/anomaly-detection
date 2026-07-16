@@ -1,40 +1,16 @@
 # Metrics Reference
 
-All three components — Controller, Workers, and the ML Service — expose Prometheus-compatible metrics on their HTTP `/metrics` endpoints (port `8080` for Go components, port `8000` for the ML service). Every metric carries at minimum a `cluster` label whose value is the `clusterName` Helm value.
+All three components — Controller, Workers, and the ML Service — expose Prometheus-compatible metrics on their HTTP `/metrics` endpoints (port `8080` for Go components, port `8000` for the ML service). Controller and worker metrics are OTel Metrics API instruments (`staffops-otel-libs/go`, `otelhelper.MetricsHandler()`) — no direct `client_golang` registration. The `cluster` (and any other org-specific) label is **not** emitted by the app; it's added at the scrape layer via the ServiceMonitor's `externalLabels` (vmagent) or your Prometheus `external_labels`/relabel config. Queries below assume that label is present from the scrape layer.
 
 ---
 
 ## Scraping configuration
 
-=== "VMServiceScrape (vm-operator)"
+The chart exposes a single, vendor-neutral scrape mechanism — `ServiceMonitor`. vm-operator
+honors the `ServiceMonitor` CRD natively on VictoriaMetrics clusters, so there is no separate
+`VMServiceScrape` resource to configure.
 
-    ```yaml
-    vmServiceScrape:
-      enabled: true
-      interval: 15s
-      scrapeTimeout: 10s
-    ```
-
-    When enabled, the chart creates a `VMServiceScrape` resource targeting all component services:
-
-    ```yaml
-    apiVersion: operator.victoriametrics.com/v1beta1
-    kind: VMServiceScrape
-    metadata:
-      name: staffops-anomaly-detection
-      namespace: monitoring
-    spec:
-      selector:
-        matchLabels:
-          app.kubernetes.io/name: staffops-anomaly-detection
-      endpoints:
-        - port: metrics
-          interval: 15s
-          scrapeTimeout: 10s
-          path: /metrics
-    ```
-
-=== "ServiceMonitor (Prometheus Operator)"
+=== "ServiceMonitor (Prometheus Operator / vm-operator)"
 
     ```yaml
     serviceMonitor:
@@ -92,7 +68,7 @@ The controller exposes metrics about detection cycle orchestration, leader elect
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `result` |
+| Labels | `result` |
 | Description | Total number of completed detection cycles since startup. The `result` label is either `success` or `error`. A flatlined counter on the leader pod indicates the detection loop has stalled. |
 
 **PromQL examples:**
@@ -115,7 +91,7 @@ rate(staffops_ad_controller_cycles_total[5m])
 | Property | Value |
 |---|---|
 | Type | Histogram |
-| Labels | `cluster` |
+| Labels | (none) |
 | Buckets | `0.1, 0.5, 1, 2, 5, 10, 30` seconds |
 | Description | End-to-end duration of each detection cycle: from job dispatch to alert firing. High values indicate slow worker responses or a large number of detection rules. |
 
@@ -134,7 +110,7 @@ histogram_quantile(0.95, rate(staffops_ad_controller_cycle_duration_seconds_buck
 | Property | Value |
 |---|---|
 | Type | Gauge |
-| Labels | `cluster`, `pod` |
+| Labels | `pod` |
 | Description | Set to `1` on the pod currently holding the Kubernetes Lease, and `0` on all standbys. Exactly one pod should show `1` at any time. If zero pods show `1`, no detection is running. |
 
 ```promql
@@ -152,7 +128,7 @@ staffops_ad_controller_is_leader == 1
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `source`, `algorithm`, `severity` |
+| Labels | `source`, `algorithm`, `severity` |
 | Description | Total anomalies detected before deduplication. `source` is `metrics` or `logs`. `algorithm` is one of `static`, `zscore`, `ewma`, `isolation_forest`, `prophet`. Useful for understanding which algorithms contribute the most signals. |
 
 ```promql
@@ -174,7 +150,7 @@ sum(increase(staffops_ad_controller_anomalies_detected_total[1h]))
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `severity`, `dry_run` |
+| Labels | `severity`, `dry_run` |
 | Description | Total alerts sent (or would-have-been-sent) to Alertmanager. When `controller.dryRun=true`, the counter still increments but `dry_run="true"` in the label — the Alertmanager is not actually called. Use this to validate rule coverage before enabling live alerting. |
 
 ```promql
@@ -192,7 +168,7 @@ rate(staffops_ad_controller_alerts_fired_total[15m])
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `reason` |
+| Labels | `reason` |
 | Description | Anomalies that were detected but suppressed before reaching Alertmanager. `reason` is one of `dedup_ttl` (same anomaly fired recently), `excluded_namespace`, or `static_excluded_namespace`. |
 
 ```promql
@@ -211,7 +187,7 @@ Workers expose metrics about query execution, algorithm performance, and Redis b
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `pod`, `result` |
+| Labels | `pod`, `result` |
 | Description | Total detection jobs processed by this worker. `result` is `success` or `error`. A high error rate usually indicates connectivity issues with VictoriaMetrics, Loki, or Redis. |
 
 ```promql
@@ -229,7 +205,7 @@ rate(staffops_ad_worker_jobs_total{result="error"}[5m])
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `pod`, `detector`, `reason` |
+| Labels | `pod`, `detector`, `reason` |
 | Description | Anomalies dropped by the suppression filter before reaching the controller. `reason` is `namespace_all` (namespace fully excluded), `namespace_static` (static-only namespace), or `adaptive_workload` (workload on the adaptive exclude list). Pair with `staffops_ad_worker_detections_total` (pre-suppression) to see the suppression rate. See [Suppression](../configuration/suppression.md). |
 
 ```promql
@@ -248,7 +224,7 @@ sum(rate(staffops_ad_worker_anomalies_suppressed_total{reason="adaptive_workload
 | Property | Value |
 |---|---|
 | Type | Histogram |
-| Labels | `cluster`, `pod`, `datasource` |
+| Labels | `pod`, `datasource` |
 | Buckets | `0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10` seconds |
 | Description | Duration of individual queries to each datasource. `datasource` is `victoriametrics` or `loki`. Slow queries (p99 > 5s) directly lengthen detection cycles and may indicate datasource pressure or overly complex PromQL expressions. |
 
@@ -275,7 +251,7 @@ histogram_quantile(0.95,
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `pod`, `operation` |
+| Labels | `pod`, `operation` |
 | Description | Redis cache hits during baseline lookups. `operation` is `baseline_read`, `seasonal_profile_read`, or `dedup_check`. A hit rate below 80% on `baseline_read` suggests baselines are expiring too quickly — consider increasing `redis.ttl.baseline`. |
 
 ```promql
@@ -292,7 +268,7 @@ sum(rate(staffops_ad_worker_redis_operations_total{operation="baseline_read"}[10
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `pod`, `operation`, `result` |
+| Labels | `pod`, `operation`, `result` |
 | Description | Total Redis operations performed. `operation` matches the cache hits metric. `result` is `hit`, `miss`, or `error`. Use alongside `redis_cache_hits_total` to compute hit ratios. |
 
 ```promql
@@ -307,7 +283,7 @@ rate(staffops_ad_worker_redis_operations_total{result="error"}[5m])
 | Property | Value |
 |---|---|
 | Type | Gauge |
-| Labels | `cluster`, `pod`, `rule` |
+| Labels | `pod`, `rule` |
 | Description | Number of samples still needed before adaptive detection activates for a given rule. Set to `0` once a rule's baseline has warmed up. Monitoring this gauge after install or after a Redis restart shows warm-up progress. |
 
 ```promql
@@ -325,7 +301,7 @@ staffops_ad_worker_baseline_warmup_remaining > 0
 | Property | Value |
 |---|---|
 | Type | Gauge |
-| Labels | `cluster`, `pod`, `rule`, `series_hash` |
+| Labels | `pod`, `rule`, `series_hash` |
 | Description | Current Z-Score value for each evaluated series. Useful for dashboarding — shows how far each series is from its baseline at the time of last evaluation. Values beyond ±3 indicate anomalous behavior (with default threshold). |
 
 ```promql
@@ -344,7 +320,7 @@ The ML service exposes metrics about inference requests, model performance, and 
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `model`, `result` |
+| Labels | `model`, `result` |
 | Description | Total inference requests served. `model` is `isolation_forest` or `prophet`. `result` is `anomaly`, `normal`, or `error`. Track the `anomaly` rate to understand ML detection volume relative to total predictions. |
 
 ```promql
@@ -364,7 +340,7 @@ rate(staffops_ad_ml_predictions_total{result="error"}[5m])
 | Property | Value |
 |---|---|
 | Type | Histogram |
-| Labels | `cluster`, `model` |
+| Labels | `model` |
 | Buckets | `0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5` seconds |
 | Description | Time spent on each inference call, from request received to response sent, per model. Isolation Forest inference is typically fast (<50ms); Prophet can be slower (100–500ms) depending on forecast horizon and dataset size. |
 
@@ -391,7 +367,7 @@ histogram_quantile(0.95,
 | Property | Value |
 |---|---|
 | Type | Counter |
-| Labels | `cluster`, `model`, `result` |
+| Labels | `model`, `result` |
 | Description | Total model retraining runs completed. `result` is `success` or `error`. A retraining error means the previous model version remains in use until the next successful retrain. |
 
 ```promql
@@ -409,7 +385,7 @@ increase(staffops_ad_ml_retraining_total{result="success"}[3h]) == 0
 | Property | Value |
 |---|---|
 | Type | Histogram |
-| Labels | `cluster`, `model` |
+| Labels | `model` |
 | Buckets | `1, 5, 10, 30, 60, 120, 300` seconds |
 | Description | Time taken to complete a full model retraining cycle. Isolation Forest retraining is typically 5–30 seconds; Prophet can take 30–120 seconds depending on the history depth. If retraining exceeds `ml.retrainInterval`, consider increasing the interval or reducing the dataset. |
 
@@ -429,7 +405,7 @@ histogram_quantile(0.5,
 | Property | Value |
 |---|---|
 | Type | Gauge |
-| Labels | `cluster`, `model` |
+| Labels | `model` |
 | Description | Number of training samples used in the most recent retraining run. Prophet requires a minimum of ~336 samples (2 weeks at 30s tick × 5 samples/min aggregated). Low values indicate insufficient historical data. |
 
 ```promql
@@ -447,7 +423,7 @@ staffops_ad_ml_model_training_samples{model="prophet"} < 336
 | Property | Value |
 |---|---|
 | Type | Gauge |
-| Labels | `cluster`, `model`, `rule` |
+| Labels | `model`, `rule` |
 | Description | Most recent anomaly score returned by the model for each evaluated rule. For Isolation Forest, lower scores (closer to `-1`) indicate more anomalous. For Prophet, the score represents the normalized deviation from the forecast confidence interval. |
 
 ```promql

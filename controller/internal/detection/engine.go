@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/baseline"
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
@@ -60,6 +63,6 @@ func (e *Engine) EvaluateLogRate(ctx context.Context, metricName string, samples
 	for i := range results {
 		results[i].Signal = "logs"
 	}
-	metrics.WorkerDetections.WithLabelValues("adaptive").Add(float64(len(results)))
+	metrics.WorkerDetections.Add(ctx, int64(len(results)), metric.WithAttributes(attribute.String("detector", "adaptive")))
 	return results
 }

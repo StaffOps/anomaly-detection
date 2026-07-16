@@ -1,7 +1,11 @@
 package detection
 
 import (
+	"context"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
@@ -35,7 +39,8 @@ func (d *StaticDetector) Evaluate(rule config.StaticRule, samples []ingestion.Sa
 		}
 	}
 	if len(anomalies) > 0 {
-		metrics.WorkerDetections.WithLabelValues("static").Add(float64(len(anomalies)))
+		metrics.WorkerDetections.Add(context.Background(), int64(len(anomalies)),
+			metric.WithAttributes(attribute.String("detector", "static")))
 	}
 	return anomalies
 }

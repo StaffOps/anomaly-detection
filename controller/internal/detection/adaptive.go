@@ -5,6 +5,9 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/baseline"
 	"github.com/staffops/staffops-anomaly-detection/internal/ingestion"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
@@ -52,7 +55,8 @@ func (d *AdaptiveDetector) Evaluate(ctx context.Context, metricName string, samp
 		})
 	}
 	if len(anomalies) > 0 {
-		metrics.WorkerDetections.WithLabelValues("adaptive").Add(float64(len(anomalies)))
+		metrics.WorkerDetections.Add(ctx, int64(len(anomalies)),
+			metric.WithAttributes(attribute.String("detector", "adaptive")))
 	}
 	return anomalies
 }

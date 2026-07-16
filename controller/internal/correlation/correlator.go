@@ -10,6 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/detection"
 	"github.com/staffops/staffops-anomaly-detection/internal/enrichment"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
@@ -149,7 +152,7 @@ func (c *Correlator) Flush(ctx context.Context) []CorrelatedAlert {
 	c.mu.Unlock()
 
 	// Phase 1: detect workload-level patterns and decide which pod groups to suppress.
-	workloadAlerts, suppressed := c.detectWorkloadPatterns(groups)
+	workloadAlerts, suppressed := c.detectWorkloadPatterns(ctx, groups)
 
 	// Phase 2: pod-level alerts for groups not absorbed into workload patterns.
 	var alerts []CorrelatedAlert
@@ -157,7 +160,7 @@ func (c *Correlator) Flush(ctx context.Context) []CorrelatedAlert {
 
 	for podKey, g := range groups {
 		if suppressed[podKey] {
-			metrics.PodAlertsSuppressed.Inc()
+			metrics.PodAlertsSuppressed.Add(ctx, 1)
 			continue
 		}
 		alert := c.buildPodAlert(g)
@@ -171,7 +174,7 @@ func (c *Correlator) Flush(ctx context.Context) []CorrelatedAlert {
 // detectWorkloadPatterns scans the ready groups, identifies workloads with
 // ≥workloadMinPods distinct affected pods, and returns workload-level alerts
 // plus the set of pod-group keys that were absorbed (and should be suppressed).
-func (c *Correlator) detectWorkloadPatterns(groups map[string]*group) ([]CorrelatedAlert, map[string]bool) {
+func (c *Correlator) detectWorkloadPatterns(ctx context.Context, groups map[string]*group) ([]CorrelatedAlert, map[string]bool) {
 	type wlAccumulator struct {
 		anomalies []detection.Anomaly
 		pods      map[string]bool
@@ -259,7 +262,7 @@ func (c *Correlator) detectWorkloadPatterns(groups map[string]*group) ([]Correla
 			AffectedPods:     pods,
 			AffectedReplicas: len(pods),
 		})
-		metrics.WorkloadPatterns.WithLabelValues(maxSeverity).Inc()
+		metrics.WorkloadPatterns.Add(ctx, 1, metric.WithAttributes(attribute.String("severity", maxSeverity)))
 
 		// Mark contributing pod groups as suppressed
 		for _, pk := range acc.podKeys {
@@ -325,7 +328,7 @@ func (c *Correlator) finalize(ctx context.Context, alerts []CorrelatedAlert) []C
 			slog.Warn("dedup check failed", "error", err)
 		}
 		if exists {
-			metrics.AlertsDeduplicated.Inc()
+			metrics.AlertsDeduplicated.Add(ctx, 1)
 			continue
 		}
 		if err := c.redis.SetWithTTL(ctx, dedupKey, "1", c.cooldown); err != nil {
@@ -337,7 +340,7 @@ func (c *Correlator) finalize(ctx context.Context, alerts []CorrelatedAlert) []C
 			ca.Enrichment = c.enricher.Run(ctx, id)
 		}
 
-		metrics.AnomalyCorrelated.WithLabelValues(ca.Severity).Inc()
+		metrics.AnomalyCorrelated.Add(ctx, 1, metric.WithAttributes(attribute.String("severity", ca.Severity)))
 		out = append(out, ca)
 	}
 	return out

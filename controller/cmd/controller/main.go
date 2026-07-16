@@ -13,8 +13,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus"
 	otelhelper "github.com/staffops/staffops-otel-libs/go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -58,24 +59,22 @@ func main() {
 		return
 	}
 
-	// OTel SDK: traces + logs via OTLP. Metrics disabled — we use Prometheus registry directly.
-	// OTel SDK: traces + logs via OTLP when collector is configured.
-	// Without endpoint, use plain JSON logger (logs must always go to stdout).
-	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	if otelEndpoint != "" {
-		otelShutdown, otelErr := otelhelper.Setup(context.Background(),
-			otelhelper.WithServiceName("staffops-ad-controller"),
-			otelhelper.WithDisabledSignals([]string{"metrics"}),
-		)
-		if otelErr != nil {
-			slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
-			slog.Warn("otel setup failed, using plain logger", "error", otelErr)
-		} else {
-			defer otelShutdown(context.Background())
-			slog.SetDefault(otelhelper.NewLogger(otelhelper.LOCAL, os.Getenv("OTEL_HELPER_DEBUG_LEVEL") == "true"))
-		}
-	} else {
+	// OTel SDK: traces + logs via OTLP when a collector is configured; metrics
+	// always route through the lib's Prometheus reader (otelhelper.MetricsHandler,
+	// mounted below). Without OTEL_EXPORTER_OTLP_ENDPOINT, the lib itself falls
+	// back to in-process traces + stdout logs (see otel-libs HOW-TO.md #13) —
+	// Setup() is always called, no manual endpoint branching needed.
+	otelShutdown, otelErr := otelhelper.Setup(context.Background(),
+		otelhelper.WithServiceName("staffops-ad-controller"),
+		otelhelper.WithMetricExporters("prometheus"),
+		otelhelper.WithoutMetricsListener(), // mounted on our own mux instead
+	)
+	if otelErr != nil {
 		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+		slog.Warn("otel setup failed, using plain logger", "error", otelErr)
+	} else {
+		defer otelShutdown(context.Background())
+		slog.SetDefault(otelhelper.NewLogger(otelhelper.LOCAL, os.Getenv("OTEL_HELPER_DEBUG_LEVEL") == "true"))
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -87,17 +86,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Register metrics with `cluster` as a constant label so every time series
-	// carries cluster identity (kubernetes-mixin convention). Org-specific
-	// labels (e.g. eks_cluster, environment, team) are NOT added here on
-	// purpose — they belong at the scrape layer (vmagent externalLabels in
-	// production, prometheus.yml external_labels for local dev). This keeps
-	// the app generic across organizations. See observability-principles.md.
-	constLabels := prometheus.Labels{
-		"cluster": cfg.Cluster,
-	}
-	metrics.MustRegisterController(prometheus.WrapRegistererWith(constLabels, metrics.ControllerRegistry))
-
 	// Redis
 	redis, err := redisclient.NewClient(cfg.Redis)
 	if err != nil {
@@ -107,7 +95,7 @@ func main() {
 	defer redis.Close()
 
 	// Metrics server
-	metricsSrv := metrics.NewServer(cfg.Controller.MetricsPort, metrics.ControllerRegistry)
+	metricsSrv := metrics.NewServer(cfg.Controller.MetricsPort, otelhelper.MetricsHandler())
 	metricsSrv.AddReadinessCheck(redis.ReadinessCheck())
 	metricsSrv.Start()
 
@@ -153,7 +141,7 @@ func main() {
 	metricsSrv.AddReadinessCheck(readiness.MLChecker(mlClient))
 
 	metricsSrv.SetReady(true)
-	metrics.BuildInfo.WithLabelValues(version.Version).Set(1)
+	metrics.BuildInfo.Record(ctx, 1, metric.WithAttributes(attribute.String("version", version.Version)))
 	slog.Info("controller started",
 		"version", version.Version,
 		"metrics_port", cfg.Controller.MetricsPort,
@@ -186,9 +174,9 @@ func main() {
 			case <-ticker.C:
 				// Update workers_available gauge based on gRPC connection state.
 				if state := workerConn.GetState(); state == connectivity.Ready || state == connectivity.Idle {
-					metrics.WorkersAvailable.Set(1)
+					metrics.WorkersAvailable.Record(loopCtx, 1)
 				} else {
-					metrics.WorkersAvailable.Set(0)
+					metrics.WorkersAvailable.Record(loopCtx, 0)
 				}
 				runCycle(loopCtx, cfg, workerClient, mlClient, correlator, dispatcher)
 			case <-loopCtx.Done():
@@ -229,7 +217,7 @@ func main() {
 		}
 	} else {
 		// Single-replica mode (local docker-compose, dev): act as if always leader.
-		metrics.IsLeader.Set(1)
+		metrics.IsLeader.Record(ctx, 1)
 		runCycleLoop(ctx)
 	}
 
@@ -243,12 +231,12 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 	// Build job batch from config
 	batch := buildJobBatch(cfg)
 	if len(batch.Jobs) == 0 {
-		metrics.DetectionCycles.WithLabelValues("success").Inc()
-		metrics.CycleDuration.Observe(time.Since(start).Seconds())
+		metrics.DetectionCycles.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
+		metrics.CycleDuration.Record(ctx, time.Since(start).Seconds())
 		return
 	}
 
-	metrics.JobsDispatched.WithLabelValues("metrics").Add(float64(len(batch.Jobs)))
+	metrics.JobsDispatched.Add(ctx, int64(len(batch.Jobs)), metric.WithAttributes(attribute.String("type", "metrics")))
 
 	// Fan-out to workers via gRPC (round_robin distributes across workers)
 	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
@@ -257,15 +245,16 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 	results, err := client.ProcessJobs(callCtx, batch)
 	if err != nil {
 		slog.Error("worker call failed", "error", err)
-		metrics.DetectionCycles.WithLabelValues("error").Inc()
-		metrics.CycleDuration.Observe(time.Since(start).Seconds())
+		metrics.DetectionCycles.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
+		metrics.CycleDuration.Record(ctx, time.Since(start).Seconds())
 		return
 	}
 
 	// Log errors from workers
 	for _, e := range results.Errors {
 		slog.Warn("job error from worker", "job_id", e.JobId, "error", e.Error)
-		metrics.JobsFailed.WithLabelValues("worker", "error").Inc()
+		metrics.JobsFailed.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("worker", "worker"), attribute.String("reason", "error")))
 	}
 
 	// Feed anomalies into correlator (ML multivariate runs after correlation+enrichment,
@@ -291,14 +280,15 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 	}
 
 	accepted, rejected := fdr.Apply(allAnomalies)
-	metrics.FDRAccepted.Add(float64(len(accepted)))
-	metrics.FDRRejected.Add(float64(rejected))
+	metrics.FDRAccepted.Add(ctx, int64(len(accepted)))
+	metrics.FDRRejected.Add(ctx, int64(rejected))
 	if rejected > 0 {
 		slog.Info("fdr_applied", "accepted", len(accepted), "rejected", rejected, "target", cfg.Controller.FDRTarget)
 	}
 
 	for _, a := range accepted {
-		metrics.AnomalyDetected.WithLabelValues(a.Severity, a.Signal).Inc()
+		metrics.AnomalyDetected.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("severity", a.Severity), attribute.String("signal", a.Signal)))
 
 		// AnomalyByWorkload: bounded labels for dashboards (top noisy workloads).
 		// Namespace resolution: try namespace → deployment_environment → service_namespace.
@@ -326,7 +316,8 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 		} else if svc := a.Labels["service_name"]; svc != "" {
 			workload = svc
 		}
-		metrics.AnomalyByWorkload.WithLabelValues(ns, workload, a.Severity).Inc()
+		metrics.AnomalyByWorkload.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("namespace", ns), attribute.String("workload", workload), attribute.String("severity", a.Severity)))
 
 		// Log each anomaly for visibility
 		slog.Info("anomaly_detected",
@@ -395,8 +386,8 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 		}
 	}
 
-	metrics.DetectionCycles.WithLabelValues("success").Inc()
-	metrics.CycleDuration.Observe(time.Since(start).Seconds())
+	metrics.DetectionCycles.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
+	metrics.CycleDuration.Record(ctx, time.Since(start).Seconds())
 
 	if len(results.Anomalies) > 0 {
 		slog.Info("cycle complete",

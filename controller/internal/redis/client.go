@@ -8,6 +8,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sony/gobreaker"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
@@ -56,10 +58,10 @@ func (c *Client) HSet(ctx context.Context, key string, values map[string]interfa
 	_, err := c.cb.Execute(func() (interface{}, error) {
 		return nil, c.rdb.HSet(ctx, key, values).Err()
 	})
-	metrics.WorkerRedisDuration.Observe(time.Since(start).Seconds())
-	metrics.WorkerRedisOps.WithLabelValues("hset").Inc()
+	metrics.WorkerRedisDuration.Record(ctx, time.Since(start).Seconds())
+	metrics.WorkerRedisOps.Add(ctx, 1, metric.WithAttributes(attribute.String("op", "hset")))
 	if err != nil {
-		metrics.WorkerRedisErrors.Inc()
+		metrics.WorkerRedisErrors.Add(ctx, 1)
 	}
 	return err
 }
@@ -70,10 +72,10 @@ func (c *Client) HGetAll(ctx context.Context, key string) (map[string]string, er
 	result, err := c.cb.Execute(func() (interface{}, error) {
 		return c.rdb.HGetAll(ctx, key).Result()
 	})
-	metrics.WorkerRedisDuration.Observe(time.Since(start).Seconds())
-	metrics.WorkerRedisOps.WithLabelValues("hgetall").Inc()
+	metrics.WorkerRedisDuration.Record(ctx, time.Since(start).Seconds())
+	metrics.WorkerRedisOps.Add(ctx, 1, metric.WithAttributes(attribute.String("op", "hgetall")))
 	if err != nil {
-		metrics.WorkerRedisErrors.Inc()
+		metrics.WorkerRedisErrors.Add(ctx, 1)
 		return nil, err
 	}
 	return result.(map[string]string), nil
@@ -85,10 +87,10 @@ func (c *Client) SetWithTTL(ctx context.Context, key, value string, ttl time.Dur
 	_, err := c.cb.Execute(func() (interface{}, error) {
 		return nil, c.rdb.Set(ctx, key, value, ttl).Err()
 	})
-	metrics.WorkerRedisDuration.Observe(time.Since(start).Seconds())
-	metrics.WorkerRedisOps.WithLabelValues("set").Inc()
+	metrics.WorkerRedisDuration.Record(ctx, time.Since(start).Seconds())
+	metrics.WorkerRedisOps.Add(ctx, 1, metric.WithAttributes(attribute.String("op", "set")))
 	if err != nil {
-		metrics.WorkerRedisErrors.Inc()
+		metrics.WorkerRedisErrors.Add(ctx, 1)
 	}
 	return err
 }
@@ -99,10 +101,10 @@ func (c *Client) Exists(ctx context.Context, key string) (bool, error) {
 	result, err := c.cb.Execute(func() (interface{}, error) {
 		return c.rdb.Exists(ctx, key).Result()
 	})
-	metrics.WorkerRedisDuration.Observe(time.Since(start).Seconds())
-	metrics.WorkerRedisOps.WithLabelValues("exists").Inc()
+	metrics.WorkerRedisDuration.Record(ctx, time.Since(start).Seconds())
+	metrics.WorkerRedisOps.Add(ctx, 1, metric.WithAttributes(attribute.String("op", "exists")))
 	if err != nil {
-		metrics.WorkerRedisErrors.Inc()
+		metrics.WorkerRedisErrors.Add(ctx, 1)
 		return false, err
 	}
 	return result.(int64) > 0, nil
@@ -118,10 +120,10 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 		}
 		return v, err
 	})
-	metrics.WorkerRedisDuration.Observe(time.Since(start).Seconds())
-	metrics.WorkerRedisOps.WithLabelValues("get").Inc()
+	metrics.WorkerRedisDuration.Record(ctx, time.Since(start).Seconds())
+	metrics.WorkerRedisOps.Add(ctx, 1, metric.WithAttributes(attribute.String("op", "get")))
 	if err != nil {
-		metrics.WorkerRedisErrors.Inc()
+		metrics.WorkerRedisErrors.Add(ctx, 1)
 		return "", err
 	}
 	return result.(string), nil

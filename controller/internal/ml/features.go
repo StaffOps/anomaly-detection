@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/detection"
 	"github.com/staffops/staffops-anomaly-detection/internal/enrichment"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
@@ -67,12 +70,12 @@ func (c *Client) DetectFromFeatures(ctx context.Context, features map[string]flo
 	}
 
 	resp, err := c.client.DetectMultivariate(callCtx, &pb.MultivariateRequest{Samples: pbSamples})
-	metrics.MLCallDuration.WithLabelValues("multivariate").Observe(time.Since(start).Seconds())
+	metrics.MLCallDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(attribute.String("method", "multivariate")))
 	if err != nil {
-		metrics.MLCalls.WithLabelValues("multivariate", "error").Inc()
+		metrics.MLCalls.Add(ctx, 1, metric.WithAttributes(attribute.String("method", "multivariate"), attribute.String("status", "error")))
 		return nil, err
 	}
-	metrics.MLCalls.WithLabelValues("multivariate", "ok").Inc()
+	metrics.MLCalls.Add(ctx, 1, metric.WithAttributes(attribute.String("method", "multivariate"), attribute.String("status", "ok")))
 
 	return &Detection{
 		IsAnomaly:    resp.IsAnomaly,

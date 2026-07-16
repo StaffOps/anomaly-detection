@@ -190,7 +190,7 @@ func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]s
 		if err := s.save(ctx, key, updated); err != nil {
 			return nil, err
 		}
-		metrics.WorkerBaselineUpdates.Inc()
+		metrics.WorkerBaselineUpdates.Add(ctx, 1)
 
 		// Return warm-up result (no anomaly detection yet)
 		if isWarmingUp {
@@ -215,7 +215,7 @@ func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]s
 	}
 
 	// Poisoned: return anomaly result WITHOUT updating baseline.
-	metrics.WorkerBaselinePoisonRejected.Inc()
+	metrics.WorkerBaselinePoisonRejected.Add(ctx, 1)
 
 	return &Result{
 		IsAnomaly: zscore > s.cfg.ZScoreThreshold,

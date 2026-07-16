@@ -6,12 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 func newTestServer() *Server {
-	return NewServer(0, prometheus.NewRegistry())
+	return NewServer(0, http.NotFoundHandler())
 }
 
 func TestNewServer_NotNil(t *testing.T) {
@@ -102,31 +100,32 @@ func TestSetReady_Toggle(t *testing.T) {
 	}
 }
 
-func TestMustRegisterController_DoesNotPanic(t *testing.T) {
+// TestInstruments_UsableWithoutSetup verifies every package-level instrument
+// is safe to record on immediately (package init creates them eagerly against
+// the global OTel meter — no otelhelper.Setup call required, matching how
+// components are constructed directly in other packages' tests).
+func TestInstruments_UsableWithoutSetup(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
-			t.Errorf("MustRegisterController panicked: %v", r)
+			t.Fatalf("recording on a package-level instrument panicked: %v", r)
 		}
 	}()
-	reg := prometheus.NewRegistry()
-	MustRegisterController(reg)
-}
-
-func TestMustRegisterWorker_DoesNotPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("MustRegisterWorker panicked: %v", r)
-		}
-	}()
-	reg := prometheus.NewRegistry()
-	MustRegisterWorker(reg)
+	ctx := context.Background()
+	DetectionCycles.Add(ctx, 1)
+	CycleDuration.Record(ctx, 1.0)
+	WorkersAvailable.Record(ctx, 1)
+	BuildInfo.Record(ctx, 1)
+	WorkerJobsProcessed.Add(ctx, 1)
+	WorkerJobDuration.Record(ctx, 1.0)
+	WorkerBaselineSeries.Record(ctx, 1)
+	WorkerRedisOps.Add(ctx, 1)
 }
 
 func TestStart_And_Shutdown(t *testing.T) {
 	// Use port 0 to let OS pick a free port (Start won't bind to port 0 directly,
 	// but we can call Start and immediately Shutdown to exercise the code path).
 	// We use a non-zero port that's unlikely to be in use but accepted by the OS.
-	s := NewServer(0, prometheus.NewRegistry())
+	s := NewServer(0, http.NotFoundHandler())
 	s.Start()
 	// use background context
 	// Shutdown should return promptly since server just started (or never fully bound)

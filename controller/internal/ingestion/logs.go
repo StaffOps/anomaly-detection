@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 )
@@ -31,7 +34,8 @@ func NewLogsPoller(cfg config.DatasourceEndpoint) *LogsPoller {
 func (p *LogsPoller) QueryMetric(ctx context.Context, query string) ([]Sample, error) {
 	start := time.Now()
 	defer func() {
-		metrics.WorkerQueryDuration.WithLabelValues("loki").Observe(time.Since(start).Seconds())
+		metrics.WorkerQueryDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("datasource", "loki")))
 	}()
 
 	u, err := url.Parse(p.baseURL + "/loki/api/v1/query")
@@ -47,14 +51,14 @@ func (p *LogsPoller) QueryMetric(ctx context.Context, query string) ([]Sample, e
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		metrics.WorkerQueryErrors.WithLabelValues("loki").Inc()
+		metrics.WorkerQueryErrors.Add(ctx, 1, metric.WithAttributes(attribute.String("datasource", "loki")))
 		return nil, fmt.Errorf("query loki: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		metrics.WorkerQueryErrors.WithLabelValues("loki").Inc()
+		metrics.WorkerQueryErrors.Add(ctx, 1, metric.WithAttributes(attribute.String("datasource", "loki")))
 		return nil, fmt.Errorf("loki returned %d: %s", resp.StatusCode, body)
 	}
 
@@ -78,7 +82,8 @@ func (p *LogsPoller) QueryMetric(ctx context.Context, query string) ([]Sample, e
 func (p *LogsPoller) QueryMetricRange(ctx context.Context, query string, start, end time.Time, step time.Duration) ([]TimeSeries, error) {
 	t0 := time.Now()
 	defer func() {
-		metrics.WorkerQueryDuration.WithLabelValues("loki_range").Observe(time.Since(t0).Seconds())
+		metrics.WorkerQueryDuration.Record(ctx, time.Since(t0).Seconds(),
+			metric.WithAttributes(attribute.String("datasource", "loki_range")))
 	}()
 
 	u, err := url.Parse(p.baseURL + "/loki/api/v1/query_range")
@@ -100,14 +105,14 @@ func (p *LogsPoller) QueryMetricRange(ctx context.Context, query string, start, 
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		metrics.WorkerQueryErrors.WithLabelValues("loki_range").Inc()
+		metrics.WorkerQueryErrors.Add(ctx, 1, metric.WithAttributes(attribute.String("datasource", "loki_range")))
 		return nil, fmt.Errorf("query_range loki: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		metrics.WorkerQueryErrors.WithLabelValues("loki_range").Inc()
+		metrics.WorkerQueryErrors.Add(ctx, 1, metric.WithAttributes(attribute.String("datasource", "loki_range")))
 		return nil, fmt.Errorf("loki returned %d: %s", resp.StatusCode, body)
 	}
 

@@ -15,7 +15,7 @@ func MLChecker(client *ml.Client) metrics.ReadinessChecker {
 			return nil
 		}
 		err := client.Health(ctx)
-		recordResult("ml", err)
+		recordResult(ctx, "ml", err)
 		return err
 	}
 }

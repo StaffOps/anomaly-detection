@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -93,12 +95,12 @@ func (c *Client) Forecast(ctx context.Context, metricName string, values []float
 		HorizonMinutes:  30,
 		BreachThreshold: threshold,
 	})
-	metrics.MLCallDuration.WithLabelValues("forecast").Observe(time.Since(start).Seconds())
+	metrics.MLCallDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(attribute.String("method", "forecast")))
 	if err != nil {
-		metrics.MLCalls.WithLabelValues("forecast", "error").Inc()
+		metrics.MLCalls.Add(ctx, 1, metric.WithAttributes(attribute.String("method", "forecast"), attribute.String("status", "error")))
 		return nil, err
 	}
-	metrics.MLCalls.WithLabelValues("forecast", "ok").Inc()
+	metrics.MLCalls.Add(ctx, 1, metric.WithAttributes(attribute.String("method", "forecast"), attribute.String("status", "ok")))
 
 	if !resp.WillBreachThreshold {
 		return nil, nil
@@ -133,12 +135,12 @@ func (c *Client) DetectMultivariate(ctx context.Context, samples map[string]floa
 	}
 
 	resp, err := c.client.DetectMultivariate(callCtx, &pb.MultivariateRequest{Samples: pbSamples})
-	metrics.MLCallDuration.WithLabelValues("multivariate").Observe(time.Since(start).Seconds())
+	metrics.MLCallDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(attribute.String("method", "multivariate")))
 	if err != nil {
-		metrics.MLCalls.WithLabelValues("multivariate", "error").Inc()
+		metrics.MLCalls.Add(ctx, 1, metric.WithAttributes(attribute.String("method", "multivariate"), attribute.String("status", "error")))
 		return nil, err
 	}
-	metrics.MLCalls.WithLabelValues("multivariate", "ok").Inc()
+	metrics.MLCalls.Add(ctx, 1, metric.WithAttributes(attribute.String("method", "multivariate"), attribute.String("status", "ok")))
 
 	if !resp.IsAnomaly {
 		return nil, nil

@@ -13,6 +13,9 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
 	"github.com/staffops/staffops-anomaly-detection/internal/metrics"
 )
@@ -37,7 +40,7 @@ func PromChecker(cfg config.DatasourceEndpoint) metrics.ReadinessChecker {
 			}
 			return nil
 		})
-		recordResult("prometheus", err)
+		recordResult(ctx, "prometheus", err)
 		return err
 	}
 }
@@ -49,10 +52,11 @@ func clamp(d time.Duration) time.Duration {
 	return d
 }
 
-func recordResult(dep string, err error) {
+func recordResult(ctx context.Context, dep string, err error) {
 	res := "ok"
 	if err != nil {
 		res = "error"
 	}
-	metrics.ReadinessChecksTotal.WithLabelValues(dep, res).Inc()
+	metrics.ReadinessChecksTotal.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("dependency", dep), attribute.String("result", res)))
 }

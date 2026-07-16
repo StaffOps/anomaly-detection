@@ -40,7 +40,7 @@ Ordered by priority — items higher up are nearer-term.
 
 - [x] **P4.A.1** — Fix instrumentation bugs — done in 0.7.0 (counter before dry-run, gauge on tick, custom histogram buckets)
 - [x] **P4.A.2** — Cardinality cleanup — done in 0.7.0 (no `identity` label on any metric; bounded `workload` in AM labels)
-- [x] **P4.A.3** — Multi-cluster constant labels — done in 0.7.0 (`WrapRegistererWith{cluster}`, eks_cluster at scrape layer)
+- [x] **P4.A.3** — Multi-cluster constant labels — done in 0.7.0 (`WrapRegistererWith{cluster}`, `eks_cluster` at scrape layer); superseded in 0.9.0 — `cluster` moved to the scrape layer too (ServiceMonitor `externalLabels`), app emits no cluster identity at all now
 - [ ] **P4.A.4** — Dashboard refresh
 
 ## 🔜 Phase 5 — Cluster Readiness
