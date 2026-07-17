@@ -316,6 +316,20 @@ staffops_ad_worker_baseline_warmup_remaining > 0
 
 ---
 
+### `staffops_ad_worker_baseline_series_tracked`
+
+| Property | Value |
+|---|---|
+| Type | Gauge |
+| Description | Count of distinct baseline series (metric+label combinations) evaluated by this worker process since startup — cardinality watch for the EWMA baseline store. Per-instance; `sum()` across workers for the cluster-wide total. Resets on pod restart. |
+
+```promql
+# Total distinct baseline series tracked across all workers
+sum(staffops_ad_worker_baseline_series_tracked)
+```
+
+---
+
 ### `staffops_ad_worker_zscore_current`
 
 | Property | Value |

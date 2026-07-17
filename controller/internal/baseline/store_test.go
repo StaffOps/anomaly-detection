@@ -152,6 +152,26 @@ func TestEvaluate_DifferentSeriesAreIsolated(t *testing.T) {
 	}
 }
 
+func TestEvaluate_TracksDistinctSeriesCount(t *testing.T) {
+	s := NewStore(newFakeHashStore(), defaultCfg())
+	ctx := context.Background()
+
+	// Same series evaluated repeatedly must count once.
+	for i := 0; i < 5; i++ {
+		_, _ = s.Evaluate(ctx, "cpu", map[string]string{"pod": "p1"}, 1.0)
+	}
+	if got := len(s.seenSeries); got != 1 {
+		t.Errorf("repeated evaluations of the same series: want 1 tracked series, got %d", got)
+	}
+
+	// A genuinely new series must add to the count.
+	_, _ = s.Evaluate(ctx, "cpu", map[string]string{"pod": "p2"}, 1.0)
+	_, _ = s.Evaluate(ctx, "memory", map[string]string{"pod": "p1"}, 1.0)
+	if got := len(s.seenSeries); got != 3 {
+		t.Errorf("want 3 distinct tracked series (cpu/p1, cpu/p2, memory/p1), got %d", got)
+	}
+}
+
 func TestEvaluate_RedisLoadError(t *testing.T) {
 	store := newFakeHashStore()
 	store.err = fmt.Errorf("redis timeout")

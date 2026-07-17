@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/staffops/staffops-anomaly-detection/internal/config"
@@ -85,6 +86,13 @@ type Store struct {
 	cfg             config.Baseline
 	ephemeralLabels map[string]struct{}
 	absence         AbsenceRecorder
+
+	// seriesMu/seenSeries track distinct baseline keys seen by THIS process,
+	// for the staffops_ad_worker_baseline_series_tracked gauge (cardinality
+	// watch). Per-instance, not cluster-wide — sum() across workers in
+	// PromQL for the total. Resets on restart, same as any in-process gauge.
+	seriesMu   sync.Mutex
+	seenSeries map[string]struct{}
 }
 
 // AbsenceRecorder is called on every sample to track series liveness.
@@ -105,7 +113,7 @@ func NewStore(redis hashStore, cfg config.Baseline) *Store {
 	for _, l := range cfg.EphemeralLabels {
 		eph[l] = struct{}{}
 	}
-	return &Store{redis: redis, cfg: cfg, ephemeralLabels: eph, absence: noopRecorder{}}
+	return &Store{redis: redis, cfg: cfg, ephemeralLabels: eph, absence: noopRecorder{}, seenSeries: make(map[string]struct{})}
 }
 
 // SetAbsenceRecorder attaches an absence tracker to the store.
@@ -119,6 +127,8 @@ func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]s
 
 	// Track series liveness for absence-of-signal detection.
 	s.absence.RecordSample(metric, labels)
+
+	s.recordSeriesTracked(ctx, key)
 
 	stats, err := s.load(ctx, key)
 	if err != nil {
@@ -225,6 +235,22 @@ func (s *Store) Evaluate(ctx context.Context, metric string, labels map[string]s
 		Stddev:    stats.Stddev,
 		EWMA:      stats.EWMA,
 	}, nil
+}
+
+// recordSeriesTracked updates the baseline_series_tracked gauge whenever a
+// not-yet-seen key shows up. Cheap map lookup on the hot path; only touches
+// the metric (and re-records the gauge) on the rare new-series case.
+func (s *Store) recordSeriesTracked(ctx context.Context, key string) {
+	s.seriesMu.Lock()
+	if _, ok := s.seenSeries[key]; ok {
+		s.seriesMu.Unlock()
+		return
+	}
+	s.seenSeries[key] = struct{}{}
+	count := int64(len(s.seenSeries))
+	s.seriesMu.Unlock()
+
+	metrics.WorkerBaselineSeries.Record(ctx, count)
 }
 
 func (s *Store) load(ctx context.Context, key string) (*Stats, error) {

@@ -10,6 +10,27 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.9.0 / ml 0.3.0.
 
+## controller — [0.10.1] — 2026-07-17
+
+### observability
+
+**Fixed — structured logs (`alert_fired`, `anomaly_detected`, ...) were silently discarded (2026-07-17)**
+- Root cause: `staffops-otel-libs/go`'s `NewLogger` always bridged `slog` through
+  the OTel Logs API into the process's `LoggerProvider`. When no
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is configured (this deployment's case),
+  `configureLogging` builds that `LoggerProvider` with no export processor
+  attached — routing records through it silently dropped every one, with no
+  error anywhere. In practice: a full day of `alert_fired`/`anomaly_detected`
+  logs never reached stdout or Loki, breaking dry-run alert auditing (the
+  "🟢 Active alerts" / "📜 Recent alerts" Grafana panels showed nothing, not
+  because of a bad query, but because the logs genuinely didn't exist).
+  Bumped `staffops-otel-libs/go` 0.2.0 → 0.2.1, which fixes `NewLogger` to
+  fall back to a plain stdout JSON handler when no processor was attached.
+- `staffops_ad_worker_baseline_series_tracked` gauge was declared but never
+  recorded anywhere — `baseline.Store` now tracks distinct baseline keys seen
+  per-process and updates the gauge on each new series (cheap: only touches
+  the metric on the rare new-series case, not the hot path).
+
 ## controller — [0.10.0] — 2026-07-16
 
 ### detection
