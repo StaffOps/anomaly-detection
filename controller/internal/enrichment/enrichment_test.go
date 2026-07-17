@@ -132,10 +132,39 @@ func TestIdentityFromLabels_Empty(t *testing.T) {
 	}
 }
 
+func TestIdentityFromLabels_Cluster(t *testing.T) {
+	labels := map[string]string{
+		"cluster":   "applications-prd-nv",
+		"namespace": "prod",
+		"pod":       "api-abc",
+	}
+	id := IdentityFromLabels(labels)
+	if id.Cluster != "applications-prd-nv" {
+		t.Errorf("cluster: want applications-prd-nv, got %q", id.Cluster)
+	}
+}
+
+func TestIdentityFromLabels_ClusterAltKey(t *testing.T) {
+	labels := map[string]string{"k8s_cluster_name": "devops-core"}
+	id := IdentityFromLabels(labels)
+	if id.Cluster != "devops-core" {
+		t.Errorf("cluster alt key: want devops-core, got %q", id.Cluster)
+	}
+}
+
+func TestIdentityCacheKey_DifferentClusters_DifferentKeys(t *testing.T) {
+	a := Identity{Cluster: "applications-dev-nv", Namespace: "prod", Pod: "api-abc"}
+	b := Identity{Cluster: "applications-prd-nv", Namespace: "prod", Pod: "api-abc"}
+	if a.CacheKey() == b.CacheKey() {
+		t.Errorf("identical namespace/pod in different clusters must not share a cache key: %q", a.CacheKey())
+	}
+}
+
 // ─── Template substitution tests ──────────────────────────────────────────────
 
 func TestSubstitute_AllVariables(t *testing.T) {
 	id := Identity{
+		Cluster:     "devops-core",
 		Namespace:   "prod",
 		Pod:         "api-abc-123",
 		Container:   "api",
@@ -143,11 +172,21 @@ func TestSubstitute_AllVariables(t *testing.T) {
 		Workload:    "api",
 		Node:        "node-1",
 	}
-	query := "metric{namespace=\"$namespace\",pod=\"$pod\",container=\"$container\",service=\"$service_name\",workload=\"$workload\",node=\"$node\"}"
+	query := "metric{cluster=\"$cluster\",namespace=\"$namespace\",pod=\"$pod\",container=\"$container\",service=\"$service_name\",workload=\"$workload\",node=\"$node\"}"
 	got := substitute(query, id)
-	want := `metric{namespace="prod",pod="api-abc-123",container="api",service="api-svc",workload="api",node="node-1"}`
+	want := `metric{cluster="devops-core",namespace="prod",pod="api-abc-123",container="api",service="api-svc",workload="api",node="node-1"}`
 	if got != want {
 		t.Errorf("substitution mismatch:\nwant: %s\ngot:  %s", want, got)
+	}
+}
+
+func TestSubstitute_ClusterMissing_Empty(t *testing.T) {
+	id := Identity{Namespace: "prod"}
+	query := `metric{cluster="$cluster",namespace="$namespace"}`
+	got := substitute(query, id)
+	want := `metric{cluster="",namespace="prod"}`
+	if got != want {
+		t.Errorf("missing cluster substitution:\nwant: %s\ngot:  %s", want, got)
 	}
 }
 

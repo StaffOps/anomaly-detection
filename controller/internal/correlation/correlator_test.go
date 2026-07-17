@@ -52,6 +52,12 @@ func podAnomaly(ns, pod, detector, severity, signal string) detection.Anomaly {
 	}
 }
 
+func podAnomalyWithCluster(cluster, ns, pod, detector, severity, signal string) detection.Anomaly {
+	a := podAnomaly(ns, pod, detector, severity, signal)
+	a.Labels["cluster"] = cluster
+	return a
+}
+
 func newTestCorrelator(dedup *fakeDedupStore) *Correlator {
 	return NewCorrelator(dedup, &fakeEnricher{}, 0, 5*time.Minute, 3)
 }
@@ -98,6 +104,24 @@ func TestFlush_Dedup_SecondFlushSuppressed(t *testing.T) {
 	}
 }
 
+func TestFlush_SameNamespacePod_DifferentClusters_BothAlert(t *testing.T) {
+	c := newTestCorrelator(newFakeDedup())
+
+	// Same namespace + pod name, but two distinct real clusters — must not
+	// correlate/dedup together (regression for the pre-cluster-label bug).
+	c.Add(podAnomalyWithCluster("applications-dev-nv", "prod", "api-abc-xyz", "adaptive", "warning", "metrics"))
+	c.Add(podAnomalyWithCluster("applications-prd-nv", "prod", "api-abc-xyz", "adaptive", "warning", "metrics"))
+
+	alerts := c.Flush(context.Background())
+	if len(alerts) != 2 {
+		t.Fatalf("expected 2 alerts (one per cluster), got %d: %+v", len(alerts), alerts)
+	}
+	clusters := map[string]bool{alerts[0].Cluster: true, alerts[1].Cluster: true}
+	if !clusters["applications-dev-nv"] || !clusters["applications-prd-nv"] {
+		t.Errorf("expected both clusters represented, got %+v", clusters)
+	}
+}
+
 func TestFlush_MultipleSignals_EscalatesToCritical(t *testing.T) {
 	c := newTestCorrelator(newFakeDedup())
 
@@ -132,9 +156,9 @@ func TestFlush_WorkloadPattern_ThreeSiblings(t *testing.T) {
 	c := newTestCorrelator(newFakeDedup())
 
 	// Three pods of same workload (deployment pattern: name-hash-pod)
-	c.Add(podAnomaly("prod", "api-6d9ff7b9-aaa11", "adaptive", "warning", "metrics"))
-	c.Add(podAnomaly("prod", "api-6d9ff7b9-bbb22", "adaptive", "warning", "metrics"))
-	c.Add(podAnomaly("prod", "api-6d9ff7b9-ccc33", "adaptive", "warning", "metrics"))
+	c.Add(podAnomalyWithCluster("devops-core", "prod", "api-6d9ff7b9-aaa11", "adaptive", "warning", "metrics"))
+	c.Add(podAnomalyWithCluster("devops-core", "prod", "api-6d9ff7b9-bbb22", "adaptive", "warning", "metrics"))
+	c.Add(podAnomalyWithCluster("devops-core", "prod", "api-6d9ff7b9-ccc33", "adaptive", "warning", "metrics"))
 
 	alerts := c.Flush(context.Background())
 	if len(alerts) != 1 {
@@ -145,6 +169,28 @@ func TestFlush_WorkloadPattern_ThreeSiblings(t *testing.T) {
 	}
 	if alerts[0].AffectedReplicas != 3 {
 		t.Errorf("expected AffectedReplicas=3, got %d", alerts[0].AffectedReplicas)
+	}
+	if alerts[0].Cluster != "devops-core" {
+		t.Errorf("expected Cluster=devops-core, got %q", alerts[0].Cluster)
+	}
+}
+
+func TestFlush_WorkloadPattern_DifferentClusters_DoNotMerge(t *testing.T) {
+	c := newTestCorrelator(newFakeDedup())
+
+	// Same namespace/workload pattern, but split across two clusters — each
+	// only has 2 siblings, below the promotion threshold of 3, so neither
+	// should be incorrectly merged into a single 4-pod workload pattern.
+	c.Add(podAnomalyWithCluster("applications-dev-nv", "prod", "api-6d9ff7b9-aaa11", "adaptive", "warning", "metrics"))
+	c.Add(podAnomalyWithCluster("applications-dev-nv", "prod", "api-6d9ff7b9-bbb22", "adaptive", "warning", "metrics"))
+	c.Add(podAnomalyWithCluster("applications-prd-nv", "prod", "api-6d9ff7b9-ccc33", "adaptive", "warning", "metrics"))
+	c.Add(podAnomalyWithCluster("applications-prd-nv", "prod", "api-6d9ff7b9-ddd44", "adaptive", "warning", "metrics"))
+
+	alerts := c.Flush(context.Background())
+	for _, a := range alerts {
+		if a.Kind == KindWorkload {
+			t.Errorf("2+2 sibling pods split across clusters must not merge into a workload alert, got %+v", a)
+		}
 	}
 }
 
@@ -198,8 +244,9 @@ func TestExtractWorkloadFromKey(t *testing.T) {
 		key  string
 		want string
 	}{
-		{"prod/api", "api"},
-		{"monitoring/prometheus", "prometheus"},
+		{"devops-core/prod/api", "api"},
+		{"unknown/monitoring/prometheus", "prometheus"},
+		{"prod/api", "api"}, // legacy 2-part key, still supported
 		{"noslash", "noslash"},
 		{"", ""},
 	}
@@ -213,21 +260,21 @@ func TestExtractWorkloadFromKey(t *testing.T) {
 
 func TestWorkloadKey_Pod(t *testing.T) {
 	a := detection.Anomaly{
-		Labels: map[string]string{"namespace": "prod", "pod": "api-abc"},
+		Labels: map[string]string{"cluster": "devops-core", "namespace": "prod", "pod": "api-abc"},
 	}
 	key := workloadKey(a)
-	if key != "prod/api-abc" {
-		t.Errorf("want prod/api-abc, got %q", key)
+	if key != "devops-core/prod/api-abc" {
+		t.Errorf("want devops-core/prod/api-abc, got %q", key)
 	}
 }
 
 func TestWorkloadKey_ServiceFallback(t *testing.T) {
 	a := detection.Anomaly{
-		Labels: map[string]string{"namespace": "prod", "service_name": "api-svc"},
+		Labels: map[string]string{"cluster": "devops-core", "namespace": "prod", "service_name": "api-svc"},
 	}
 	key := workloadKey(a)
-	if key != "prod/api-svc" {
-		t.Errorf("want prod/api-svc, got %q", key)
+	if key != "devops-core/prod/api-svc" {
+		t.Errorf("want devops-core/prod/api-svc, got %q", key)
 	}
 }
 
@@ -236,6 +283,24 @@ func TestWorkloadKey_Empty(t *testing.T) {
 	key := workloadKey(a)
 	if key != "_unknown_" {
 		t.Errorf("want _unknown_, got %q", key)
+	}
+}
+
+func TestWorkloadKey_NoClusterLabel_DefaultsUnknown(t *testing.T) {
+	a := detection.Anomaly{
+		Labels: map[string]string{"namespace": "prod", "pod": "api-abc"},
+	}
+	key := workloadKey(a)
+	if key != "unknown/prod/api-abc" {
+		t.Errorf("want unknown/prod/api-abc, got %q", key)
+	}
+}
+
+func TestWorkloadKey_DifferentClusters_DoNotCollide(t *testing.T) {
+	a := detection.Anomaly{Labels: map[string]string{"cluster": "applications-dev-nv", "namespace": "prod", "pod": "api-abc"}}
+	b := detection.Anomaly{Labels: map[string]string{"cluster": "applications-prd-nv", "namespace": "prod", "pod": "api-abc"}}
+	if workloadKey(a) == workloadKey(b) {
+		t.Errorf("identical namespace/pod in different clusters must not produce the same key: %q", workloadKey(a))
 	}
 }
 

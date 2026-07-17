@@ -9,6 +9,7 @@ import (
 // Identity represents the labels available for an anomaly that can be used
 // to fan out enrichment queries. Empty strings mean the label was absent.
 type Identity struct {
+	Cluster     string
 	Namespace   string
 	Pod         string
 	Container   string
@@ -42,6 +43,7 @@ func (i Identity) Kind() Kind {
 // Returns the empty Identity if no usable label was found.
 func IdentityFromLabels(labels map[string]string) Identity {
 	return Identity{
+		Cluster:     firstNonEmpty(labels, "cluster", "k8s_cluster_name", "k8s.cluster.name"),
 		Namespace:   firstNonEmpty(labels, "namespace", "k8s_namespace_name", "k8s.namespace.name"),
 		Pod:         firstNonEmpty(labels, "pod", "k8s_pod_name", "k8s.pod.name"),
 		Container:   firstNonEmpty(labels, "container", "container_name", "k8s.container.name"),
@@ -54,6 +56,9 @@ func IdentityFromLabels(labels map[string]string) Identity {
 // CacheKey returns a stable key for caching enrichment results for this identity.
 func (i Identity) CacheKey() string {
 	parts := []string{}
+	if i.Cluster != "" {
+		parts = append(parts, "cluster="+i.Cluster)
+	}
 	if i.Namespace != "" {
 		parts = append(parts, "ns="+i.Namespace)
 	}

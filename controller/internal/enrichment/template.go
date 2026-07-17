@@ -8,9 +8,10 @@ import "strings"
 //
 // Supported placeholders:
 //
-//	$namespace, $pod, $container, $service_name, $workload, $node
+//	$cluster, $namespace, $pod, $container, $service_name, $workload, $node
 func substitute(query string, id Identity) string {
 	r := strings.NewReplacer(
+		"$cluster", id.Cluster,
 		"$namespace", id.Namespace,
 		"$pod", id.Pod,
 		"$container", id.Container,

@@ -178,6 +178,26 @@ sum by (reason) (rate(staffops_ad_controller_suppressed_total[10m]))
 
 ---
 
+### `staffops_ad_detection_anomalies_by_workload_total`
+
+| Property | Value |
+|---|---|
+| Type | Counter |
+| Labels | `cluster`, `namespace`, `workload`, `severity` |
+| Description | Anomalies sliced by cluster/namespace/workload — bounded labels for "top noisy workloads" dashboards, suppression tuning, and drift detection. `workload` is extracted from pod names (`correlation.ExtractWorkload`), never a raw pod ID; service-level anomalies use `service_name` as workload. `cluster` reflects the *monitored* workload's own cluster (this deployment queries a federated multi-cluster VictoriaMetrics/Loki), not necessarily the cluster the controller itself runs in. Any of the three identity labels default to `"unknown"` when absent from the source query's `by()`/`group_by`. |
+
+```promql
+# Top 10 noisiest workloads across all clusters, last 24h
+topk(10, sum by (cluster, namespace, workload) (
+  increase(staffops_ad_detection_anomalies_by_workload_total[24h])
+))
+
+# Confirm anomalies are attributed to real clusters, not just one
+count by (cluster) (staffops_ad_detection_anomalies_by_workload_total)
+```
+
+---
+
 ## Worker metrics
 
 Workers expose metrics about query execution, algorithm performance, and Redis baseline operations. Each worker pod exposes metrics independently; aggregate with `sum by (cluster)` for cluster-level views.

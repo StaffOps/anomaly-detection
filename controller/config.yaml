@@ -70,43 +70,43 @@ detection:
   # CPU/memory ratio removed — duplicates VMAlert, generates noise.
   static_rules:
     - name: high_restart_rate
-      query: max(increase(kube_pod_container_status_restarts_total{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}"}[5m])) by (namespace, pod)
+      query: max(increase(kube_pod_container_status_restarts_total{namespace!~"${EXCLUDE_NAMESPACES_REGEX:kube-system}"}[5m])) by (cluster, namespace, pod)
       threshold: 3
       operator: ">"
       severity: critical
 
     - name: istio_5xx_rate_high
-      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[5m])) by (destination_workload, destination_workload_namespace) / sum(rate(istio_requests_total{destination_workload!=""}[5m])) by (destination_workload, destination_workload_namespace) > 0.05
+      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[5m])) by (cluster, destination_workload, destination_workload_namespace) / sum(rate(istio_requests_total{destination_workload!=""}[5m])) by (cluster, destination_workload, destination_workload_namespace) > 0.05
       threshold: 0.05
       operator: ">"
       severity: warning
 
     - name: kestrel_queued_requests_high
-      query: max(kestrel_queued_requests) by (namespace, pod)
+      query: max(kestrel_queued_requests) by (cluster, namespace, pod)
       threshold: 50
       operator: ">"
       severity: warning
 
     - name: dotnet_threadpool_saturated
-      query: max(dotnet_thread_pool_queue_length_total) by (namespace, pod) > 0 or max(process_runtime_dotnet_thread_pool_queue_length) by (namespace, pod) > 0
+      query: max(dotnet_thread_pool_queue_length_total) by (cluster, namespace, pod) > 0 or max(process_runtime_dotnet_thread_pool_queue_length) by (cluster, namespace, pod) > 0
       threshold: 100
       operator: ">"
       severity: warning
 
     - name: http_client_queue_time_high
-      query: histogram_quantile(0.99, sum(rate(http_client_request_time_in_queue_seconds_bucket[5m])) by (le, namespace, pod))
+      query: histogram_quantile(0.99, sum(rate(http_client_request_time_in_queue_seconds_bucket[5m])) by (le, cluster, namespace, pod))
       threshold: 2.0
       operator: ">"
       severity: warning
 
     - name: otel_collector_dropping_spans
-      query: sum(rate(otelcol_exporter_enqueue_failed_spans_total[5m])) by (service_name)
+      query: sum(rate(otelcol_exporter_enqueue_failed_spans_total[5m])) by (cluster, service_name)
       threshold: 0
       operator: ">"
       severity: critical
 
     - name: rollout_stuck
-      query: max(rollout_info_replicas_unavailable) by (namespace, rollout)
+      query: max(rollout_info_replicas_unavailable) by (cluster, namespace, rollout)
       threshold: 0
       operator: ">"
       severity: warning
@@ -118,70 +118,70 @@ detection:
     # Note: spanmetrics lack k8s namespace — only service_name available.
     # namespace shows as "unknown" in dashboards for these.
     - name: error_rate_by_service
-      query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[1m])) by (service_name)
-      group_by: [service_name]
+      query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[1m])) by (cluster, service_name)
+      group_by: [cluster, service_name]
 
     - name: request_rate_by_service
-      query: sum(rate(spanmetrics_apm_calls_total[1m])) by (service_name)
-      group_by: [service_name]
+      query: sum(rate(spanmetrics_apm_calls_total[1m])) by (cluster, service_name)
+      group_by: [cluster, service_name]
 
     - name: latency_p99_by_service
-      query: histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket[5m])) by (le, service_name))
-      group_by: [service_name]
+      query: histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket[5m])) by (le, cluster, service_name))
+      group_by: [cluster, service_name]
 
     # Istio mesh — service-to-service error rate
     - name: istio_error_rate_by_workload
-      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[1m])) by (destination_workload, destination_workload_namespace)
-      group_by: [destination_workload, destination_workload_namespace]
+      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[1m])) by (cluster, destination_workload, destination_workload_namespace)
+      group_by: [cluster, destination_workload, destination_workload_namespace]
 
     # .NET saturation signals (leading indicators)
     - name: dotnet_gc_pause_rate
-      query: sum(rate(dotnet_gc_pause_time_seconds_total[1m])) by (namespace, pod)
-      group_by: [namespace, pod]
+      query: sum(rate(dotnet_gc_pause_time_seconds_total[1m])) by (cluster, namespace, pod)
+      group_by: [cluster, namespace, pod]
 
     - name: dotnet_heap_growth
-      query: max(process_runtime_dotnet_gc_heap_size_bytes) by (namespace, pod)
-      group_by: [namespace, pod]
+      query: max(process_runtime_dotnet_gc_heap_size_bytes) by (cluster, namespace, pod)
+      group_by: [cluster, namespace, pod]
 
     - name: http_client_active_requests
-      query: max(http_client_active_requests) by (namespace, pod)
-      group_by: [namespace, pod]
+      query: max(http_client_active_requests) by (cluster, namespace, pod)
+      group_by: [cluster, namespace, pod]
 
     # Queue depth (SQS-backed and Kestrel)
     - name: queue_depth
-      query: max(queue_depth_messages) by (namespace, pod)
-      group_by: [namespace, pod]
+      query: max(queue_depth_messages) by (cluster, namespace, pod)
+      group_by: [cluster, namespace, pod]
 
     - name: queue_failed_rate
-      query: sum(rate(queue_messages_failed_total[1m])) by (namespace, pod)
-      group_by: [namespace, pod]
+      query: sum(rate(queue_messages_failed_total[1m])) by (cluster, namespace, pod)
+      group_by: [cluster, namespace, pod]
 
     # DB connection pool saturation
     - name: hikari_pool_pending
-      query: max(hikaricp_connections_pending) by (namespace, pod)
-      group_by: [namespace, pod]
+      query: max(hikaricp_connections_pending) by (cluster, namespace, pod)
+      group_by: [cluster, namespace, pod]
 
     - name: go_sql_waiting
-      query: max(go_sql_stats_connections_waited_for_total) by (namespace, pod)
-      group_by: [namespace, pod]
+      query: max(go_sql_stats_connections_waited_for_total) by (cluster, namespace, pod)
+      group_by: [cluster, namespace, pod]
 
     # OTel Collector pipeline health
     - name: otel_collector_queue_size
-      query: max(otelcol_exporter_queue_size) by (service_name)
-      group_by: [service_name]
+      query: max(otelcol_exporter_queue_size) by (cluster, service_name)
+      group_by: [cluster, service_name]
 
     # Karpenter scheduling
     - name: karpenter_scheduling_duration
-      query: histogram_quantile(0.99, sum(rate(karpenter_provisioner_scheduling_duration_seconds_bucket[5m])) by (le))
-      group_by: []
+      query: histogram_quantile(0.99, sum(rate(karpenter_provisioner_scheduling_duration_seconds_bucket[5m])) by (le, cluster))
+      group_by: [cluster]
 
   log_patterns:
     - name: error_rate_by_namespace
-      query: sum(rate({service_namespace=~".+"} |= "error" [1m])) by (service_namespace)
-      group_by: [service_namespace]
+      query: sum(rate({service_namespace=~".+"} |= "error" [1m])) by (cluster, service_namespace)
+      group_by: [cluster, service_namespace]
     - name: log_volume_by_workload
-      query: sum(rate({service_namespace=~".+"}[1m])) by (service_namespace, service_workload)
-      group_by: [service_namespace, service_workload]
+      query: sum(rate({service_namespace=~".+"}[1m])) by (cluster, service_namespace, service_workload)
+      group_by: [cluster, service_namespace, service_workload]
     - name: panic_oom
       query: '{service_namespace=~".+"} |~ "(?i)(panic|oom|out of memory|fatal)"'
       type: pattern_match
@@ -210,26 +210,26 @@ enrichment:
 
   pod_bundle:
     - name: cpu_ratio
-      query: 'max(rate(container_cpu_usage_seconds_total{namespace="$namespace",pod="$pod",container!=""}[1m])) / max(kube_pod_container_resource_limits{resource="cpu",namespace="$namespace",pod="$pod"})'
+      query: 'max(rate(container_cpu_usage_seconds_total{cluster="$cluster",namespace="$namespace",pod="$pod",container!=""}[1m])) / max(kube_pod_container_resource_limits{resource="cpu",cluster="$cluster",namespace="$namespace",pod="$pod"})'
     - name: memory_ratio
-      query: 'max(container_memory_working_set_bytes{namespace="$namespace",pod="$pod",container!=""}) / max(kube_pod_container_resource_limits{resource="memory",namespace="$namespace",pod="$pod"})'
+      query: 'max(container_memory_working_set_bytes{cluster="$cluster",namespace="$namespace",pod="$pod",container!=""}) / max(kube_pod_container_resource_limits{resource="memory",cluster="$cluster",namespace="$namespace",pod="$pod"})'
     - name: restarts_5m
-      query: 'max(increase(kube_pod_container_status_restarts_total{namespace="$namespace",pod="$pod"}[5m]))'
+      query: 'max(increase(kube_pod_container_status_restarts_total{cluster="$cluster",namespace="$namespace",pod="$pod"}[5m]))'
     - name: oom_kills
-      query: 'max(kube_pod_container_status_terminated_reason{namespace="$namespace",pod="$pod",reason="OOMKilled"})'
+      query: 'max(kube_pod_container_status_terminated_reason{cluster="$cluster",namespace="$namespace",pod="$pod",reason="OOMKilled"})'
     - name: ready_replicas
-      query: 'max(kube_pod_status_ready{namespace="$namespace",pod="$pod",condition="true"})'
+      query: 'max(kube_pod_status_ready{cluster="$cluster",namespace="$namespace",pod="$pod",condition="true"})'
     - name: error_logs_1m
       source: loki
-      query: 'sum(rate({k8s_namespace_name="$namespace",k8s_pod_name="$pod"} |~ "(?i)(error|panic|fatal)" [1m]))'
+      query: 'sum(rate({cluster="$cluster",k8s_namespace_name="$namespace",k8s_pod_name="$pod"} |~ "(?i)(error|panic|fatal)" [1m]))'
 
   service_bundle:
     - name: error_rate_1m
-      query: 'sum(rate(spanmetrics_apm_calls_total{service_name="$service_name",status_code="STATUS_CODE_ERROR"}[1m]))'
+      query: 'sum(rate(spanmetrics_apm_calls_total{cluster="$cluster",service_name="$service_name",status_code="STATUS_CODE_ERROR"}[1m]))'
     - name: request_rate_1m
-      query: 'sum(rate(spanmetrics_apm_calls_total{service_name="$service_name"}[1m]))'
+      query: 'sum(rate(spanmetrics_apm_calls_total{cluster="$cluster",service_name="$service_name"}[1m]))'
     - name: latency_p99_5m
-      query: 'histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket{service_name="$service_name"}[5m])) by (le))'
+      query: 'histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket{cluster="$cluster",service_name="$service_name"}[5m])) by (le))'
 
 # All link base URLs come from env vars. Empty value = annotation not emitted.
 links:

@@ -155,19 +155,24 @@ var (
 	AnomalyDetected = mustInt64Counter("staffops_ad_detection_anomalies_total",
 		"Anomalies detected, by severity and signal")
 
-	// AnomalyByWorkload tracks anomalies sliced by namespace+workload for
-	// dashboards (top noisy workloads, suppression tuning, drift detection).
+	// AnomalyByWorkload tracks anomalies sliced by cluster+namespace+workload
+	// for dashboards (top noisy workloads, suppression tuning, drift detection).
 	//
-	// Cardinality: severity(3) × namespace(~50) × workload(~20-50/ns) ≈ 3-7k
-	// series per cluster — well below the steering-mandated 2k/metric limit
-	// applied per cluster.
+	// Cardinality: severity(3) × cluster(4, one per monitored K8s cluster) ×
+	// namespace(~50) × workload(~20-50/ns) ≈ 12-28k series total — the
+	// `cluster` dimension is monitored-workload cardinality (this deployment
+	// queries a federated multi-cluster VictoriaMetrics/Loki), not a
+	// per-cluster-deployment multiplier, so it does NOT divide across
+	// separate Prometheus instances the way `namespace`/`workload` do.
+	// Revisit if the steering-mandated 2k/metric limit is measured on this
+	// single series (not per label combination).
 	//
 	// The `workload` label is bounded by deployment count: extracted from pod
 	// names via correlation.ExtractWorkload, never raw pod IDs.
 	// Service-level anomalies use service_name as workload.
-	// Empty namespace/workload (degenerate cases) are normalized to "unknown".
+	// Empty cluster/namespace/workload (degenerate cases) are normalized to "unknown".
 	AnomalyByWorkload = mustInt64Counter("staffops_ad_detection_anomalies_by_workload_total",
-		"Anomalies detected, sliced by namespace and workload (bounded labels for dashboards)")
+		"Anomalies detected, sliced by cluster, namespace, and workload (bounded labels for dashboards)")
 	AnomalyCorrelated = mustInt64Counter("staffops_ad_detection_correlated_total",
 		"Anomaly groups produced by the correlator")
 

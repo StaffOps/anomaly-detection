@@ -40,6 +40,18 @@ func NewDispatcher(cfg config.DatasourceEndpoint, dryRun bool, cluster string, l
 	}
 }
 
+// clusterFor resolves the alert's own cluster label (the monitored workload's
+// cluster, e.g. from a federated multi-cluster query) — falling back to the
+// controller's own CLUSTER_NAME only when the anomaly carries none (e.g. a
+// rule with no cluster in its by()/group_by, such as karpenter_scheduling_duration
+// before this label is fully rolled out).
+func (d *Dispatcher) clusterFor(labels map[string]string) string {
+	if c := labels["cluster"]; c != "" {
+		return c
+	}
+	return d.cluster
+}
+
 // FireCorrelated sends a correlated alert (with optional enrichment context) to Alertmanager.
 // Handles both pod-level and workload-level alerts.
 func (d *Dispatcher) FireCorrelated(ctx context.Context, ca correlation.CorrelatedAlert) error {
@@ -70,7 +82,7 @@ func (d *Dispatcher) FireCorrelated(ctx context.Context, ca correlation.Correlat
 		"alert_name", "AnomalyDetected",
 		"kind", string(ca.Kind),
 		"severity", ca.Severity,
-		"cluster", d.cluster,
+		"cluster", d.clusterFor(rep.Labels),
 		"namespace", ca.Namespace,
 		"identity", identity,
 		"signals", strings.Join(ca.Signals, ","),
@@ -133,7 +145,7 @@ func (d *Dispatcher) Fire(ctx context.Context, anomaly detection.Anomaly) error 
 		"alert_name", "AnomalyDetected",
 		"kind", "pod",
 		"severity", anomaly.Severity,
-		"cluster", d.cluster,
+		"cluster", d.clusterFor(anomaly.Labels),
 		"namespace", anomaly.Labels["namespace"],
 		"identity", identity,
 		"signal", anomaly.Signal,
@@ -307,7 +319,7 @@ func (d *Dispatcher) buildAlert(a detection.Anomaly, kind correlation.Kind, iden
 		Labels: map[string]string{
 			"alertname": "AnomalyDetected",
 			"severity":  a.Severity,
-			"cluster":   d.cluster,
+			"cluster":   d.clusterFor(a.Labels),
 			"namespace": ns,
 			// workloadLabel is always bounded (deployment / statefulset / daemonset /
 			// service name). Full pod identity lives in annotations.

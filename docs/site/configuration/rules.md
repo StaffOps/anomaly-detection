@@ -9,8 +9,8 @@ detection:
   static_rules:
     - name: high_cpu_ratio          # Unique rule name
       query: |                      # PromQL query
-        max(rate(container_cpu_usage_seconds_total{...}[1m])) by (namespace, pod)
-        / max(kube_pod_container_resource_limits{resource="cpu",...}) by (namespace, pod)
+        max(rate(container_cpu_usage_seconds_total{...}[1m])) by (cluster, namespace, pod)
+        / max(kube_pod_container_resource_limits{resource="cpu",...}) by (cluster, namespace, pod)
       threshold: 0.9                # Comparison value
       operator: ">"                 # Operator: >, <, >=, <=
       severity: warning             # warning or critical
@@ -24,6 +24,10 @@ detection:
 | `high_restart_rate` | > 3 restarts in 5 minutes | 3 |
 | `high_memory_ratio` | Memory usage > 85% of limit | 0.85 |
 
+> This deployment queries a federated VictoriaMetrics spanning multiple
+> Kubernetes clusters (`cluster` label). Every rule's `by()` includes
+> `cluster` — see [Writing Custom Rules](#writing-custom-rules) below.
+
 ---
 
 ## Adaptive Metrics
@@ -35,18 +39,18 @@ detection:
   adaptive_metrics:
     - name: cpu_by_workload         # Unique name
       query: |                      # PromQL query
-        max(rate(container_cpu_usage_seconds_total{...}[1m])) by (namespace, pod)
-      group_by: [namespace, pod]    # Labels that identify a unique series
+        max(rate(container_cpu_usage_seconds_total{...}[1m])) by (cluster, namespace, pod)
+      group_by: [cluster, namespace, pod]   # Labels that identify a unique series
 ```
 
 ### Default Adaptive Metrics
 
 | Name | Signal | Group by |
 |------|--------|----------|
-| `cpu_by_workload` | CPU usage rate per pod | namespace, pod |
-| `error_rate_by_service` | Error rate from span metrics | service_name |
-| `request_rate_by_service` | Request rate from span metrics | service_name |
-| `latency_p99_by_service` | P99 latency from span metrics | service_name |
+| `cpu_by_workload` | CPU usage rate per pod | cluster, namespace, pod |
+| `error_rate_by_service` | Error rate from span metrics | cluster, service_name |
+| `request_rate_by_service` | Request rate from span metrics | cluster, service_name |
+| `latency_p99_by_service` | P99 latency from span metrics | cluster, service_name |
 
 ---
 
@@ -60,8 +64,8 @@ Loki-based detection rules. Two types:
 detection:
   log_patterns:
     - name: error_rate_by_namespace
-      query: sum(rate({service_namespace=~".+"} |= "error" [1m])) by (service_namespace)
-      group_by: [service_namespace]
+      query: sum(rate({service_namespace=~".+"} |= "error" [1m])) by (cluster, service_namespace)
+      group_by: [cluster, service_namespace]
 ```
 
 ### Pattern matching (immediate)
@@ -102,23 +106,29 @@ detection:
 
 ### Guidelines
 
-1. **Use `group_by`** to identify unique series — this determines baseline granularity
-2. **Exclude noisy namespaces** in the query itself using `namespace!~"..."` or via suppression config
-3. **Test with replay** before deploying: `controller --replay --from=24h --config=new.yaml`
+1. **Always include `cluster`** in every `by()`/`group_by` — this deployment
+   queries a federated multi-cluster VictoriaMetrics/Loki. Omitting `cluster`
+   silently collapses every cluster's series into one, breaks per-cluster
+   baselines, and (for workload-pattern detection) can incorrectly correlate
+   identically-named pods/namespaces across different clusters as the same
+   workload.
+2. **Use `group_by`** to identify unique series — this determines baseline granularity
+3. **Exclude noisy namespaces** in the query itself using `namespace!~"..."` or via suppression config
+4. **Test with replay** before deploying: `controller --replay --from=24h --config=new.yaml`
 
 ### Example: Custom Adaptive Rule
 
 ```yaml
 - name: disk_io_by_node
   query: rate(node_disk_io_time_seconds_total[5m])
-  group_by: [instance, device]
+  group_by: [cluster, instance, device]
 ```
 
 ### Example: Custom Static Rule
 
 ```yaml
 - name: pending_pods
-  query: count(kube_pod_status_phase{phase="Pending"}) by (namespace)
+  query: count(kube_pod_status_phase{phase="Pending"}) by (cluster, namespace)
   threshold: 5
   operator: ">"
   severity: warning

@@ -188,6 +188,27 @@ func TestBuildAlert_Labels(t *testing.T) {
 	}
 }
 
+func TestBuildAlert_ClusterFromAnomalyLabel(t *testing.T) {
+	d := newTestDispatcher("http://localhost", true) // d.cluster = "test-cluster"
+	a := baseAnomaly("critical", "static", "metrics")
+	a.Labels["cluster"] = "applications-prd-nv"
+	alert := d.buildAlert(a, correlation.KindPod, "api-pod", "api", "threshold breach")
+
+	if alert.Labels["cluster"] != "applications-prd-nv" {
+		t.Errorf("expected the anomaly's own cluster label to win over the dispatcher's, got %q", alert.Labels["cluster"])
+	}
+}
+
+func TestBuildAlert_ClusterFallback_WhenAnomalyHasNone(t *testing.T) {
+	d := newTestDispatcher("http://localhost", true) // d.cluster = "test-cluster"
+	a := baseAnomaly("critical", "static", "metrics")
+	alert := d.buildAlert(a, correlation.KindPod, "api-pod", "api", "threshold breach")
+
+	if alert.Labels["cluster"] != "test-cluster" {
+		t.Errorf("expected fallback to dispatcher cluster when anomaly has none, got %q", alert.Labels["cluster"])
+	}
+}
+
 func TestBuildAlert_Annotations(t *testing.T) {
 	d := newTestDispatcher("http://localhost", true)
 	a := baseAnomaly("warning", "adaptive", "metrics")

@@ -78,6 +78,7 @@ type CorrelatedAlert struct {
 	Kind             Kind
 	Anomalies        []detection.Anomaly
 	Severity         string
+	Cluster          string
 	Namespace        string
 	Workload         string
 	Signals          []string // unique signals involved
@@ -178,10 +179,11 @@ func (c *Correlator) detectWorkloadPatterns(ctx context.Context, groups map[stri
 	type wlAccumulator struct {
 		anomalies []detection.Anomaly
 		pods      map[string]bool
-		podKeys   []string // namespace/pod keys for suppression marking
+		podKeys   []string // cluster/namespace/pod keys for suppression marking
+		cluster   string
 		namespace string
 	}
-	wls := make(map[string]*wlAccumulator) // key: namespace/workload
+	wls := make(map[string]*wlAccumulator) // key: cluster/namespace/workload
 
 	for podKey, g := range groups {
 		if len(g.anomalies) == 0 {
@@ -197,12 +199,14 @@ func (c *Correlator) detectWorkloadPatterns(ctx context.Context, groups map[stri
 		if workload == pod {
 			continue // unknown pattern — treat as bare pod
 		}
-		wlKey := ns + "/" + workload
+		cluster := clusterOrUnknown(first.Labels)
+		wlKey := cluster + "/" + ns + "/" + workload
 
 		acc, ok := wls[wlKey]
 		if !ok {
 			acc = &wlAccumulator{
 				pods:      make(map[string]bool),
+				cluster:   cluster,
 				namespace: ns,
 			}
 			wls[wlKey] = acc
@@ -256,6 +260,7 @@ func (c *Correlator) detectWorkloadPatterns(ctx context.Context, groups map[stri
 			Kind:             KindWorkload,
 			Anomalies:        []detection.Anomaly{rep},
 			Severity:         maxSeverity,
+			Cluster:          acc.cluster,
 			Namespace:        acc.namespace,
 			Workload:         ExtractWorkloadFromKey(wlKey),
 			Signals:          signals,
@@ -273,9 +278,10 @@ func (c *Correlator) detectWorkloadPatterns(ctx context.Context, groups map[stri
 	return alerts, suppressed
 }
 
-// ExtractWorkloadFromKey extracts the workload portion from a "namespace/workload" key.
+// ExtractWorkloadFromKey extracts the workload portion from a
+// "cluster/namespace/workload" key (the trailing segment).
 func ExtractWorkloadFromKey(key string) string {
-	for i := 0; i < len(key); i++ {
+	for i := len(key) - 1; i >= 0; i-- {
 		if key[i] == '/' {
 			return key[i+1:]
 		}
@@ -306,11 +312,13 @@ func (c *Correlator) buildPodAlert(g *group) CorrelatedAlert {
 
 	ns := g.anomalies[0].Labels["namespace"]
 	workload := g.anomalies[0].Labels["pod"]
+	cluster := clusterOrUnknown(g.anomalies[0].Labels)
 
 	return CorrelatedAlert{
 		Kind:      KindPod,
 		Anomalies: g.anomalies,
 		Severity:  maxSeverity,
+		Cluster:   cluster,
 		Namespace: ns,
 		Workload:  workload,
 		Signals:   signals,
@@ -349,12 +357,22 @@ func (c *Correlator) finalize(ctx context.Context, alerts []CorrelatedAlert) []C
 func (c *Correlator) fingerprint(alert CorrelatedAlert) string {
 	data, _ := json.Marshal(map[string]string{
 		"kind":     string(alert.Kind),
+		"cluster":  alert.Cluster,
 		"ns":       alert.Namespace,
 		"workload": alert.Workload,
 		"severity": alert.Severity,
 	})
 	h := sha256.Sum256(data)
 	return fmt.Sprintf("alert:dedup:%x", h[:8])
+}
+
+// clusterOrUnknown returns the anomaly's cluster label, or "unknown" when
+// absent — keeps cluster-prefixed keys unambiguous (vs. an empty segment).
+func clusterOrUnknown(labels map[string]string) string {
+	if c := labels["cluster"]; c != "" {
+		return c
+	}
+	return "unknown"
 }
 
 func workloadKey(a detection.Anomaly) string {
@@ -366,5 +384,5 @@ func workloadKey(a detection.Anomaly) string {
 	if ns == "" && id == "" {
 		return "_unknown_"
 	}
-	return ns + "/" + id
+	return clusterOrUnknown(a.Labels) + "/" + ns + "/" + id
 }

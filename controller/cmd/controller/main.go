@@ -306,6 +306,10 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 		if ns == "" {
 			ns = "unknown"
 		}
+		cluster := a.Labels["cluster"]
+		if cluster == "" {
+			cluster = "unknown"
+		}
 		workload := "unknown"
 		if pod := a.Labels["pod"]; pod != "" {
 			if w := correlation.ExtractWorkload(pod); w != "" {
@@ -317,7 +321,7 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 			workload = svc
 		}
 		metrics.AnomalyByWorkload.Add(ctx, 1, metric.WithAttributes(
-			attribute.String("namespace", ns), attribute.String("workload", workload), attribute.String("severity", a.Severity)))
+			attribute.String("cluster", cluster), attribute.String("namespace", ns), attribute.String("workload", workload), attribute.String("severity", a.Severity)))
 
 		// Log each anomaly for visibility
 		slog.Info("anomaly_detected",

@@ -10,6 +10,41 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 Work landed after controller 0.9.0 / ml 0.3.0.
 
+## controller — [0.10.0] — 2026-07-16
+
+### detection
+
+**Fixed — propagate the monitored workload's real `cluster` through the detection pipeline (2026-07-16)**
+- This deployment queries a federated VictoriaMetrics/Loki spanning multiple K8s clusters
+  (`devops-core`, `applications-dev-nv`, `applications-prd-nv`, `applications-prd-sp`), but
+  every static/adaptive/log-pattern query in `config.yaml` aggregated with
+  `by(namespace, pod)` etc. **without** `cluster` — so the real cluster was dropped before an
+  `Anomaly` was even built. All 7 `static_rules`, all 12 `adaptive_metrics`
+  (`by()` + `group_by`), and both `log_patterns` now include `cluster`; enrichment
+  `pod_bundle`/`service_bundle` query templates now match on `cluster="$cluster"` too.
+  Discovered via the "Top noisy workloads" Grafana panel showing every row as `devops-core`
+  even though the underlying workloads span all 4 clusters.
+- Not a revert of the 0.9.0 change that removed the app's own constant `cluster` label wrap
+  (that was the controller pod's *own* cluster identity, now scrape-layer-only via
+  ServiceMonitor/vmagent). This is a different thing: the *monitored workload's* cluster,
+  read out of the federated query results themselves, same as `namespace` already was.
+- **Correctness bug this fixes**: the correlator's workload dedup key (`namespace/pod`) didn't
+  include cluster, so two different clusters with an identically-named namespace+pod
+  (plausible across `applications-*`) would incorrectly correlate/dedup as the same workload.
+  `workloadKey()` and the workload-pattern key are now `cluster/namespace/workload`
+  (`ExtractWorkloadFromKey` now returns the trailing segment instead of everything after the
+  first `/`); the Redis dedup fingerprint now hashes `cluster` too.
+- `enrichment.Identity` gained a `Cluster` field (populated from `cluster` /
+  `k8s_cluster_name` / `k8s.cluster.name`, mirroring how `Namespace`/`Pod` resolve) and a
+  `$cluster` template placeholder; `CorrelatedAlert` gained a `Cluster` field; the Alertmanager
+  dispatcher now prefers the anomaly's own `cluster` label over the controller's `CLUSTER_NAME`
+  (falling back to it only when an anomaly carries no cluster, e.g. the cluster-wide
+  `karpenter_scheduling_duration` rule before broader rollout).
+- `staffops_ad_detection_anomalies_by_workload_total` gained a `cluster` label — see
+  [Metrics Reference](docs/site/reference/metrics.md#staffops_ad_detection_anomalies_by_workload_total).
+  New cardinality: severity(3) × cluster(4) × namespace(~50) × workload(~20-50/ns) ≈ 12-28k
+  series (single metric, not per-cluster-deployment — see the code comment in `metrics.go`).
+
 ## ml — [0.3.0] — 2026-07-16
 
 ### observability
