@@ -10,7 +10,7 @@
 
 1. **Baselines still warming up** — wait 30+ minutes (60 samples × 30s)
 2. **All namespaces suppressed** — check `EXCLUDE_NAMESPACES_CSV`
-3. **Queries returning empty** — verify VM_URL/LOKI_URL are correct and have data
+3. **Queries returning empty** — verify PROMETHEUS_URL/LOKI_URL are correct and have data
 
 **Diagnosis:**
 
@@ -44,7 +44,7 @@ curl -s localhost:8080/metrics | grep readiness_checks_total
 | Dependency | Fix |
 |------------|-----|
 | Redis | Check `REDIS_ADDR`, verify Redis is running |
-| VictoriaMetrics | Check `VM_URL`, verify network access from container |
+| Prometheus | Check `PROMETHEUS_URL`, verify network access from container |
 | Loki | Check `LOKI_URL`, verify network access |
 | Alertmanager | Check `ALERTMANAGER_URL`, may be transient (flapping) |
 
@@ -74,7 +74,7 @@ curl -s localhost:8080/metrics | grep readiness_checks_total
 **Causes:**
 
 1. Too many queries per cycle (many rules × many workloads)
-2. Slow VM/Loki responses
+2. Slow Prometheus/Loki responses
 3. Enrichment queries adding latency (5-7 queries per alert)
 
 **Mitigation:**
@@ -82,7 +82,7 @@ curl -s localhost:8080/metrics | grep readiness_checks_total
 - Increase `controller.job_interval` (e.g., 60s instead of 30s)
 - Reduce number of adaptive metrics
 - Add more workers (scale query throughput)
-- Check VM/Loki latency independently
+- Check Prometheus/Loki latency independently
 
 ---
 

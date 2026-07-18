@@ -66,7 +66,7 @@ while true; do
 
   printf "   %-20s %-12s %-12s %s\n" "DATASOURCE" "QUERIES" "AVG (ms)" "REGRAS"
   printf "   %-20s %-12s %-12s %s\n" "--------------------" "------------" "------------" "----------------------------"
-  printf "   %-20s %-12s %-12s %s\n" "VictoriaMetrics" "${VM_Q:-0}" "$VM_A" "high_cpu_ratio, high_restart_rate,"
+  printf "   %-20s %-12s %-12s %s\n" "Prometheus" "${VM_Q:-0}" "$VM_A" "high_cpu_ratio, high_restart_rate,"
   printf "   %-20s %-12s %-12s %s\n" "" "" "" "high_memory_ratio, cpu_by_workload,"
   printf "   %-20s %-12s %-12s %s\n" "" "" "" "error/request/latency_by_service"
   printf "   %-20s %-12s %-12s %s\n" "Loki" "${LK_Q:-0}" "$LK_A" "error_rate_by_ns, log_volume_by_wl"

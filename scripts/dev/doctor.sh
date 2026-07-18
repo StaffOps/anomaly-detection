@@ -51,7 +51,7 @@ echo "== local stack (.env) — only required for scripts/start.sh =="
 env_file="$(repo_root)/.env"
 if [ -f "$env_file" ]; then
   missing_vars=""
-  for var in VM_URL LOKI_URL ALERTMANAGER_URL; do
+  for var in PROMETHEUS_URL LOKI_URL ALERTMANAGER_URL; do
     if ! grep -qE "^${var}=.+" "$env_file"; then
       missing_vars="${missing_vars} ${var}"
     fi

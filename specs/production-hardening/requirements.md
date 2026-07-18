@@ -107,7 +107,7 @@ The spec is complete when all the following are true and verifiable:
       the chart.
 - [ ] `sync-wave` annotations sequence Redis before controller/worker.
 - [ ] `PodDisruptionBudget` exists for controller and worker.
-- [ ] `prometheus.io/scrape` annotations replaced by `VMServiceScrape` CRDs.
+- [ ] `prometheus.io/scrape` annotations replaced by `ServiceMonitor` CRDs.
 - [ ] CPU limits removed from controller and worker.
 - [ ] Redis has a `PersistentVolumeClaim`.
 
@@ -133,7 +133,7 @@ The spec is complete when all the following are true and verifiable:
   collapses into "internal tooling + Robusta playbook" — that is the output
   of Phase 0 gates P0.1 / P0.2, not this spec.
 - Falco integration, agent-API integration, ML Forecast wiring — separate specs.
-- Self-monitoring VMRules (P6.1) — separate roadmap item.
+- Self-monitoring PrometheusRules (P6.1) — separate roadmap item.
 
 ## Cross-references
 

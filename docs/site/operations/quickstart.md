@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Docker and Docker Compose
-- Access to VictoriaMetrics, Loki, and Alertmanager endpoints
+- Access to Prometheus, Loki, and Alertmanager endpoints
 - Environment variables configured (see below)
 
 ## 1. Configure Environment
@@ -18,7 +18,7 @@ Edit `scripts/.env`:
 
 ```bash
 # Required
-VM_URL=https://victoria-metrics-read.example.com/select/0/prometheus
+PROMETHEUS_URL=https://prometheus-read.example.com/select/0/prometheus
 LOKI_URL=https://loki.example.com
 ALERTMANAGER_URL=https://alertmanager.example.com
 
@@ -93,6 +93,6 @@ curl -s http://localhost:8080/metrics | grep staffops_ad_controller_cycle
     - Logs show `[DRY-RUN] would fire alert` messages
 
 !!! warning "Common issues"
-    - **503 on /readyz**: Check that VM_URL, LOKI_URL, ALERTMANAGER_URL are reachable from inside Docker
+    - **503 on /readyz**: Check that PROMETHEUS_URL, LOKI_URL, ALERTMANAGER_URL are reachable from inside Docker
     - **No anomalies**: Wait 30+ minutes for baselines to warm up (60 samples × 30s)
     - **ML errors**: Check ML service logs: `docker compose -f scripts/docker-compose.yaml logs ml`

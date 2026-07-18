@@ -45,7 +45,7 @@ Stateless query executors. Scale horizontally.
 
 **Responsibilities:**
 
-- Execute PromQL queries against VictoriaMetrics
+- Execute PromQL queries against Prometheus
 - Execute LogQL queries against Loki
 - Run detection algorithms (static threshold, adaptive Z-Score)
 - Update baselines in Redis (EWMA, Welford statistics)

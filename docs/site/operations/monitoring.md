@@ -61,7 +61,7 @@ Probes:
 | Dependency | Check | Timeout |
 |------------|-------|---------|
 | Redis | `PING` | 3s |
-| VictoriaMetrics | `query=up` | 3s |
+| Prometheus | `query=up` | 3s |
 | Loki | `/loki/api/v1/labels` | 3s |
 | Alertmanager | `/api/v2/status` | 3s |
 | ML Service | gRPC Health (no-op if disabled) | 3s |
@@ -115,7 +115,7 @@ scrape_configs:
 
 ## Recording Rules
 
-VMRule `staffops-ad-recording` in `controller/deploy/vmrules.yaml` pre-aggregates expensive queries:
+PrometheusRule `staffops-ad-recording` in `controller/deploy/vmrules.yaml` pre-aggregates expensive queries:
 
 | Recording rule | Window | Purpose |
 |----------------|--------|---------|
@@ -127,7 +127,7 @@ These are evaluated every 1 minute. Dashboards query the recording rules instead
 
 ## Health Alerts
 
-VMRule `staffops-ad-health` in `controller/deploy/vmrules.yaml`:
+PrometheusRule `staffops-ad-health` in `controller/deploy/vmrules.yaml`:
 
 | Alert | Severity | Trigger |
 |-------|----------|---------|

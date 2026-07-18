@@ -54,8 +54,8 @@
 
 ## 2026-05-30 19:58 — Alertmanager check passou a falhar / /readyz=503
 - **Type**: warning
-- **Detail**: `/readyz` retornando 503 consistentemente (5/5). Causa: `readiness_checks_total{dependency="alertmanager",result="error"} 5`. VM e Loki ok. Earlier (no 0.8.0 rebuild) AM passava. Pode ser timeout transitivo, mudança de endpoint, ou algo no AM.
-- **Evidence**: 5/5 503s, only AM falhou; VM e Loki nos mesmos 5 calls retornaram ok
+- **Detail**: `/readyz` retornando 503 consistentemente (5/5). Causa: `readiness_checks_total{dependency="alertmanager",result="error"} 5`. Prometheus e Loki ok. Earlier (no 0.8.0 rebuild) AM passava. Pode ser timeout transitivo, mudança de endpoint, ou algo no AM.
+- **Evidence**: 5/5 503s, only AM falhou; Prometheus e Loki nos mesmos 5 calls retornaram ok
 - **Action**: testar `wget` direto pro AM dentro do container; se for transient, esperar; se persistir, ajustar `AlertmanagerChecker` (talvez `/api/v2/status` mudou ou tem auth?). **Importante**: stack rodando "ready=true" inicialmente, agora passou a "not ready" — anti-flapping logic não existe.
 
 ## 2026-05-30 19:58 — ML feature count mismatch (BUG IMPORTANTE)
@@ -77,7 +77,7 @@
 
 ## 2026-05-30 19:58 — Workloads infra noisy: vm-cluster-vmselect, ztunnel, istio-cni
 - **Type**: tuning_needed
-- **Detail**: VictoriaMetrics próprio aparece como anomalous (4 anomalies em 30min para vmselect-2 e vmselect-0). Mesmo padrão: ztunnel, istio-cni-node, fluent-bit. São pods de infra com workload variável que disparam adaptive falsamente.
+- **Detail**: Prometheus próprio aparece como anomalous (4 anomalies em 30min para vmselect-2 e vmselect-0). Mesmo padrão: ztunnel, istio-cni-node, fluent-bit. São pods de infra com workload variável que disparam adaptive falsamente.
 - **Evidence**: `monitoring/vm-cluster-vmselect-{0,2}` = 4 cada; `istio-system/ztunnel-*` e `istio-cni-*` = 3 cada
 - **Action**: adicionar `monitoring`, `istio-system` ao `exclude_static_only` ou criar uma terceira lista `exclude_high_variance` (suprime adaptive mas mantém critical static). Decidir após observar mais.
 
@@ -91,7 +91,7 @@
 - **Type**: warning
 - **Detail**: 23 cycles, sum 257.7s → avg 11.2s. Mas `le="10" bucket = 13` → significa que 10 ciclos excederam 10s. Cycle interval é 30s, então gastando ~37% wall clock só processando. Em prod com mais workloads o ciclo pode estourar o intervalo.
 - **Evidence**: `cycle_duration_seconds_count=23, sum=257.7, le="5"=0, le="10"=13`
-- **Action**: profilar o ciclo. Provavelmente o gargalo são queries VM/Loki (3 jobs * N pods cada) + enrichment (5-7 queries por alerta). Considerar paralelizar fan-out de jobs entre workers, ou aumentar `controller.job_interval` quando há muitos workloads.
+- **Action**: profilar o ciclo. Provavelmente o gargalo são queries Prometheus/Loki (3 jobs * N pods cada) + enrichment (5-7 queries por alerta). Considerar paralelizar fan-out de jobs entre workers, ou aumentar `controller.job_interval` quando há muitos workloads.
 
 ## 2026-05-30 20:01 — ML zero detections em 109 calls
 - **Type**: warning (relacionado ao bug do feature count)
@@ -269,7 +269,7 @@
 
 ## 2026-05-30 23:20 — replay-mode (P3.1) IN PROGRESS — paused at 5/16 tasks
 - **Type**: progress note
-- **Detail**: Started replay-mode implementation as pilot of spec-driven workflow (`specs/replay-mode/`). Completed phases 1+2: window parser (T1, 22 sub-tests), VM range query (T2), Loki range query (T3), InMemStore baseline (T4, 7 tests), `baseline.Evaluator` interface refactor (T5, AdaptiveDetector now polymorphic). Paused to attack observability hardening blockers before continuing. Build clean, all tests green.
+- **Detail**: Started replay-mode implementation as pilot of spec-driven workflow (`specs/replay-mode/`). Completed phases 1+2: window parser (T1, 22 sub-tests), Prometheus range query (T2), Loki range query (T3), InMemStore baseline (T4, 7 tests), `baseline.Evaluator` interface refactor (T5, AdaptiveDetector now polymorphic). Paused to attack observability hardening blockers before continuing. Build clean, all tests green.
 - **Evidence**: `controller/internal/replay/{window,inmem_baseline,*_test}.go` + extended `internal/ingestion/{metrics,logs}.go` with TimeSeries/QueryRange.
 - **Action**: resume after observability hardening or deciding next direction. T6-T16 remaining (~5 days sequential).
 

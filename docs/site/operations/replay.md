@@ -69,7 +69,7 @@ For a 24h window with defaults: `max(4.8h, 30min) = 4.8h` warm-up.
 
 After warm-up, the engine simulates detection cycles:
 
-- Fetches data in 1-hour chunks via VM/Loki range queries
+- Fetches data in 1-hour chunks via Prometheus/Loki range queries
 - Iterates ticks at `job_interval` (30s) steps
 - Runs the same detection engine as production
 - Accumulates anomalies in memory
@@ -153,7 +153,7 @@ jq '.totals.top_workloads[:10]' report.json
 
 - **Query failure on a tick**: logged as warning, tick skipped, replay continues
 - **SIGTERM/SIGINT**: flushes partial report (marked `partial`), exits cleanly
-- **Pre-flight failure** (VM/Loki unreachable): fails fast before processing
+- **Pre-flight failure** (Prometheus/Loki unreachable): fails fast before processing
 
 !!! info "Status"
     Replay mode is 75% complete (12/16 tasks). Integration test, smoke test, and final docs are pending. See [Roadmap](../roadmap.md).

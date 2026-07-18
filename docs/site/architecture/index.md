@@ -7,7 +7,7 @@ The system follows a distributed controller-worker pattern with an external ML s
 ```mermaid
 graph TB
     subgraph External["External Data Sources"]
-        VM[VictoriaMetrics]
+        Prometheus[Prometheus]
         LK[Loki]
         AM[Alertmanager]
     end
@@ -21,7 +21,7 @@ graph TB
         RD[(Redis)]
     end
 
-    VM --> W1 & W2 & W3
+    Prometheus --> W1 & W2 & W3
     LK --> W1 & W2 & W3
     W1 & W2 & W3 -->|gRPC| CTL
     W1 & W2 & W3 --> RD
@@ -59,7 +59,7 @@ staffops-anomaly-detection/
 │   │   ├── correlation/ # Dedup, workload grouping, severity
 │   │   ├── detection/   # Static, adaptive, pattern engines
 │   │   ├── enrichment/  # Context queries (CPU, memory, etc.)
-│   │   ├── ingestion/   # VM + Loki query clients
+│   │   ├── ingestion/   # Prometheus + Loki query clients
 │   │   ├── ml/          # gRPC client to ML service
 │   │   ├── readiness/   # Health probe checks
 │   │   ├── replay/      # Offline replay engine

@@ -22,7 +22,7 @@ controller/
 │   ├── correlation/           # Dedup, workload grouping
 │   ├── detection/             # Detection engine
 │   ├── enrichment/            # Context queries
-│   ├── ingestion/             # VM + Loki clients
+│   ├── ingestion/             # Prometheus + Loki clients
 │   ├── metrics/               # Prometheus instrumentation
 │   ├── ml/                    # ML gRPC client
 │   ├── readiness/             # Health probes

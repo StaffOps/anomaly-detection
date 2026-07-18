@@ -12,7 +12,7 @@ THEN the alert payload SHALL contain enriched context (cpu_ratio, memory_ratio, 
 ### US-2: Grafana user correlating signals
 
 WHEN a user clicks an alert link in Slack
-THEN the link SHALL open the correct Grafana Explore panel with pre-filled query (MetricsQL, TraceQL, or LogQL) scoped to the affected workload and time window (±15min for metrics/traces, ±5min for logs).
+THEN the link SHALL open the correct Grafana Explore panel with pre-filled query (PromQL, TraceQL, or LogQL) scoped to the affected workload and time window (±15min for metrics/traces, ±5min for logs).
 
 ### US-3: Operator checking controller health
 
@@ -32,7 +32,7 @@ THEN the endpoint SHALL report aggregate health of all dependencies (Redis, Prom
 
 ### P1.2 — Alert Payload with Links
 
-- [x] LinkBuilder renders Grafana Explore URL (MetricsQL) anchored at anomaly timestamp ±15min
+- [x] LinkBuilder renders Grafana Explore URL (PromQL) anchored at anomaly timestamp ±15min
 - [x] LinkBuilder renders Tempo TraceQL URL anchored at ±15min
 - [x] LinkBuilder renders Loki LogQL URL anchored at ±5min
 - [x] LinkBuilder renders per-detector Runbook URL

@@ -15,7 +15,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
   - **Sempre converte para UTC** (`time.UTC()`)
   - Unit tests cobrindo todos os casos + edge cases (DST, leap second irrelevante, future timestamps)
 
-- [x] **T2 — VM range query**
+- [x] **T2 — Prometheus range query**
   - File: `controller/internal/ingestion/metrics.go`
   - Adicionar método `QueryRange(ctx, query string, start, end time.Time, step time.Duration) ([]TimeSeries, error)`
   - `TimeSeries` é `{Labels map[string]string, Points []Point}`, `Point` é `{T time.Time, V float64}`
@@ -56,7 +56,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
 - [x] **T7 — Tick simulator**
   - File: `controller/internal/replay/engine.go`
   - Função `Run(ctx, ReplayConfig, *config.Config) (*Report, error)`
-  - Carrega chunks de 1h via VM/Loki range queries (T2+T3)
+  - Carrega chunks de 1h via Prometheus/Loki range queries (T2+T3)
   - Constrói InMemStore do warm-up (warm-up duration = `max(0.2 × window, baseline.warm_up_samples × tick_interval)`)
   - Itera ticks `[warmup_end, to]` step `JobInterval`, chama `detection.Engine` (existente!) com samples adaptados de range para "instant at T"
   - Detector adaptive honra `IsWarmingUp` (filtra anomalies durante warmup phase)
@@ -103,7 +103,7 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
   - File: `controller/cmd/controller/main.go`
   - Adicionar flags: `--replay`, `--from`, `--to`, `--output` (default `./replay-report.json`), `--warmup-fraction` (default 0.2), `--max-range` (default 7d), `--max-anomalies` (default 1000), `--enrich` (placeholder, V2)
   - **NOT adicionar `--ml`** — V1 explicitamente não suporta. Documentar em `--help` que ML é V2.
-  - Pre-flight checks: VM `query=up` OK, Loki labels OK, output path writable. Falha rápido se algum não passa.
+  - Pre-flight checks: Prometheus `query=up` OK, Loki labels OK, output path writable. Falha rápido se algum não passa.
   - Se `--replay`: carrega config, monta `ReplayEngine`, executa, sai. Skip Redis/AM/worker setup.
   - Logger separado (`mode=replay`, prefix `[REPLAY]`) para diferenciar de prod
   - Loga banner "REPLAY MODE — no side effects" + janela computada + warmup_end no início
@@ -122,14 +122,14 @@ Sequenciamento das tasks com dependências explícitas. Cada task entrega valor 
 - [x] **T13 — Integration test docker-compose**
   - File: `controller/internal/replay/replay_integ_test.go` (build tag `integration`)
   - Setup: `testdata/docker-compose-integ.yaml` (vmsingle + loki)
-  - Injects synthetic metrics (2 pods, normal→spike) + logs (error bursts) into VM/Loki
+  - Injects synthetic metrics (2 pods, normal→spike) + logs (error bursts) into Prometheus/Loki
   - Runs replay engine programmatically, verifies detection rate ≥90%
   - Skip if `integration` build tag not set
   - **Depends**: T11
 
 - [x] **T14 — Manual smoke test contra prod**
   - Ran `controller --replay --from=3h --to=now --config=controller/config.yaml --output=/tmp/smoke-test.json`
-  - Validated: JSON schema correct, Markdown readable, VM queries p95 ~1s
+  - Validated: JSON schema correct, Markdown readable, Prometheus queries p95 ~1s
   - Confirmed zero side effects (no Redis in container, no AM calls)
   - Graceful partial flush on timeout (SIGINT handling works)
   - Known: Loki `panic_oom` pattern_match query is slow (~30s) — raw log scan vs metric query

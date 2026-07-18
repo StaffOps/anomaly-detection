@@ -14,7 +14,7 @@ These three values have no defaults and **must** be provided. The chart will fai
 | Key | Type | Description |
 |---|---|---|
 | `clusterName` | string | Cluster identifier. Injected as the `cluster` label on every Prometheus metric and Alertmanager alert. |
-| `datasources.victoriametrics.url` | string | VictoriaMetrics PromQL-compatible read endpoint, e.g. `http://vmselect:8481/select/0/prometheus`. |
+| `datasources.victoriametrics.url` | string | Prometheus PromQL-compatible read endpoint, e.g. `http://vmselect:8481/select/0/prometheus`. |
 | `datasources.loki.url` | string | Loki HTTP read endpoint, e.g. `http://loki-gateway:3100`. |
 | `datasources.alertmanager.url` | string | Alertmanager v2 API base URL, e.g. `http://alertmanager:9093`. |
 
@@ -27,7 +27,7 @@ Minimal values file:
 clusterName: my-cluster
 
 datasources:
-  victoriametrics:
+  prometheus:
     url: http://vmselect.monitoring.svc:8481/select/0/prometheus
   loki:
     url: http://loki-gateway.monitoring.svc:3100
@@ -86,7 +86,7 @@ Workers are stateless Go processes that execute PromQL and LogQL queries, run de
 |---|---|---|---|
 | `worker.replicaCount` | `3` | integer | Number of worker replicas. Workers are stateless — scale freely. |
 | `worker.concurrency` | `5` | integer | Number of detection jobs a single worker processes in parallel. Higher values increase throughput but also datasource load. |
-| `worker.queryTimeout` | `20s` | duration | Per-query timeout for VictoriaMetrics and Loki requests. |
+| `worker.queryTimeout` | `20s` | duration | Per-query timeout for Prometheus and Loki requests. |
 | `worker.grpc.port` | `9090` | integer | gRPC port the worker listens on. |
 | `worker.resources.requests.cpu` | `200m` | string | CPU request per worker pod. |
 | `worker.resources.requests.memory` | `256Mi` | string | Memory request per worker pod. |
@@ -398,25 +398,25 @@ Prometheus Operator ServiceMonitor for scraping controller and worker metrics.
 
 ### vmServiceScrape
 
-VictoriaMetrics Operator VMServiceScrape (preferred when using the VictoriaMetrics stack).
+Prometheus Operator ServiceMonitor (preferred when using the Prometheus stack).
 
 | Key | Default | Description |
 |---|---|---|
-| `vmServiceScrape.enabled` | `false` | Create a VMServiceScrape resource. |
+| `vmServiceScrape.enabled` | `false` | Create a ServiceMonitor resource. |
 | `vmServiceScrape.interval` | `30s` | Scrape interval. |
 | `vmServiceScrape.scrapeTimeout` | `10s` | Per-scrape timeout. |
 | `vmServiceScrape.extraEndpoints` | `[]` | Additional scrape endpoints, e.g. for the ML service. |
 
 ### vmRule
 
-VictoriaMetrics Operator VMRule containing health alerts and recording rules for the anomaly detection service itself.
+Prometheus Operator PrometheusRule containing health alerts and recording rules for the anomaly detection service itself.
 
 | Key | Default | Description |
 |---|---|---|
-| `vmRule.enabled` | `false` | Create the VMRule resource. |
-| `vmRule.namespace` | `""` | Namespace for the VMRule. Defaults to the release namespace. |
+| `vmRule.enabled` | `false` | Create the PrometheusRule resource. |
+| `vmRule.namespace` | `""` | Namespace for the PrometheusRule. Defaults to the release namespace. |
 | `vmRule.additionalLabels` | `{}` | Extra labels for VMAlertmanager rule group selection. |
-| `vmRule.disabledAlerts` | `[]` | List of alert names to exclude from the rendered VMRule. |
+| `vmRule.disabledAlerts` | `[]` | List of alert names to exclude from the rendered PrometheusRule. |
 
 ### grafanaDashboard
 
@@ -504,4 +504,4 @@ ml:
 | `staffops_ad_worker_redis_cache_hits_total` is zero | Workers cannot connect to Redis | Verify Redis address, port, and password. For external Redis, confirm the Secret referenced by `redis.external.existingSecret` exists in the same namespace and contains the `redis-password` key. |
 | Alerts arrive in Alertmanager but without the `cluster` label | `clusterName` was not set | Set `clusterName` in values and run `helm upgrade`. All metrics and alerts carry this label. |
 | Prophet detection never triggers | Insufficient historical data in Redis | Prophet requires at least 2 weeks of baseline data. Check `staffops_ad_ml_prophet_training_samples` — it must exceed `336` (2 weeks × 24h × 7 samples/h at 30s tick). |
-| High query latency warnings in worker logs | Slow VictoriaMetrics or Loki responses | Tune `worker.queryTimeout`, reduce `worker.concurrency`, or check datasource health. The histogram `staffops_ad_worker_query_duration_seconds` shows per-datasource p99 latency. |
+| High query latency warnings in worker logs | Slow Prometheus or Loki responses | Tune `worker.queryTimeout`, reduce `worker.concurrency`, or check datasource health. The histogram `staffops_ad_worker_query_duration_seconds` shows per-datasource p99 latency. |

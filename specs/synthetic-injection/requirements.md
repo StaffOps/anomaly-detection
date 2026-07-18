@@ -98,7 +98,7 @@ score).
 - **Injeção correlacionada multi-série** (latência↑ + erro↑ + throughput↓ juntos,
   seguindo uma cadeia do degradation-model) — V1 injeta por série independente. A
   injeção causal-realista é V2 e depende da direção do produto ser confirmada.
-- **Injeção em logs (Loki)** — V1 foca em métricas (VM). Logs são mais difíceis de
+- **Injeção em logs (Loki)** — V1 foca em métricas (Prometheus). Logs são mais difíceis de
   perturbar realisticamente (texto, não série numérica). V2.
 - **Geração de séries 100% sintéticas** (sem base real) — V1 perturba séries reais
   limpas, que carregam realismo de ruído/sazonalidade. Sintético puro é menos
@@ -114,7 +114,7 @@ score).
 ## Precondições
 
 - **Replay mode funcional** (✅ P3.1 DONE) — esta feature estende o replay existente.
-- Acesso de leitura a VM/Loki históricos (já usado pelo replay).
+- Acesso de leitura a Prometheus/Loki históricos (já usado pelo replay).
 - Janelas limpas conhecidas — responsabilidade do operador declarar (ver Fora de
   escopo: auto-seleção é V2).
 

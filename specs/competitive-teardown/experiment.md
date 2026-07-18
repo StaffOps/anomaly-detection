@@ -87,7 +87,7 @@ Para evitar racionalização pós-hoc, os critérios são fixados agora:
 ### Phase 2: Atacar o core candidato (o teste de verdade)
 - [ ] T5: Pegar UMA cadeia causal do `degradation-model.md` (sugestão: .NET N1, threadpool→queue→latency→errors, a mais coberta por métricas).
 - [ ] T6: Tentar expressá-la como Robusta playbook — o playbook consegue afirmar "a fila encheu ANTES da latência subir, logo a causa é threadpool, não dependência"?
-- [ ] T7: Tentar expressá-la como recording rules encadeadas no VM — dá pra codificar a *ordem temporal* (precedência) que distingue N1 de N3 sem reimplementar correlação?
+- [ ] T7: Tentar expressá-la como recording rules encadeadas no Prometheus — dá pra codificar a *ordem temporal* (precedência) que distingue N1 de N3 sem reimplementar correlação?
 - [ ] T8: Registrar o resultado de T6/T7 contra os critérios "PORTA/RESISTE" fixados acima.
 
 ### Phase 3: Decisão
@@ -123,4 +123,4 @@ de recall. Os dois juntos é que decidem a hipótese.
 | Racionalização pós-hoc ("C6 resiste porque eu quero que resista") | Critérios PORTA/RESISTE fixados ANTES de rodar (acima) |
 | Robusta indisponível → teardown vira teoria | Declarar explicitamente quando for análise documental vs teste real; análise documental é veredito mais fraco |
 | Esforço de portar subestimado/superestimado | Registrar esforço real (horas) por capacidade, não impressão |
-| Viés de quem construiu o sistema | Idealmente delegar T6/T7 a `gitops`/`sre` (quem conhece Robusta/VM rules) em vez do autor do sistema |
+| Viés de quem construiu o sistema | Idealmente delegar T6/T7 a `gitops`/`sre` (quem conhece Robusta/Prometheus rules) em vez do autor do sistema |

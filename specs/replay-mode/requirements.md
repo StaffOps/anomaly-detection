@@ -32,7 +32,7 @@ WHEN um operador especifica janela > capacidade dos datasources (ex: 30 dias) TH
 - [ ] Replay reusa o mesmo código de detecção (`internal/detection/`) que o ciclo normal — nenhuma divergência de comportamento
 - [ ] Warm-up dinâmico: `max(20% da janela, baseline.warm_up_samples × tick_interval)`. Para `warm_up_samples=60` e `tick=30s` → mínimo 30min.
 - [ ] Detector adaptive honra `IsWarmingUp` igual prod: NÃO emite anomaly se `baseline.Result.Count < warm_up_samples` para aquela série (matches behavior de produção).
-- [ ] Static rules disparam corretamente em modo replay (queries range em VM)
+- [ ] Static rules disparam corretamente em modo replay (queries range em Prometheus)
 - [ ] Adaptive Z-score disparam corretamente (baseline temporário em memória, não Redis)
 - [ ] Log patterns disparam corretamente (queries range em Loki)
 - [ ] P2.4 (workload-pattern) ativo igual produção
@@ -41,7 +41,7 @@ WHEN um operador especifica janela > capacidade dos datasources (ex: 30 dias) TH
 
 ### Robustez
 
-- [ ] Erro de query (VM ou Loki indisponível em algum tick): replay **NÃO aborta**. Skip o tick afetado, log warning, incrementa contador `query_errors`. Final report inclui contagem.
+- [ ] Erro de query (Prometheus ou Loki indisponível em algum tick): replay **NÃO aborta**. Skip o tick afetado, log warning, incrementa contador `query_errors`. Final report inclui contagem.
 - [ ] Resultado vazio (zero anomalies detectadas) é resultado válido — não é erro.
 - [ ] `metadata.result_status` no output: `anomalies_detected` | `no_anomalies` | `partial` (último quando houve query errors).
 
@@ -59,18 +59,18 @@ WHEN um operador especifica janela > capacidade dos datasources (ex: 30 dias) TH
 - [ ] Replay 7 dias conclui em ≤ 30 min OU sistema rejeita janela com mensagem clara
 - [ ] Modo replay loga claramente "REPLAY MODE — no side effects" no início
 - [ ] Métricas Prometheus de produção NÃO são incrementadas em replay mode. Métricas de replay vivem em **registry separado**, embedadas no JSON output (V1 sem Prometheus exposure — V2 expõe se demandado).
-- [ ] Falha rápida se VM ou Loki indisponível **antes do replay começar** (sanity check). Indisponibilidade durante replay → graceful skip (ver "Robustez").
+- [ ] Falha rápida se Prometheus ou Loki indisponível **antes do replay começar** (sanity check). Indisponibilidade durante replay → graceful skip (ver "Robustez").
 
 ### Qualidade
 
 - [ ] Unit tests cobrindo: parse de `--from`/`--to`, warm-up split, output format, query error handling, IsWarmingUp filter
-- [ ] Integration test usando docker-compose stack contra dataset sintético (idealmente injetar ~100 amostras conhecidas em VM e validar que detector pega)
+- [ ] Integration test usando docker-compose stack contra dataset sintético (idealmente injetar ~100 amostras conhecidas em Prometheus e validar que detector pega)
 
 ## Fora de escopo (deixar para versão posterior)
 
 - **Comparação com ground truth** (TPs/FPs/FNs vs AM alert history). Demanda integração com AM `/api/v2/alerts` ou ingestão de CSV labeled. V2.
 - **Replay com ML wired** funcionando como prod (Isolation Forest stateful precisa replay sequencial cuidadoso). V2 com ML instance isolada.
-- **Cache de queries para iterar config rápido**: salvar VM/Loki responses em disco, próxima run com `--use-cache` reusa sem re-querying. V2.
+- **Cache de queries para iterar config rápido**: salvar Prometheus/Loki responses em disco, próxima run com `--use-cache` reusa sem re-querying. V2.
 - **Output em formato Grafana dashboard JSON** (importável). V2 nice-to-have.
 - **Replay distribuído** (workers paralelizando chunks da janela). V2 se performance virar gargalo.
 - **Replay de eventos K8s** (não temos histórico de eventos retornável). Static + adaptive + log apenas.

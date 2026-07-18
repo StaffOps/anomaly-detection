@@ -59,7 +59,7 @@ while true; do
   echo " WORKERS (3 replicas)"
   echo "   Deteccoes:  static=${SDET:-0}    adaptive=${ADET:-0}"
   echo "   Baseline:   updates=${BUPD:-0}"
-  echo "   Queries:    VM=${VMQ:-0} (avg ${VMA}ms)  Loki=${LKQ:-0} (avg ${LKA}ms)"
+  echo "   Queries:    Prometheus=${VMQ:-0} (avg ${VMA}ms)  Loki=${LKQ:-0} (avg ${LKA}ms)"
   echo ""
   if [ "$PCT" -lt 100 ]; then
     echo " WARM-UP: [${BAR}] ${PCT}% (${BCNT}/60)"

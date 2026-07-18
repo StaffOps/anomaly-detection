@@ -25,7 +25,7 @@ deviate from a learned per-series baseline:
 
 | Signal | Source | Detector |
 |--------|--------|----------|
-| `metrics` | VictoriaMetrics (PromQL) | static thresholds + adaptive EWMA/Z-score |
+| `metrics` | Prometheus (PromQL) | static thresholds + adaptive EWMA/Z-score |
 | `logs` | Loki (LogQL) | log-rate patterns |
 | `events` | K8s API (`Events("").Watch`) | event-reason patterns |
 
@@ -106,7 +106,7 @@ until malicious load reads as normal. Fatal in a security context.
 
 ### 3. No absence-of-signal ("dead man's switch") detection
 
-`/readyz` probes check the **detector's own dependencies** (VM, Loki, Alertmanager,
+`/readyz` probes check the **detector's own dependencies** (Prometheus, Loki, Alertmanager,
 ML). There is **no** detection of an *expected* signal going silent — "this workload
 always emits N logs/min and stopped" raises nothing. Blinding the pipeline (killing
 the collector, filling the disk) is silent.

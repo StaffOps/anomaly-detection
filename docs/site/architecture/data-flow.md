@@ -6,14 +6,14 @@
 sequenceDiagram
     participant C as Controller
     participant W as Workers (x3)
-    participant VM as VictoriaMetrics
+    participant Prometheus as Prometheus
     participant LK as Loki
     participant RD as Redis
     participant ML as ML Service
     participant AM as Alertmanager
 
     C->>W: Dispatch job batch (gRPC)
-    W->>VM: PromQL instant queries
+    W->>Prometheus: PromQL instant queries
     W->>LK: LogQL queries
     W->>RD: Read/update baselines
     W-->>C: Return anomalies
@@ -24,7 +24,7 @@ sequenceDiagram
     end
 
     C->>C: Correlate + deduplicate
-    C->>VM: Enrichment queries (context)
+    C->>Prometheus: Enrichment queries (context)
     C->>AM: Fire alert (or dry-run log)
 ```
 
@@ -35,7 +35,7 @@ sequenceDiagram
 2. Controller builds job batch per cycle
 3. Jobs dispatched round-robin to workers
 4. Each worker:
-   a. Executes query (VM or Loki)
+   a. Executes query (Prometheus or Loki)
    b. Compares result against threshold or baseline
    c. If anomalous → returns Anomaly{metric, labels, value, severity}
    d. Updates baseline in Redis (EWMA alpha=0.3)

@@ -4,12 +4,12 @@
 
 - Kubernetes ≥ 1.24
 - Helm ≥ 3.10
-- VictoriaMetrics with PromQL-compatible endpoint
+- Prometheus with PromQL-compatible endpoint
 - Loki with LogQL endpoint
 - Alertmanager v2 endpoint
 
 !!! note "What this chart does NOT install"
-    VictoriaMetrics, Loki, and Alertmanager must already be running in your cluster. The anomaly detection service connects to them as data sources.
+    Prometheus, Loki, and Alertmanager must already be running in your cluster. The anomaly detection service connects to them as data sources.
 
 ---
 
@@ -47,7 +47,7 @@ Create a values file:
 clusterName: prd-eks
 
 datasources:
-  victoriametrics:
+  prometheus:
     url: https://vm.internal/select/0/prometheus
   loki:
     url: https://loki.internal

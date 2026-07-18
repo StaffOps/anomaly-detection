@@ -21,7 +21,7 @@ Anomaly Detected
 │ Alert Fire  │──▶ Alertmanager (enriched payload + links)
 └─────────────┘
 
-/readyz ──▶ [Redis, VM, Loki, AM, ML] ──▶ 200/503
+/readyz ──▶ [Redis, Prometheus, Loki, AM, ML] ──▶ 200/503
 ```
 
 ## Components
@@ -60,7 +60,7 @@ Anomaly Detected
 **Choice**: Cache enrichment query results in Redis with TTL (60s default), keyed by workload identity.
 
 **Justification**:
-1. Same workload may trigger multiple anomalies within one detection cycle — avoid redundant VM queries
+1. Same workload may trigger multiple anomalies within one detection cycle — avoid redundant Prometheus queries
 2. Redis already a dependency (baselines, dedup) — no new infra
 3. TTL ensures staleness is bounded; LRU eviction keeps memory bounded
 

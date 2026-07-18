@@ -73,7 +73,7 @@ metricSeries = append(metricSeries, series...)
 ```
 
 Por que aqui e não antes (no datasource) ou depois (nos samples):
-- **Antes (no VM)**: violaria a invariante "não escreve em datasource" e poluiria
+- **Antes (no Prometheus)**: violaria a invariante "não escreve em datasource" e poluiria
   dados reais. Inaceitável.
 - **Depois (no sample já extraído)**: perderia a forma temporal — uma rampa precisa
   perturbar *a série inteira ao longo do tempo*, não um ponto. Injetar no `TimeSeries`
@@ -210,7 +210,7 @@ Adiciona dois blocos ao JSON do replay existente:
 
 ### Decisão 1: Perturbar séries reais limpas (não gerar séries sintéticas do zero)
 
-**Escolha**: injetar falhas sobre dados históricos reais de VM/Loki, não gerar
+**Escolha**: injetar falhas sobre dados históricos reais de Prometheus/Loki, não gerar
 timeseries 100% artificiais.
 
 **Justificativa, em ordem de força**:
@@ -260,7 +260,7 @@ normalizado, testado.
 
 ## Invariantes
 
-- Injeção acontece **apenas em memória** — VM/Loki nunca modificados
+- Injeção acontece **apenas em memória** — Prometheus/Loki nunca modificados
 - Herda todas as invariantes do replay (sem Redis/Alertmanager/gRPC/ML)
 - `Injector.Apply` sem perfil é **no-op exato** — replay normal não muda em nada
 - Mesma seed + mesma janela + mesmo perfil = mesmo score (determinístico)

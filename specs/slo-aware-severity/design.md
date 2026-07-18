@@ -84,7 +84,7 @@ Severity levels: `info < warning < critical`. Only one step per adjustment (no `
 
 **Justification**:
 1. Predictable — operator controls exactly which services participate
-2. No dependency on VMRule label conventions being consistent
+2. No dependency on PrometheusRule label conventions being consistent
 3. Simpler to implement and debug
 
 **Trade-offs accepted**:

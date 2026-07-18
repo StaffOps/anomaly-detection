@@ -14,7 +14,7 @@ fluem pelo mesmo caminho — reusando enrichment, dedup, e dispatch.
 │  Fontes de ingestão (existentes)            Nova fonte                 │
 │  ┌─────────────┐ ┌──────────┐ ┌──────────┐  ┌────────────────────┐    │
 │  │ Metrics     │ │ Logs     │ │ K8s      │  │ Falco              │    │
-│  │ (VM/PromQL) │ │ (Loki)   │ │ Events   │  │ (Loki LogQL  ──A    │    │
+│  │ (Prometheus/PromQL) │ │ (Loki)   │ │ Events   │  │ (Loki LogQL  ──A    │    │
 │  │             │ │          │ │ (watch)  │  │  OR webhook  ──B)   │    │
 │  └──────┬──────┘ └────┬─────┘ └────┬─────┘  └─────────┬──────────┘    │
 │         │             │            │                  │                │

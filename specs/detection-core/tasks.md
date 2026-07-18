@@ -14,7 +14,7 @@
 
 ## P1.2 — Alert Payload with Links
 
-- [x] Task 8: Implement `LinkBuilder` with Grafana Explore URL renderer (MetricsQL, ±15min)
+- [x] Task 8: Implement `LinkBuilder` with Grafana Explore URL renderer (PromQL, ±15min)
 - [x] Task 9: Add Tempo TraceQL link renderer (±15min)
 - [x] Task 10: Add Loki LogQL link renderer (±5min)
 - [x] Task 11: Add per-detector Runbook URL renderer

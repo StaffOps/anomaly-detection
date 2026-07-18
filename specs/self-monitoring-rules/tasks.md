@@ -1,4 +1,4 @@
-# Tasks: Self-Monitoring VMRules (P6.1)
+# Tasks: Self-Monitoring PrometheusRules (P6.1)
 
 > **Status**: `TODO` — Small, blocked on Helm chart (PH.15)
 

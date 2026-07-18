@@ -69,7 +69,7 @@ For production images (amd64 + arm64):
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t registry/staffops-anomaly-controller:v0.7.0 \
+  -t registry/staffops-anomaly-controller:v0.11.0 \
   ./controller
 ```
 

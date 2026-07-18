@@ -10,7 +10,7 @@ Required variables (docker-compose fails fast if missing):
 
 | Variable | Purpose | Example |
 |----------|---------|---------|
-| `VM_URL` | VictoriaMetrics endpoint | `https://victoria-metrics-read.example.com/select/0/prometheus` |
+| `PROMETHEUS_URL` | Prometheus endpoint | `https://prometheus-read.example.com/select/0/prometheus` |
 | `LOKI_URL` | Loki endpoint | `https://loki.example.com` |
 | `ALERTMANAGER_URL` | Alertmanager endpoint | `https://alertmanager.example.com` |
 
@@ -42,8 +42,8 @@ redis:
   db: 0
 
 datasources:
-  victoriametrics:
-    url: ${VM_URL}
+  prometheus:
+    url: ${PROMETHEUS_URL}
     timeout: 30s
   loki:
     url: ${LOKI_URL}

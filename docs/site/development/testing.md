@@ -80,7 +80,7 @@ docker run --rm --network=host \
 ```
 
 !!! info "Integration test status"
-    Integration tests for replay mode (T13) are pending. They will inject synthetic data into VM/Loki and verify detection accuracy.
+    Integration tests for replay mode (T13) are pending. They will inject synthetic data into Prometheus/Loki and verify detection accuracy.
 
 ## Golden File Tests
 

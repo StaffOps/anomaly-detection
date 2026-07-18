@@ -33,7 +33,7 @@
 
 | Component | Responsibility |
 |-----------|---------------|
-| `Discoverer` | Periodically queries VM for service_graph metrics, builds/updates graph |
+| `Discoverer` | Periodically queries Prometheus for service_graph metrics, builds/updates graph |
 | `AdjacencyStore` | Redis-backed graph storage (adjacency list, edge weights, TTL) |
 | `Propagator` | On anomaly: walks graph, finds concurrent anomalies, scores propagation |
 | `MetricsExporter` | Exposes `staffops_ad_graph_*` metrics for Grafana Node Graph |
@@ -89,7 +89,7 @@ severity_factor: 1.0 if upstream is critical, 0.7 if warning, 0.3 if info
 1. Service graph metrics already exist in the Prometheus-compatible TSDB (zero new infra)
 2. Pre-aggregated by the Collector — no trace storage scanning needed
 3. Sub-second PromQL query vs seconds/minutes for Tempo search
-4. Works in replay mode (metrics are in VM history)
+4. Works in replay mode (metrics are in Prometheus history)
 
 **Trade-offs accepted**:
 | Cost | Reality |

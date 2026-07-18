@@ -1,4 +1,4 @@
-# Feature: Self-Monitoring VMRules (P6.1)
+# Feature: Self-Monitoring PrometheusRules (P6.1)
 
 ## User Story
 
@@ -8,7 +8,7 @@ THEN I SHALL be alerted via standard Alertmanager→Slack pipeline before user-f
 
 ## Acceptance Criteria
 
-- [ ] PrometheusRule resource (compatible with VMRule CRD) containing all rules below:
+- [ ] PrometheusRule resource (compatible with PrometheusRule CRD) containing all rules below:
 
 | Rule | Condition | For | Severity |
 |------|-----------|-----|----------|
@@ -33,5 +33,5 @@ THEN I SHALL be alerted via standard Alertmanager→Slack pipeline before user-f
 
 ## Notes
 
-- PrometheusRule CRD is the vendor-agnostic name; VictoriaMetrics operator watches it via VMRule compatibility mode. Both work identically.
+- PrometheusRule CRD is the vendor-agnostic name; Prometheus operator watches it via PrometheusRule compatibility mode. Both work identically.
 - Metric names depend on the controller/worker instrumentation already in place.

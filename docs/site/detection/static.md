@@ -6,7 +6,7 @@ Compares a metric value against a fixed threshold. Simplest detection method —
 
 ```mermaid
 graph LR
-    Q[Query VM] --> V[Get value]
+    Q[Query Prometheus] --> V[Get value]
     V --> C{value > threshold?}
     C -->|Yes| A[Anomaly]
     C -->|No| N[Normal]

@@ -164,7 +164,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
 
 - [x] **PH.17** (done in chart PH.15) — Add `argocd.argoproj.io/sync-wave` annotations:
   `-2` namespace, `-1` Redis + ServiceAccounts + RBAC, `0` controller + worker
-  + ML, `1` VMRule + VMServiceScrape + Dashboard. **Effort: S** (in PH.15
+  + ML, `1` PrometheusRule + ServiceMonitor + Dashboard. **Effort: S** (in PH.15
   templates).
 
 - [x] **PH.18** (done in chart PH.15) — Add `PodDisruptionBudget`:
@@ -173,7 +173,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   - **Effort: S** (in PH.15 templates).
 
 - [x] **PH.19** (done in chart PH.15) — Replace `prometheus.io/scrape` annotations with
-  `VMServiceScrape` CRDs. Also: define `VMRule` for staffops_ad alerts already
+  `ServiceMonitor` CRDs. Also: define `PrometheusRule` for staffops_ad alerts already
   in `controller/deploy/vmrules.yaml`. **Effort: S**.
 
 - [x] **PH.20** (done in chart PH.15) — Remove explicit CPU limits from controller + worker
@@ -186,7 +186,7 @@ Each task carries a `PH.N` identifier matching the corresponding entry in
   - Redis: ingress only from controller+worker pods.
   - Worker gRPC (50052): ingress only from controller pods.
   - ML gRPC (50051): ingress only from controller pods.
-  - Egress: controller → VM, Loki, Alertmanager external endpoints.
+  - Egress: controller → Prometheus, Loki, Alertmanager external endpoints.
   - **Effort: S** (in PH.15 templates).
 
 - [ ] **PH.22** — Pre-provision a zero-permission IRSA role.

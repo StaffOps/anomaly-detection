@@ -34,7 +34,7 @@ Feature and experiment specifications for `staffops-anomaly-detection`.
 | [fdr-correction](fdr-correction/) | `DONE` | P0.4 | Benjamini-Hochberg FDR to cut ~1000+ FP/day |
 | [baseline-robustness](baseline-robustness/) | `DONE` | P2.8-10 | Workload keying, anti-poisoning, dead man's switch |
 | [cardinality-guard](cardinality-guard/) | `TODO` | P5.4 | Self-protection: cap baseline series count |
-| [self-monitoring-rules](self-monitoring-rules/) | `TODO` | P6.1 | PrometheusRule/VMRule for system self-health |
+| [self-monitoring-rules](self-monitoring-rules/) | `TODO` | P6.1 | PrometheusRule/PrometheusRule for system self-health |
 | [degradation-model-validation](degradation-model-validation/) | `TODO` | P0.3 | Validate causal chains against real incidents |
 | [synthetic-injection](synthetic-injection/) | `READY` | P0.1 | Inject synthetic faults to measure recall/FP bounds |
 | [competitive-teardown](competitive-teardown/) | `READY` | P0.2 | Time-boxed: can the value be reproduced as config? |

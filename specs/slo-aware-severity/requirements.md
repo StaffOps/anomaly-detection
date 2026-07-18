@@ -30,4 +30,4 @@ THEN the alert annotation SHALL include original severity, adjusted severity, an
 - Defining SLOs or SLO targets (separate concern — owned by SRE)
 - Creating or modifying SLO recording rules in the cluster
 - Alertmanager routing changes
-- Auto-discovery of SLOs from VMRule labels (future enhancement, not P3.4)
+- Auto-discovery of SLOs from PrometheusRule labels (future enhancement, not P3.4)

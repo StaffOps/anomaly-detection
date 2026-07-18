@@ -11,7 +11,7 @@ Ordered by priority — items higher up are nearer-term.
 | 3 — Operational maturity | Replay mode, dashboards, feedback | 🚧 In progress |
 | 4 — Observability hardening | Instrumentation fixes, cardinality | 🎯 Next |
 | 5 — Cluster readiness | Leader election, deploy, real alerts | 🔜 Planned |
-| 6 — Self-monitoring | VMRules, dashboards, OTel SDK | 🔜 Planned |
+| 6 — Self-monitoring | PrometheusRules, dashboards, OTel SDK | 🔜 Planned |
 
 ---
 
@@ -19,7 +19,7 @@ Ordered by priority — items higher up are nearer-term.
 
 - **P1.1** — Label-based pivot (anomaly enrichment) with identity extraction, template substitution, bounded concurrency, Redis-backed cache
 - **P1.2** — Alert payload with Grafana/Tempo/Loki/Runbook deep links anchored at anomaly timestamp
-- **P1.3** — Complete readiness checks (`/readyz` probes VM, Loki, Alertmanager, ML)
+- **P1.3** — Complete readiness checks (`/readyz` probes Prometheus, Loki, Alertmanager, ML)
 
 ## 🟡 Phase 2 — ML Maturity
 
@@ -32,7 +32,7 @@ Ordered by priority — items higher up are nearer-term.
 ## 🚧 Phase 3 — Operational Maturity
 
 - [x] **P3.1** — Replay mode (16/16 tasks done) — see [Replay Mode](operations/replay.md)
-- [x] **P3.2** — Top noisy workloads dashboard / VMRule — see [Monitoring](operations/monitoring.md)
+- [x] **P3.2** — Top noisy workloads dashboard / PrometheusRule — see [Monitoring](operations/monitoring.md)
 - [ ] **P3.3** — Feedback loop (Slack reactions → precision/recall tracking)
 - [ ] **P3.4** — SLO-aware severity adjustment
 
@@ -53,6 +53,6 @@ Ordered by priority — items higher up are nearer-term.
 
 ## 🔜 Phase 6 — Self-Monitoring
 
-- [ ] **P6.1** — VMRules for `staffops_ad_*` metrics
+- [ ] **P6.1** — PrometheusRules for `staffops_ad_*` metrics
 - [ ] **P6.2** — Grafana dashboard refresh
 - [ ] **P6.3** — OTel SDK adoption (traceID-correlated logs)

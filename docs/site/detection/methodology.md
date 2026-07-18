@@ -19,7 +19,7 @@
    "taxa de request caiu" igual a "taxa de erro subiu". A semântica (direção,
    classe, teto) tem que ser metadado da regra, não conhecimento na cabeça de alguém.
 4. **Cada série adaptativa tem custo triplo**: memória Redis (baseline), carga de
-   query no VM, e orçamento de falso positivo. Série que não justifica os três, sai.
+   query no Prometheus, e orçamento de falso positivo. Série que não justifica os três, sai.
 5. **Nenhuma mudança de detector sem número.** O harness de medição (P0.1) é o
    pré-requisito: toda técnica desta página é avaliada por recall/FP sobre falhas
    injetadas, não por argumento.
@@ -60,8 +60,8 @@ estiver ativo, por injeção sintética antes do primeiro deploy da regra.
 | Se o sinal... | Detector | Por quê |
 |---------------|----------|---------|
 | Tem teto/limite conhecido (`bounded.ceiling`) | **static** (`value OP threshold`) | Determinístico, zero custo de baseline, zero FP estatístico |
-| Cresce previsivelmente rumo a um teto (fila, disco, pool) | **`predict_linear` em VMRule** — fora deste produto | Saturação rumo a teto conhecido é *previsível*, não anômala (Decision 8) |
-| Tem SLO definido | **burn-rate multi-window em VMRule** — fora deste produto | Padrão da indústria, assertivo por construção; consumir, não reconstruir |
+| Cresce previsivelmente rumo a um teto (fila, disco, pool) | **`predict_linear` em PrometheusRule** — fora deste produto | Saturação rumo a teto conhecido é *previsível*, não anômala (Decision 8) |
+| Tem SLO definido | **burn-rate multi-window em PrometheusRule** — fora deste produto | Padrão da indústria, assertivo por construção; consumir, não reconstruir |
 | Baseline desconhecido + sazonalidade estável | **adaptive** (EWMA/seasonal) | O único caso que justifica o custo do baseline |
 | É textual/padrão em log (panic, OOM) | **pattern** (LogQL rate) | Sem baseline numérico |
 | DEVE sempre emitir (heartbeat, exporter) | **absence** (P2.10, quando existir) | Silêncio é o sinal |
@@ -107,7 +107,7 @@ algoritmo melhor" sem número do P0.1 antes e depois.
 | FP/dia total (estimado via feedback + dedup) | O orçamento global de atenção humana |
 | `alert_deduplicated_total / alert_fired_total` | Dedup alto = regra gritando repetido |
 | `baseline_series_tracked` | Custo Redis; guarda de cardinalidade (P5.4) em 10k |
-| Queries/ciclo e duração p99 do ciclo | Custo VM; rate limits 20/s VM já existem |
+| Queries/ciclo e duração p99 do ciclo | Custo Prometheus; rate limits 20/s Prometheus já existem |
 | % anomalias suprimidas por janela pós-deploy | Mede o valor da técnica nº 1 |
 
 ### Ciclo de vida de uma regra
@@ -120,14 +120,14 @@ proposta (catálogo completo) → replay sobre 7d históricos → injeção sint
 
 ## Modelo de custo (para não estourar)
 
-- **Tier 0 — de graça**: static rules e VMRules (`predict_linear`, burn-rate) rodam
-  no VM que já existe. Use amplamente.
+- **Tier 0 — de graça**: static rules e PrometheusRules (`predict_linear`, burn-rate) rodam
+  no Prometheus que já existe. Use amplamente.
 - **Tier 1 — barato**: pattern (LogQL) — custo por query; agrupe por namespace.
 - **Tier 2 — caro**: adaptive — Redis + queries por ciclo + FP budget. **Curado**:
   só sinais do catálogo com justificativa; alvo < 500 séries adaptativas.
 - **Empurre agregação para recording rules**: se a query do sinal agrega muito,
-  crie recording rule no VM (`vmrules.yaml`) e consulte a série pré-agregada — a
-  conta roda 1× no VM, não a cada worker/ciclo.
+  crie recording rule no Prometheus (`vmrules.yaml`) e consulte a série pré-agregada — a
+  conta roda 1× no Prometheus, não a cada worker/ciclo.
 - **Sem custo de LLM**: nada nesta página chama IA. A integração aigent-squad
   (P5.5) permanece **opcional e atrás de flag**, consumindo alertas já assertivos.
 

@@ -18,7 +18,7 @@
         ┌──────────────────┼──────────────────┐
         │                  │                  │
    ┌────▼──────┐   ┌──────▼─────┐   ┌────────▼──────┐
-   │  VM range │   │ Loki range │   │ detection.    │
+   │  Prometheus range │   │ Loki range │   │ detection.    │
    │  query    │   │ query      │   │ Engine        │
    │  /api/v1/ │   │ /loki/api/ │   │ (REUSED from  │
    │  query_   │   │ v1/query_  │   │  prod path)   │
@@ -201,7 +201,7 @@ Antes de começar o tick simulator, validar:
 |---------|--------------|
 | `from > to` ou janela < 2.5h | Erro claro, exit non-zero |
 | `to - from > max_range` (default 7d) | Erro claro com sugestão de `--max-range` |
-| VM `/api/v1/query?query=up` falha | Erro: "VM unreachable, refusing to start replay" |
+| Prometheus `/api/v1/query?query=up` falha | Erro: "Prometheus unreachable, refusing to start replay" |
 | Loki `/loki/api/v1/labels` falha | Erro: "Loki unreachable, refusing to start replay" |
 | Config inválido (parse error) | Erro: linha + mensagem |
 | Output path inacessível (write protected) | Erro antes de processar qualquer tick |
@@ -212,7 +212,7 @@ Se o tick simulator está rodando e algo falha:
 
 | Cenário | Comportamento |
 |---------|--------------|
-| Query VM retorna 500/timeout em tick T | Skip tick T, log warning, incrementa `ticks_skipped_query_error`. Próximo tick prossegue. |
+| Query Prometheus retorna 500/timeout em tick T | Skip tick T, log warning, incrementa `ticks_skipped_query_error`. Próximo tick prossegue. |
 | Query Loki retorna 500/timeout em tick T | Skip apenas a parte de logs do tick. Métricas do tick continuam. |
 | Detection engine panics em tick T | Recover, log error com stack trace, skip tick. |
 | Out of memory | Não pode recuperar — abort com mensagem específica + sugestão de janela menor |
@@ -263,16 +263,16 @@ Não incrementam contadores de produção (`staffops_ad_detection_anomalies_tota
 
 | Risco | Probabilidade | Mitigação |
 |-------|--------------|-----------|
-| VM range query timeout em janelas longas | alta | Chunk em janelas de 1h, retry com backoff |
+| Prometheus range query timeout em janelas longas | alta | Chunk em janelas de 1h, retry com backoff |
 | Memory blowup carregando muitas séries | média | Hard cap de séries por query (top N por workload, configurable) |
 | Replay diverge da prod por bug em range→instant adapter | média | Integration test com data sintética conhecida |
-| Operador roda replay em prod stack atrapalhando perf de VM | baixa | Logar warning quando replay roda em janela curta de horário pico |
+| Operador roda replay em prod stack atrapalhando perf de Prometheus | baixa | Logar warning quando replay roda em janela curta de horário pico |
 | Output JSON cresce demais (5MB+) | média | Truncar lista de anomalies em N (default 1000), expor flag `--max-anomalies` |
 
 ## Sequence diagram (caminho feliz, simplificado)
 
 ```
-operator              controller(--replay)        VM            Loki
+operator              controller(--replay)        Prometheus            Loki
    │                        │                      │             │
    │── ./controller ─────────►                      │             │
    │   --replay              │                      │             │

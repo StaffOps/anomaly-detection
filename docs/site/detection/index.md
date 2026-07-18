@@ -32,7 +32,7 @@ graph TD
 
 ## Signal Types
 
-### Metrics (VictoriaMetrics)
+### Metrics (Prometheus)
 
 - CPU usage ratio per pod
 - Memory usage ratio per pod

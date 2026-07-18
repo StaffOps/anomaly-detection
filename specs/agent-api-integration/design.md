@@ -270,7 +270,7 @@ agent_api:
 
 1. **Considerar rate-limit no chaitops lado** — mesmo com `max_concurrent=5` no controller, um cluster instável pode gerar 5 squads a cada 5min. O chaitops deveria ter seu próprio throttle (aceitar ou 429).
 
-2. **Alerting rule sugerida** — criar VMRule quando implementar:
+2. **Alerting rule sugerida** — criar PrometheusRule quando implementar:
    ```yaml
    - alert: AgentAPICircuitBreakerOpen
      expr: agent_api_circuit_breaker_state == 1

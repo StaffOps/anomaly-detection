@@ -9,7 +9,7 @@ All configuration is done via `values.yaml`. Below are the key parameters.
 | Key | Description |
 |---|---|
 | `clusterName` | Cluster identifier — used as the `cluster` label on all metrics and alerts |
-| `datasources.victoriametrics.url` | VictoriaMetrics read endpoint (PromQL-compatible) |
+| `datasources.victoriametrics.url` | Prometheus read endpoint (PromQL-compatible) |
 | `datasources.loki.url` | Loki read endpoint (LogQL) |
 | `datasources.alertmanager.url` | Alertmanager v2 API endpoint |
 
@@ -111,6 +111,6 @@ suppression:
 | Key | Default | Description |
 |---|---|---|
 | `serviceMonitor.enabled` | `false` | Prometheus Operator ServiceMonitor |
-| `vmServiceScrape.enabled` | `false` | vm-operator VMServiceScrape |
-| `vmRule.enabled` | `false` | vm-operator VMRule (health alerts + recording rules) |
+| `vmServiceScrape.enabled` | `false` | vm-operator ServiceMonitor |
+| `vmRule.enabled` | `false` | vm-operator PrometheusRule (health alerts + recording rules) |
 | `grafanaDashboard.enabled` | `false` | ConfigMap labelled for Grafana sidecar discovery |

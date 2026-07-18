@@ -19,7 +19,7 @@
 - [ ] T6: Attempt to express it as Robusta playbook — can the playbook assert
       "queue filled BEFORE latency rose, therefore cause is threadpool, not
       dependency"? (depends on: T5)
-- [ ] T7: Attempt to express it as recording rules in VM — can temporal
+- [ ] T7: Attempt to express it as recording rules in Prometheus — can temporal
       ordering (precedence) distinguishing N1 from N3 be encoded without
       reimplementing correlation? (depends on: T5)
 - [ ] T8: Score T6/T7 results against PORTS/RESISTS criteria. (depends on: T6, T7)

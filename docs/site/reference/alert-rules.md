@@ -1,9 +1,9 @@
 # Alert Rules Reference
 
-When `vmRule.enabled=true`, the chart creates a `VMRule` resource containing health alerts for the anomaly detection service itself. These rules monitor the controller, workers, and ML service — they are distinct from the detection rules you configure to find anomalies in your own workloads.
+When `vmRule.enabled=true`, the chart creates a `PrometheusRule` resource containing health alerts for the anomaly detection service itself. These rules monitor the controller, workers, and ML service — they are distinct from the detection rules you configure to find anomalies in your own workloads.
 
 !!! note "Prerequisite"
-    The `VMRule` resource requires the [VictoriaMetrics Operator](https://github.com/VictoriaMetrics/operator) to be installed. If you are using the Prometheus Operator instead, the chart does not yet render a `PrometheusRule` automatically — use the custom alert example below to add rules manually.
+    The `PrometheusRule` resource requires the [Prometheus Operator](https://github.com/Prometheus/operator) to be installed. If you are using the Prometheus Operator instead, the chart does not yet render a `PrometheusRule` automatically — use the custom alert example below to add rules manually.
 
 Enable with:
 
@@ -18,7 +18,7 @@ vmRule:
 
 ## Included alerts
 
-The table below lists all alerts shipped in the default `VMRule`. The `for` duration is the minimum time the condition must be continuously true before the alert fires.
+The table below lists all alerts shipped in the default `PrometheusRule`. The `for` duration is the minimum time the condition must be continuously true before the alert fires.
 
 | Alert name | Condition | Severity | For | Description |
 |---|---|---|---|---|
@@ -95,7 +95,7 @@ This is an `info`-severity alert intended to be visible in dashboards and Slack/
 
 ## Disabling individual alerts
 
-To suppress a specific alert from the rendered VMRule, list its name in `vmRule.disabledAlerts`:
+To suppress a specific alert from the rendered PrometheusRule, list its name in `vmRule.disabledAlerts`:
 
 ```yaml
 vmRule:
@@ -106,17 +106,17 @@ vmRule:
 ```
 
 !!! warning "disabledAlerts vs Alertmanager inhibition"
-    `disabledAlerts` removes the rule from the VMRule resource entirely — the alert is never evaluated. This is different from Alertmanager inhibition or silences, which evaluate the rule but suppress the notification. Use `disabledAlerts` when you permanently don't want a rule; use Alertmanager silences for temporary suppression.
+    `disabledAlerts` removes the rule from the PrometheusRule resource entirely — the alert is never evaluated. This is different from Alertmanager inhibition or silences, which evaluate the rule but suppress the notification. Use `disabledAlerts` when you permanently don't want a rule; use Alertmanager silences for temporary suppression.
 
 ---
 
-## Custom VMRule example
+## Custom PrometheusRule example
 
-To add your own rules that reference `staffops_ad_*` metrics, create a separate `VMRule` resource rather than patching the chart's managed resource (which would be overwritten on upgrade).
+To add your own rules that reference `staffops_ad_*` metrics, create a separate `PrometheusRule` resource rather than patching the chart's managed resource (which would be overwritten on upgrade).
 
 ```yaml title="custom-vmrule.yaml"
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMRule
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
 metadata:
   name: staffops-anomaly-detection-custom
   namespace: monitoring
@@ -203,17 +203,17 @@ vmRule:
 ```
 
 !!! note "extraRules placement"
-    Rules added via `vmRule.extraRules` are placed in the same `VMRule` resource as the built-in alerts, under a separate group named `staffops-ad-custom`. They are subject to the same `vmRule.additionalLabels` and will be deleted if `vmRule.enabled` is set to `false`.
+    Rules added via `vmRule.extraRules` are placed in the same `PrometheusRule` resource as the built-in alerts, under a separate group named `staffops-ad-custom`. They are subject to the same `vmRule.additionalLabels` and will be deleted if `vmRule.enabled` is set to `false`.
 
 ---
 
-## VMRule full resource reference
+## PrometheusRule full resource reference
 
-When `vmRule.enabled=true`, the chart renders a resource equivalent to the following. This is useful as a reference when creating a standalone `VMRule` without the Helm chart, or when migrating to a `PrometheusRule` manually.
+When `vmRule.enabled=true`, the chart renders a resource equivalent to the following. This is useful as a reference when creating a standalone `PrometheusRule` without the Helm chart, or when migrating to a `PrometheusRule` manually.
 
 ```yaml
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMRule
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
 metadata:
   name: <release>-staffops-anomaly-detection
   namespace: monitoring
