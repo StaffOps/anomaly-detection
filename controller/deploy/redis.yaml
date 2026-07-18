@@ -58,7 +58,7 @@ data:
       password: ""
 
     datasources:
-      victoriametrics:
+      prometheus:
         url: http://vm-cluster-vmselect.monitoring:8481/select/0/prometheus
         timeout: 10s
       loki:

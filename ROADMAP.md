@@ -61,8 +61,18 @@ detector.
 from z-scores, applied per cycle after adaptive detection, before correlation. Only
 adaptive results filtered; static/pattern pass through. Config: `controller.fdr_target`
 (default 0.05). Metrics: `staffops_ad_detection_fdr_{accepted,rejected}_total`. 100% test
-coverage (20 unit tests). Remaining: T6-T7 (replay before/after comparison to quantify
-real FP reduction).
+coverage.
+
+**Follow-up — F0 (2026-07-17): corrected the censored-family bug.** The original
+implementation inferred the BH family size from the anomalies it received, but workers
+only ship anomalies that already fired (z > threshold) — a censored family of uniformly
+tiny p-values, over which BH accepts ~everything (it rejected ~0 in homolog). Fix: workers
+report `adaptive_series_tested` (evaluations past warm-up) on `JobResults`; the controller
+passes it to `fdr.Apply(anomalies, totalTests)` as the true `m` (~400/cycle). New gauge
+`staffops_ad_detection_fdr_family_size`. Replay now applies FDR per tick over the real
+family and reports `fdr_rejected` — this **is** the T6-T7 harness (replay before/after).
+Remaining: run the replay comparison to quantify the real FP reduction number (feeds
+exit-dry-run / P5.3).
 
 ---
 
@@ -78,7 +88,7 @@ Implemented `internal/enrichment/` with identity extraction, template substituti
 
 ### ✅ ~~P1.3 — Complete readiness checks~~ — **DONE in controller 0.7.0**
 
-`/readyz` now probes Redis (existing) plus VictoriaMetrics, Loki, Alertmanager, and ML service via `internal/readiness/`. All probes capped at 3s. ML probe is no-op when disabled. New metric `staffops_ad_controller_readiness_checks_total{dependency,result}`. 7 unit tests with `httptest`.
+`/readyz` now probes Redis (existing) plus Prometheus, Loki, Alertmanager, and ML service via `internal/readiness/`. All probes capped at 3s. ML probe is no-op when disabled. New metric `staffops_ad_controller_readiness_checks_total{dependency,result}`. 7 unit tests with `httptest`.
 
 ---
 
@@ -125,10 +135,17 @@ já ingeridos (`ingestion/events.go`). Anomalia dentro da janela pós-deploy →
 downgrade para info + annotation `during_rollout=true`. Métrica: % de anomalias
 suprimidas por janela. Config: duração da janela (default ~10min pós-rollout).
 
-### 🎯 P1.6 — Direction-of-badness (pode já; pequeno)
+### ✅ ~~P1.6 — Direction-of-badness~~ — **DONE (2026-07-18, v0.11.0)**
 
 Metadado `direction: up_bad|down_bad|both_bad` por regra adaptativa; anomalia só
 dispara na direção declarada. Mata FP de melhorias (latência caiu, tráfego caiu).
+
+**Implementação**: `internal/detection/direction.go` — `DirectionAllows`/`FilterByDirection`
+derivam a direção de `Value` vs `Mean` (o z-score é `|z|`, simétrico). Filtro roda no
+controller **antes do FDR** (sem mudança de proto/worker). Config: campo `direction` em
+`AdaptiveMetric` (vazio = `both_bad`, retrocompatível). Métrica:
+`staffops_ad_detection_direction_filtered_total`. Homologado em homolog (125 drops/30min).
+A maioria das regras RED de serviço é `up_bad`; `request_rate` fica `both_bad`.
 
 ### 🎯 P1.7 🔒 — Persistência N-de-M + histerese
 
@@ -184,7 +201,7 @@ Mapear como anomalias em um workload se propagam pra outros — request flows, b
 
 ### 🎯 P2.7 — Falco integration (runtime security signal)
 
-Adicionar Falco como **nova fonte de sinal** ao lado de métricas (VM), logs (Loki) e eventos do K8s. Falco detecta comportamento suspeito em runtime via eBPF (syscalls): shell em container, escrita em path sensível, escalação de privilégio, conexão de rede inesperada, mudança de binário. Esses eventos são ortogonais às anomalias de recurso/latência atuais e enriquecem a correlação com contexto de **segurança**.
+Adicionar Falco como **nova fonte de sinal** ao lado de métricas (Prometheus), logs (Loki) e eventos do K8s. Falco detecta comportamento suspeito em runtime via eBPF (syscalls): shell em container, escrita em path sensível, escalação de privilégio, conexão de rede inesperada, mudança de binário. Esses eventos são ortogonais às anomalias de recurso/latência atuais e enriquecem a correlação com contexto de **segurança**.
 
 **Valor**: hoje o controller vê "pod X com CPU/erro anômalo". Com Falco, pode cruzar "pod X anômalo **E** Falco disparou `Terminal shell in container` no mesmo pod no mesmo período" → eleva severidade e muda a natureza do alerta (possível comprometimento, não só saturação).
 
@@ -265,11 +282,11 @@ Spec at [`specs/replay-mode/`](specs/replay-mode/). All 16 tasks complete.
 
 CLI: `controller --replay --from=24h --to=1h --config=cand.yaml --output=report.json` simulates detection over historical metrics/logs without side effects (no Redis writes, no Alertmanager dispatches, no gRPC fan-out).
 
-**Smoke test result** (2026-05-31): Ran against production endpoints (VM bdc.app.br, Loki bdc.app.br). Pre-flight OK, engine processed ticks correctly, graceful partial flush on SIGINT. JSON schema valid, Markdown readable. VM queries p95 ~1s. Zero side effects confirmed.
+**Smoke test result** (2026-05-31): Ran against production endpoints (Prometheus bdc.app.br, Loki bdc.app.br). Pre-flight OK, engine processed ticks correctly, graceful partial flush on SIGINT. JSON schema valid, Markdown readable. Prometheus queries p95 ~1s. Zero side effects confirmed.
 
 **V1 excludes**: ground-truth comparison (TPs/FPs/FNs), ML wired, query cache, distributed replay. All scoped as V2.
 
-### ✅ ~~P3.2 — Top noisy workloads dashboard / VMRule~~ — **DONE**
+### ✅ ~~P3.2 — Top noisy workloads dashboard / PrometheusRule~~ — **DONE**
 
 New metric `staffops_ad_detection_anomalies_by_workload_total{namespace, workload, severity}` (bounded labels: workload extracted via `correlation.ExtractWorkload`, falls back to `service_name`, empty values normalized to `unknown`).
 
@@ -282,7 +299,7 @@ Operator dashboard panels added (`scripts/observability/grafana/dashboards/opera
 - 🔥 Top noisy workloads (24h) — table with topk(20), color-graded
 - 📊 Cardinality watch — monitors series count per `staffops_ad_*` metric with thresholds at 500/1000/2000 (steering hard limit)
 
-VMRule alert `StaffOpsADWorkloadChronicallyNoisy` fires (info severity) when a workload exceeds 100 anomalies in 24h — operator hint to add suppression or investigate.
+PrometheusRule alert `StaffOpsADWorkloadChronicallyNoisy` fires (info severity) when a workload exceeds 100 anomalies in 24h — operator hint to add suppression or investigate.
 
 Cardinality justified: severity(3) × namespace(~50) × workload(~30/ns avg) ≈ 4500 series — bounded growth via deployment count, not pod count.
 
@@ -301,7 +318,7 @@ Stored in Redis with TTL 30d. Used to:
 
 ### 🎯 P3.4 — SLO-aware severity
 
-Load SLO state (from VMRules or config). Adjust severity dynamically:
+Load SLO state (from PrometheusRules or config). Adjust severity dynamically:
 - SLO budget > 80% → downgrade warning to info (less noise)
 - SLO budget < 20% → upgrade warning to critical (max attention)
 
@@ -402,7 +419,7 @@ is enforcement of existing steering rules (`k8s-best-practices.md`, `cloud-secur
 | # | Item | Source review |
 |---|------|---------------|
 | PH.13 | ✅ **Done (2026-07-02)** — module moved to org: `github.com/staffops/staffops-otel-libs/go` tagged `v0.1.0` (was `karlipegomes/...` pseudo-version). Controller imports + go.mod updated; repo is public so GOPRIVATE/token auth removed from Dockerfile, CI (test/sast/build/release), AGENTS.md, start.sh | security, dev |
-| PH.14 | ✅ **Done in chart (PH.15)** — VM/Loki/Alertmanager/redis endpoints templated from Helm values (`config.datasources.*`), no longer hardcoded in an in-repo ConfigMap | gitops |
+| PH.14 | ✅ **Done in chart (PH.15)** — Prometheus/Loki/Alertmanager/redis endpoints templated from Helm values (`config.datasources.*`), no longer hardcoded in an in-repo ConfigMap | gitops |
 
 ### Helm chart + GitOps (move from raw YAML to ApplicationSet)
 
@@ -410,11 +427,11 @@ Currently rated **GitOps maturity 1.5/5**. To unblock cluster deploy:
 
 | # | Item | Source review |
 |---|------|---------------|
-| PH.15 | ✅ **Done (2026-07-02)** — `helm-charts/anomaly-detection/` created (18 files): controller, worker, redis (+PVC, AUTH via ExternalSecret), ML (PH.8), RBAC, VMRule, VMServiceScrape, PDB, NetworkPolicy, per-env overlays (dev/hml/prd). Folds in PH.1/PH.6/PH.7/PH.14/PH.20/PH.21/PH.23. `helm lint --strict` clean; renders valid YAML all envs. Delegated to `gitops`, reviewed by `code-review` (fixed a Redis-AUTH config-key blocker + PDB single-replica deadlock) | gitops |
+| PH.15 | ✅ **Done (2026-07-02)** — `helm-charts/anomaly-detection/` created (18 files): controller, worker, redis (+PVC, AUTH via ExternalSecret), ML (PH.8), RBAC, PrometheusRule, ServiceMonitor, PDB, NetworkPolicy, per-env overlays (dev/hml/prd). Folds in PH.1/PH.6/PH.7/PH.14/PH.20/PH.21/PH.23. `helm lint --strict` clean; renders valid YAML all envs. Delegated to `gitops`, reviewed by `code-review` (fixed a Redis-AUTH config-key blocker + PDB single-replica deadlock) | gitops |
 | PH.16 | ✅ **Done (2026-07-02)** — deployment wired via **helmfile** (BDC pattern, mirrors aigent-squad) in `02-KUBE/00-CONFIG/k8s-setup/staffops/` — not ArgoCD ApplicationSet. Release + `anomaly-detection/values.yaml.gotmpl` (devops-core) target the **canonical** chart `06-STAFFOPS/helm-charts/charts/anomaly-detection`. `helmfile template` renders the full stack. NOTE: the PH.15 chart built under `staffops-anomaly-detection/helm-charts/` was a wrong-location duplicate — **removed**; canonical chart is SSOT | gitops |
 | PH.17 | Add `argocd.argoproj.io/sync-wave` annotations so Redis comes up before controller/worker | gitops |
 | PH.18 | Add `PodDisruptionBudget` (`minAvailable: 1` controller leader, `minAvailable: 2` workers) | gitops |
-| PH.19 | ✅ **Done in canonical chart** — `VMServiceScrape` (+ optional `ServiceMonitor`) templates replace `prometheus.io/scrape` annotations; enabled via `vmServiceScrape.enabled` | gitops |
+| PH.19 | ✅ **Done in canonical chart** — `ServiceMonitor` (+ optional `ServiceMonitor`) templates replace `prometheus.io/scrape` annotations; enabled via `vmServiceScrape.enabled` | gitops |
 | PH.20 | ✅ **Done in chart (PH.15)** — controller/worker have memory-only limits (no CPU limit); redis keeps a small CPU limit (not on the 60s detection path) | gitops |
 
 ### Network & secrets
@@ -556,9 +573,9 @@ Invoke staffops-chaitops Agent API on high-confidence anomalies to trigger autom
 
 ## Phase 6 — Observability of the observability (was Phase 5)
 
-### 🎯 P6.1 — Self-monitoring VMRules (was P5.1)
+### 🎯 P6.1 — Self-monitoring PrometheusRules (was P5.1)
 
-VMRules covering `staffops_ad_*` metrics:
+PrometheusRules covering `staffops_ad_*` metrics:
 - Cycle duration p99 > 30s → alert
 - Worker query error rate > 10% → alert
 - ML calls error rate > 5% → alert
@@ -591,7 +608,7 @@ Single consolidated milestone covering a day of iteration. See `CHANGELOG.md` fo
 - `staffops_ad_*` metric taxonomy (5 sub-namespaces) + `build_info`
 - **P1.1** label-based pivot / enrichment (`internal/enrichment/`)
 - **P1.2** alert deep links (Grafana / Tempo / Loki / Runbook)
-- **P1.3** complete `/readyz` probes (VM / Loki / Alertmanager / ML)
+- **P1.3** complete `/readyz` probes (Prometheus / Loki / Alertmanager / ML)
 - **P2.1** ML multivariate proper feature vector (fixes same-metric collision bug)
 - **P2.4** workload-aware correlation (`internal/correlation/workload.go`, awaiting prod validation)
 - 12-factor: all endpoint URLs externalized to env vars
@@ -632,7 +649,7 @@ Single consolidated milestone covering a day of iteration. See `CHANGELOG.md` fo
 - **2026-05-30**: Adopted `staffops_ad_*` metric prefix with 5 sub-namespaces (controller/worker/detection/alert/ml) over single flat namespace.
 - **2026-05-30**: Versions bumped manually per `version-management.md` steering. Each component (controller, ml) versioned independently.
 - **2026-05-30**: Module path renamed `github.com/bigdatacorp/staffops-anomaly-detection` → `github.com/staffops/staffops-anomaly-detection` for org-neutrality. All Go imports + Python proto descriptors regenerated.
-- **2026-05-30**: All endpoint URLs / org-specific identifiers moved to env vars (`${VAR}` / `${VAR:default}` substitution in `config.yaml`). Required vars: `VM_URL`, `LOKI_URL`, `ALERTMANAGER_URL`. Compose fails fast.
+- **2026-05-30**: All endpoint URLs / org-specific identifiers moved to env vars (`${VAR}` / `${VAR:default}` substitution in `config.yaml`). Required vars: `PROMETHEUS_URL`, `LOKI_URL`, `ALERTMANAGER_URL`. Compose fails fast.
 - **2026-05-30**: Adopted spec-driven workflow per `staffops_agent_definition/steering/spec-driven-workflow.md`. `specs/replay-mode/` is the pilot — design reviewed before implementation, 11 ambiguities decided up front.
 - **2026-05-30**: Observability hardening promoted to dedicated phase (Phase 4). Three blockers identified (instrumentation bugs, `identity` label cardinality bomb, missing multi-cluster labels) that must be fixed before any cluster deploy. Renumbered: old Phase 4 → new Phase 5, old Phase 5 → new Phase 6.
 - **2026-05-30**: Subagent tool (Kiro CLI parallel execution) verified non-functional in this environment (3 consecutive `No result` returns including minimal `summary`-only ping). Falling back to serial implementation by main agent. Will retry when environment changes.

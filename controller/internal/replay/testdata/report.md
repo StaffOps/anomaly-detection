@@ -21,6 +21,7 @@
 | Anomalies | 3 |
 | Warmup skipped | 0 |
 | Query errors | 0 |
+| FDR rejected | 0 |
 
 ### By Severity
 

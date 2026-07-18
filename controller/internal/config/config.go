@@ -116,6 +116,13 @@ type AdaptiveMetric struct {
 	Name    string   `yaml:"name"`
 	Query   string   `yaml:"query"`
 	GroupBy []string `yaml:"group_by"`
+	// Direction of badness. The adaptive detector fires on |z| (symmetric), but
+	// most metrics are only anomalous in ONE direction: latency/errors/queue
+	// depth are bad when they RISE, ready-replicas/throughput when they FALL.
+	// Declaring it drops the false positives from the harmless direction (e.g.
+	// latency improving). One of: "up_bad", "down_bad", "both_bad".
+	// Empty = "both_bad" (backward-compatible: fire on any deviation).
+	Direction string `yaml:"direction"`
 }
 
 type LogPattern struct {

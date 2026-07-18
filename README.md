@@ -51,7 +51,7 @@ staffops-anomaly-detection/
                             │ gRPC         │ gRPC
                     ┌───────▼───────┐  ┌───▼────────────┐
                     │ Workers (x3)  │  │  ML Service     │
-                    │  - VM queries │  │  - Prophet      │
+                    │  - Prometheus queries │  │  - Prophet      │
                     │  - Loki queries│  │  - Isolation    │
                     │  - Detection  │  │    Forest       │
                     └───────┬───────┘  └────────────────┘
@@ -81,10 +81,11 @@ Every 60s:
   2. Workers execute queries against Prometheus-compatible TSDB / Loki
   3. Workers run detection (static threshold, Z-Score, log rate)
   4. Controller receives anomalies
-  5. FDR correction (Benjamini-Hochberg) filters false positives from multiple comparisons
-  6. ML Isolation Forest evaluates multivariate correlation (≥2 anomalies)
-  7. Correlator groups by workload, deduplicates, escalates severity
-  8. Dispatcher fires to Alertmanager (dry-run mode available)
+  5. Direction-of-badness drops adaptive firings in the harmless direction
+  6. FDR correction (Benjamini-Hochberg) filters false positives over the full test family
+  7. ML Isolation Forest evaluates multivariate correlation (≥2 anomalies)
+  8. Correlator groups by workload, deduplicates, escalates severity
+  9. Dispatcher fires to Alertmanager (dry-run mode available)
 ```
 
 ## Detection Methods
@@ -94,7 +95,8 @@ Every 60s:
 | Static threshold | `static` | Value > configured limit (CPU > 90%, restarts > 3) |
 | Adaptive Z-Score | `adaptive` | Value deviates > 3σ from EWMA baseline |
 | Log rate anomaly | `adaptive` | Log volume spike via Loki queries |
-| FDR correction | `fdr` | Benjamini-Hochberg filters weak adaptive results per cycle |
+| Direction-of-badness | (adaptive filter) | Drops firings in the harmless direction (`direction: up_bad\|down_bad\|both_bad`) |
+| FDR correction | `fdr` | Benjamini-Hochberg over the full test family (workers report `adaptive_series_tested`) |
 | ML Multivariate | `ml_isolation_forest` | Correlated anomalies across multiple metrics |
 | ML Forecast | `ml_forecast` | Prophet predicts threshold breach (ready, not yet wired) |
 | Absence-of-signal | `absence` | Previously-active series goes silent > threshold |
@@ -113,8 +115,8 @@ Main config: `controller/config.yaml`
 
 ```yaml
 datasources:
-  victoriametrics:
-    url: ${VM_URL}             # e.g. https://victoria-metrics-read.example.com/select/0/prometheus
+  prometheus:
+    url: ${PROMETHEUS_URL}             # e.g. https://prometheus-read.example.com/select/0/prometheus
   loki:
     url: ${LOKI_URL}           # e.g. https://loki.example.com
   alertmanager:

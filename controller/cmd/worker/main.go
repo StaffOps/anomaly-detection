@@ -84,7 +84,7 @@ func main() {
 	suppressionFilter := suppression.NewFilter(cfg.Suppression)
 
 	// Rate limiters
-	vmLimiter := ratelimit.New(20)   // 20 queries/s to VM (conservative to avoid overloading vmselect)
+	vmLimiter := ratelimit.New(20)   // 20 queries/s to Prometheus (conservative to avoid overloading vmselect)
 	lokiLimiter := ratelimit.New(50) // 50 queries/s to Loki
 
 	// Ingestion
@@ -176,7 +176,8 @@ func (s *workerServer) ProcessJobs(ctx context.Context, batch *pb.JobBatch) (*pb
 	for _, job := range batch.Jobs {
 		start := time.Now()
 
-		anomalies, err := s.processJob(ctx, job, queryCache)
+		anomalies, tested, err := s.processJob(ctx, job, queryCache)
+		results.AdaptiveSeriesTested += int64(tested)
 		if err != nil {
 			slog.Warn("job failed", "job_id", job.Id, "name", job.Name, "error", err)
 			results.Errors = append(results.Errors, &pb.JobError{
@@ -229,12 +230,14 @@ func (s *workerServer) ProcessJobs(ctx context.Context, batch *pb.JobBatch) (*pb
 	return results, nil
 }
 
-func (s *workerServer) processJob(ctx context.Context, job *pb.DetectionJob, cache map[string][]ingestion.Sample) ([]detection.Anomaly, error) {
+// processJob executes one detection job. The int is the number of adaptive
+// evaluations past warm-up (FDR family contribution) — always 0 for static.
+func (s *workerServer) processJob(ctx context.Context, job *pb.DetectionJob, cache map[string][]ingestion.Sample) ([]detection.Anomaly, int, error) {
 	switch job.Type {
 	case pb.JobType_JOB_TYPE_METRICS_STATIC:
 		samples, err := s.cachedQueryVM(ctx, job.Query, cache)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		rule := config.StaticRule{
 			Name:      job.Name,
@@ -242,27 +245,29 @@ func (s *workerServer) processJob(ctx context.Context, job *pb.DetectionJob, cac
 			Operator:  job.Operator,
 			Severity:  job.Severity,
 		}
-		return s.engine.EvaluateMetricsStatic(rule, samples), nil
+		return s.engine.EvaluateMetricsStatic(rule, samples), 0, nil
 
 	case pb.JobType_JOB_TYPE_METRICS_ADAPTIVE:
 		samples, err := s.cachedQueryVM(ctx, job.Query, cache)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		return s.engine.EvaluateMetricsAdaptive(ctx, job.Name, samples), nil
+		anomalies, tested := s.engine.EvaluateMetricsAdaptive(ctx, job.Name, samples)
+		return anomalies, tested, nil
 
 	case pb.JobType_JOB_TYPE_LOGS:
 		if err := s.lokiLimiter.Wait(ctx); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		samples, err := s.logsPoller.QueryMetric(ctx, job.Query)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		return s.engine.EvaluateLogRate(ctx, job.Name, samples), nil
+		anomalies, tested := s.engine.EvaluateLogRate(ctx, job.Name, samples)
+		return anomalies, tested, nil
 
 	default:
-		return nil, fmt.Errorf("unknown job type: %v", job.Type)
+		return nil, 0, fmt.Errorf("unknown job type: %v", job.Type)
 	}
 }
 

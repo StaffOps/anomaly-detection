@@ -44,7 +44,8 @@
       "workload": 1
     },
     "warmup_skipped": 0,
-    "query_errors": 0
+    "query_errors": 0,
+    "fdr_rejected": 0
   },
   "top_workloads": [
     {

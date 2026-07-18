@@ -29,7 +29,7 @@ import (
 // the replay engine detects the known anomalies with ≥90% accuracy.
 
 func vmURL() string {
-	if u := os.Getenv("VM_URL"); u != "" {
+	if u := os.Getenv("PROMETHEUS_URL"); u != "" {
 		return u
 	}
 	return "http://localhost:8428"
@@ -49,7 +49,7 @@ func TestReplayIntegration(t *testing.T) {
 
 	// Verify backends are reachable.
 	if err := waitReady(vm+"/health", 15*time.Second); err != nil {
-		t.Fatalf("VM not ready: %v", err)
+		t.Fatalf("Prometheus not ready: %v", err)
 	}
 	if err := waitReady(loki+"/ready", 15*time.Second); err != nil {
 		t.Fatalf("Loki not ready: %v", err)
@@ -63,7 +63,7 @@ func TestReplayIntegration(t *testing.T) {
 	anomalyStart := windowEnd.Add(-1 * time.Hour)
 
 	// --- Inject synthetic metrics into Prometheus-compatible TSDB ---
-	t.Log("Injecting synthetic metrics into VM...")
+	t.Log("Injecting synthetic metrics into Prometheus...")
 	injectedAnomalies := injectMetrics(t, vm, windowStart, windowEnd, anomalyStart)
 	t.Logf("Injected %d anomalous data points", injectedAnomalies)
 
@@ -72,7 +72,7 @@ func TestReplayIntegration(t *testing.T) {
 	injectedLogAnomalies := injectLogs(t, loki, windowStart, windowEnd, anomalyStart)
 	t.Logf("Injected %d anomalous log bursts", injectedLogAnomalies)
 
-	// Wait for VM to index.
+	// Wait for Prometheus to index.
 	time.Sleep(2 * time.Second)
 
 	// --- Run replay ---
@@ -163,7 +163,7 @@ func injectMetrics(t *testing.T, vmBase string, start, end, anomalyStart time.Ti
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		t.Fatalf("VM import returned %d", resp.StatusCode)
+		t.Fatalf("Prometheus import returned %d", resp.StatusCode)
 	}
 
 	return anomalyCount

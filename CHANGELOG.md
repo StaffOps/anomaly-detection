@@ -8,7 +8,82 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ## [Unreleased]
 
-Work landed after controller 0.9.0 / ml 0.3.0.
+_Nothing yet._
+
+## controller — [0.11.0] — 2026-07-18
+
+Detection quality + FP control milestone. Consolidates the FDR full-family fix (F0),
+direction-of-badness, rule hygiene, the tuned deployed rule set with Group A additions
+(unbiased RED / DB latency / CPU throttling / service-graph self-health), and a full
+VictoriaMetrics→Prometheus terminology sweep. Homologated on `devops-core` (dry-run).
+
+### detection
+
+**Added — direction-of-badness per adaptive rule (v0.11, 2026-07-18)**
+- The adaptive detector fires on `|z|` (symmetric), so it alerted even when a
+  metric moved the *harmless* way (latency dropping, error rate falling). New
+  optional `direction:` field on adaptive rules — `up_bad` | `down_bad` |
+  `both_bad` (empty = `both_bad`, backward-compatible). The controller drops
+  wrong-direction adaptive anomalies before FDR (`internal/detection/direction.go`,
+  derived from Value vs Mean — no proto/worker change). Metric:
+  `staffops_ad_detection_direction_filtered_total`. Most service RED rules are
+  now `up_bad`; `request_rate` stays `both_bad` (a traffic drop can be an outage).
+
+**Added — Group A rules: unbiased RED + root-cause + pipeline self-health (v0.11)**
+- Deployed to devops-core via the gotmpl `detection:` override (all metrics
+  verified present in the live inventory 2026-07-18):
+  - **Unbiased RED** — `http_error_ratio_by_service`, `http_latency_p99_by_service`
+    from the OTel SDK `http_server_request_duration_seconds_*` (100% of traffic,
+    *not* sampling-biased like the `spanmetrics_apm_*` rules).
+  - **Root cause** — `db_latency_p99_by_service` (`db_client_operation_duration_seconds`),
+    the direct "is it the database?" signal.
+  - **Leading indicator** — `cpu_throttling_ratio` (CFS throttling), which the
+    `cpu_ratio` static misses (a pod can throttle hard at 60% "usage").
+  - **Pipeline self-health** — `servicegraph_series_limited` (static) +
+    `servicegraph_expired_edges` (adaptive) guard the Tempo metrics-generator;
+    if it degrades, every trace-derived rule blinds silently.
+
+**Changed — rule hygiene: 5 dead rules removed, rate() windows widened (2026-07-17)**
+- Audited every `config.yaml` rule metric against the live Prometheus
+  inventory. Removed rules whose metrics do not exist (they never fired):
+  `dotnet_gc_pause_rate`, `queue_depth`, `queue_failed_rate`, `go_sql_waiting`,
+  `karpenter_scheduling_duration` (Karpenter renamed the `provisioner_*` family
+  upstream). `dotnet_threadpool_saturated` simplified — its
+  `dotnet_thread_pool_queue_length_total` alternative (.NET 9+ meter) is not
+  emitted by any workload; only the `process_runtime_dotnet_*` era exists.
+- Widened `rate()` windows `[1m]` → `[2m]` on adaptive/log rules (org scrape
+  interval is 30s; `rate()` needs ≥4× scrape to survive a missed scrape).
+  Enrichment queries deliberately untouched (`*_1m` names are ML canonical
+  feature names — renaming would break the feature-vector contract).
+- **Drift finding → resolved for deploy (2026-07-18)**: the deployed rule set
+  came from the Helm chart's small default `detection:` (incl. `high_cpu_ratio`/
+  `high_memory_ratio`, retired in this repo for duplicating VMAlert), NOT this
+  repo's tuned `config.yaml`. Ported the tuned 18-rule set into the devops-core
+  gotmpl `detection:` override (6→18 rules; dropped the noisy cpu/mem statics).
+  Homologated: 0 cycle errors, FDR family 277 (service-level vs ~2500 pod-level),
+  rejection ~18%. Also bumped `controller.jobInterval` 30s→60s — the richer
+  set's spanmetrics/istio histogram queries pushed cycle p99 to ~58s (backing up
+  a 30s cadence); at 60s the steady-state p99 is ~20s. Whether the chart
+  *default* should also carry the tuned set (SSOT) stays open (program map §7.8).
+
+**Fixed — FDR (Benjamini-Hochberg) corrected over a censored family, rejecting ~0 (F0, 2026-07-17)**
+- Root cause: `fdr.Apply` inferred the statistical family size from the anomalies
+  it received, but workers only ship anomalies that already fired (z > threshold).
+  BH over that truncated family — a handful of uniformly tiny p-values — accepts
+  nearly everything by construction, so the correction was decorative (rejected ~0).
+- Fix: workers now report `adaptive_series_tested` (the count of adaptive
+  evaluations past warm-up) on `JobResults`; the controller passes it to
+  `fdr.Apply(anomalies, totalTests)` as the true family size `m`. A marginal
+  anomaly (e.g. z≈3.0) that passed against `m=1` is now correctly rejected once
+  the cycle's ~400 tests are accounted for, while genuinely strong signals still
+  survive. Falls back to the fired count when `totalTests` is unreported (≤ fired).
+- New gauge `staffops_ad_detection_fdr_family_size` exposes `m` per cycle — a
+  value near 0 means workers are not reporting tested series (censored family).
+- Replay now mirrors the controller: FDR is applied per tick over the real family,
+  and the report carries `fdr_rejected`. Also fixed a replay bug where every
+  adaptive rule was evaluated against the pooled series of *all* rules
+  (cross-metric baseline contamination absent from the production worker path).
+- Proto change: `JobResults.adaptive_series_tested` (field 3). Stubs regenerated.
 
 ## controller — [0.10.1] — 2026-07-17
 
@@ -36,7 +111,7 @@ Work landed after controller 0.9.0 / ml 0.3.0.
 ### detection
 
 **Fixed — propagate the monitored workload's real `cluster` through the detection pipeline (2026-07-16)**
-- This deployment queries a federated VictoriaMetrics/Loki spanning multiple K8s clusters
+- This deployment queries a federated Prometheus/Loki spanning multiple K8s clusters
   (`devops-core`, `applications-dev-nv`, `applications-prd-nv`, `applications-prd-sp`), but
   every static/adaptive/log-pattern query in `config.yaml` aggregated with
   `by(namespace, pod)` etc. **without** `cluster` — so the real cluster was dropped before an
@@ -110,9 +185,9 @@ Work landed after controller 0.9.0 / ml 0.3.0.
   `main.go`). Cluster identity is scrape-layer-only now (ServiceMonitor `externalLabels` /
   vmagent), consistent with how every other org-specific label was already handled — see
   [Metrics Reference](docs/site/reference/metrics.md).
-- Helm chart: removed `vmServiceScrape` (VMServiceScrape/vm-operator-specific CRD) — vm-operator
+- Helm chart: removed `vmServiceScrape` (ServiceMonitor/vm-operator-specific CRD) — vm-operator
   honors the standard `ServiceMonitor` CRD directly, so `serviceMonitor.enabled` is now the
-  single scrape toggle for both Prometheus Operator and VictoriaMetrics clusters.
+  single scrape toggle for both Prometheus Operator and Prometheus clusters.
 
 ## controller — [0.8.0] — 2026-07-14
 
@@ -158,8 +233,8 @@ Helm chart, and the first false-positive-reduction lever.
   metric labels `"vm"`/`"vm_range"` → `"prometheus"`/`"prometheus_range"`, replay report
   fields `VMQueries*` → `PromQueries*`, `readiness/vm.go` → `prometheus.go`
   (`VMChecker`→`PromChecker`), `preflightVM`→`preflightProm`. Prometheus is the open
-  standard (PromQL); the backend (VM/Thanos/Cortex/Mimir) is an environment choice.
-  Left: `VMServiceScrape` (real vm-operator CRD) and the integration-test VM image.
+  standard (PromQL); the backend (Prometheus/Thanos/Cortex/Mimir) is an environment choice.
+  Left: `ServiceMonitor` (real vm-operator CRD) and the integration-test Prometheus image.
   (Committed 044b213 without a CHANGELOG entry — recorded here retroactively.)
 
 ### deps / supply chain
@@ -192,14 +267,14 @@ Helm chart, and the first false-positive-reduction lever.
   - **PH.18** `templates/pdb.yaml` (controller `minAvailable:1` guarded to replicaCount>1;
     worker `maxUnavailable:1` — drain-safe at any replica count).
   - **PH.21** `templates/networkpolicy.yaml` (controller/redis/worker/ML ingress rules).
-  - **VMRule → PrometheusRule** (`monitoring.coreos.com/v1`) — more portable; vm-operator
+  - **PrometheusRule → PrometheusRule** (`monitoring.coreos.com/v1`) — more portable; vm-operator
     auto-converts. Values key `vmRule` → `prometheusRule`.
 - **Deployment via helmfile** (BDC pattern, mirrors `aigent-squad`), NOT ArgoCD
   ApplicationSet: added the `anomaly-detection` release + `anomaly-detection/values.yaml.gotmpl`
   in `02-KUBE/00-CONFIG/k8s-setup/staffops/` targeting the canonical chart, namespace
   `monitoring`, `controller.dryRun=true` for first bring-up. `helmfile template` renders
   the full stack (4 Deployment, ExternalSecret, PVC, 2 PrometheusRule, 4 NetworkPolicy,
-  2 PDB, VMServiceScrape, dashboard, RBAC).
+  2 PDB, ServiceMonitor, dashboard, RBAC).
 - Reviewed by `code-review` (APPROVE-WITH-NITS): added controller NetworkPolicy,
   clarified the ignored worker-PDB value, silenced the redis-cli auth warning.
 
@@ -213,8 +288,8 @@ Helm chart, and the first false-positive-reduction lever.
   `external-secrets.io/v1` API, region us-east-1. AWS secret
   `staffops/anomaly-detection/redis-password` created to homologate. Redis PVC 10Gi.
 - Full chart (18 files) replacing the raw `controller/deploy/*.yaml`: templates for
-  controller, worker, redis (+PVC), ML service, RBAC, ConfigMap, VMRule,
-  VMServiceScrape, PDB, NetworkPolicy, ExternalSecret; per-env overlays
+  controller, worker, redis (+PVC), ML service, RBAC, ConfigMap, PrometheusRule,
+  ServiceMonitor, PDB, NetworkPolicy, ExternalSecret; per-env overlays
   `values-{dev,hml,prd}.yaml`. `helm lint --strict` clean; renders valid YAML in all envs.
 - Folds in the pod-template hard-fails as chart-native: **PH.1** (securityContext
   runAsNonRoot/readOnlyRootFilesystem+emptyDir/drop-ALL/runAsUser 65534 on all 4 pods),
@@ -317,7 +392,7 @@ Helm chart, and the first false-positive-reduction lever.
 - 21 specs covering every significant ROADMAP item (retroactive for completed + new for planned)
 - `specs/README.md` index with status tracking and project direction summary
 - MkDocs restructured to `docs/site/` pattern (aligned with staffops-aigent-squad)
-- All specs vendor-agnostic ("Prometheus-compatible TSDB" not VictoriaMetrics)
+- All specs vendor-agnostic ("Prometheus-compatible TSDB" not Prometheus)
 
 ### ci / build
 
@@ -368,13 +443,13 @@ Helm chart, and the first false-positive-reduction lever.
 - Exclude namespaces expanded: +monitoring, istio-system, scaleops-system
 
 **Changed — Performance tuning**
-- `job_interval`: 30s → 60s (reduce VM load)
-- VM rate limiter: 100/s → 20/s per worker
+- `job_interval`: 30s → 60s (reduce Prometheus load)
+- Prometheus rate limiter: 100/s → 20/s per worker
 - Enrichment concurrency: 5 → 2
-- gRPC call timeout: 30s → 90s (handles slow VM)
-- VM query timeout: 30s → 60s
+- gRPC call timeout: 30s → 90s (handles slow Prometheus)
+- Prometheus query timeout: 30s → 60s
 
-**⚠️ PENDING VALIDATION** (blocked by VM/Loki degradation 2026-06-14 evening):
+**⚠️ PENDING VALIDATION** (blocked by Prometheus/Loki degradation 2026-06-14 evening):
 - [ ] Replay with new rules against stable window (confirm spanmetrics/istio/.NET signals produce detections)
 - [ ] Live observation for ≥1h with healthy backends (confirm alert quality, dedup, workload correlation)
 - [ ] Verify enrichment bundles work with new rule labels (service_name vs namespace/pod)
@@ -387,7 +462,7 @@ Helm chart, and the first false-positive-reduction lever.
   - Window parser (durations, `Nd` days, RFC3339, UTC), in-memory baseline store (Welford+EWMA), `baseline.Evaluator` interface
   - Tick simulator: 1h chunked range queries, dynamic warmup split, graceful per-tick query-error skip, SIGINT partial flush
   - Report serializers: JSON (full schema, `schema_version: 1`) + Markdown (tables + ASCII sparklines), both UTC
-  - CLI: `--replay --from --to --output --warmup-fraction --max-range --max-anomalies` with VM/Loki/output pre-flight checks (ML is V2)
+  - CLI: `--replay --from --to --output --warmup-fraction --max-range --max-anomalies` with Prometheus/Loki/output pre-flight checks (ML is V2)
   - In-memory execution metrics embedded in `metadata.execution_metrics` (no Prometheus exposure in V1)
 - Remaining: T13 integration test, T14 smoke test, T15 README, T16 ROADMAP move-to-Done.
 
@@ -414,7 +489,7 @@ Consolidated milestone covering a full day of MVP iteration. Multiple sub-featur
 - `internal/version/version.go` SSOT and `staffops_ad_controller_build_info{version}` metric
 
 **P1.1 — Label-based pivot (anomaly enrichment)**
-- `internal/enrichment/` — identity extraction (pod/service kinds), template substitution (`$pod`, `$namespace`, `$service_name`, etc.), bounded concurrency, Redis-backed cache, multi-source (VM + Loki)
+- `internal/enrichment/` — identity extraction (pod/service kinds), template substitution (`$pod`, `$namespace`, `$service_name`, etc.), bounded concurrency, Redis-backed cache, multi-source (Prometheus + Loki)
 - Per-kind metrics: `staffops_ad_controller_enrichment_runs_total`, `_duration_seconds`, `_cache_hits_total`, `_cache_misses_total`, `_query_errors_total`
 - Default `pod_bundle` (cpu_ratio, memory_ratio, restarts_5m, oom_kills, ready_replicas, error_logs_1m) and `service_bundle` (error_rate_1m, request_rate_1m, latency_p99_5m)
 - Alert payload now ships with `enrich_*` annotations and a one-line `context` summary
@@ -426,7 +501,7 @@ Consolidated milestone covering a full day of MVP iteration. Multiple sub-featur
 - Per-detector runbook paths (`<base>/<detector>`)
 
 **P1.3 — Complete readiness checks**
-- `internal/readiness/` with checkers for VictoriaMetrics, Loki, Alertmanager, ML
+- `internal/readiness/` with checkers for Prometheus, Loki, Alertmanager, ML
 - `/readyz` now probes all upstream dependencies (was Redis-only before)
 - All probes capped at 3s
 - ML probe is no-op when `ml.enabled=false`
@@ -458,7 +533,7 @@ Consolidated milestone covering a full day of MVP iteration. Multiple sub-featur
 
 ### Migration notes
 
-- Operators must populate `.env` (or set env vars) before starting the stack. Required: `VM_URL`, `LOKI_URL`, `ALERTMANAGER_URL`. Stack fails fast if missing.
+- Operators must populate `.env` (or set env vars) before starting the stack. Required: `PROMETHEUS_URL`, `LOKI_URL`, `ALERTMANAGER_URL`. Stack fails fast if missing.
 - Dashboards/alerts referencing the old `anomaly_*` metric names must update to `staffops_ad_*` taxonomy.
 - ML invocation pattern changed (per-alert with feature vector, vs per-cycle with raw values). Operators may see fewer total ML calls but each is meaningful.
 

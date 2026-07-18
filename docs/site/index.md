@@ -10,7 +10,7 @@ A complementary detection layer that sits alongside traditional alerting (VMAler
 
 ```mermaid
 graph LR
-    VM[VictoriaMetrics] --> W[Workers]
+    Prometheus[Prometheus] --> W[Workers]
     Loki --> W
     W --> C[Controller]
     C --> ML[ML Service]
@@ -23,7 +23,7 @@ graph LR
 | Feature | Description |
 |---------|-------------|
 | **Adaptive baselines** | EWMA + Welford's algorithm learns normal behavior per metric |
-| **Multi-signal** | Metrics (VM) + Logs (Loki) + K8s Events |
+| **Multi-signal** | Metrics (Prometheus) + Logs (Loki) + K8s Events |
 | **ML correlation** | Isolation Forest detects multivariate anomalies |
 | **Workload-aware** | Groups pod-level anomalies into workload-level alerts |
 | **Enrichment** | Alerts carry context (CPU ratio, memory, restarts, error rate) |
@@ -36,7 +36,7 @@ graph LR
 ```
 Controller (Go)          Workers (Go, x3)         ML Service (Python)
 ┌──────────────┐        ┌──────────────┐         ┌──────────────┐
-│ Scheduler    │──gRPC──│ VM queries   │         │ Prophet      │
+│ Scheduler    │──gRPC──│ Prometheus queries   │         │ Prophet      │
 │ Correlator   │        │ Loki queries │         │ Isolation    │
 │ Enrichment   │        │ Detection    │         │ Forest       │
 │ Dispatcher   │──gRPC──│ Baselines    │         └──────┬───────┘
@@ -59,12 +59,15 @@ Controller (Go)          Workers (Go, x3)         ML Service (Python)
 
 ## Current Status
 
-!!! success "Controller v0.7.0 — MVP Enriched"
-    - Static + Adaptive + Log detection functional
-    - ML Isolation Forest integrated (multivariate)
-    - Workload-aware correlation
-    - Alert enrichment with deep links
-    - Replay mode 75% complete (12/16 tasks)
+!!! success "Controller v0.11.0"
+    - Static + Adaptive + Log detection, ML Isolation Forest (multivariate)
+    - Workload-aware correlation + alert enrichment with deep links
+    - **FDR (Benjamini-Hochberg)** over the full test family — controls
+      multiple-comparison false positives
+    - **Direction-of-badness** — adaptive rules fire only the bad way
+    - Tuned rule set incl. **unbiased RED** (OTel SDK http metrics), DB latency,
+      CPU throttling, and service-graph pipeline self-health
+    - Replay mode with synthetic fault injection
 
 !!! warning "Dry-run mode"
     Currently running in dry-run — alerts are generated but not dispatched to Alertmanager. Pending observability hardening (Phase 4) before production activation.

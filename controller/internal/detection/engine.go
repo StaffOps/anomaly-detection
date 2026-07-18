@@ -48,7 +48,8 @@ func (e *Engine) EvaluateMetricsStatic(rule config.StaticRule, samples []ingesti
 }
 
 // EvaluateMetricsAdaptive runs adaptive (Z-Score) detection on samples.
-func (e *Engine) EvaluateMetricsAdaptive(ctx context.Context, metricName string, samples []ingestion.Sample) []Anomaly {
+// The int is the number of series tested past warm-up (FDR family size).
+func (e *Engine) EvaluateMetricsAdaptive(ctx context.Context, metricName string, samples []ingestion.Sample) ([]Anomaly, int) {
 	return e.adaptive.Evaluate(ctx, metricName, samples)
 }
 
@@ -58,11 +59,14 @@ func (e *Engine) EvaluateEvent(event ingestion.EventAnomaly) *Anomaly {
 }
 
 // EvaluateLogRate runs adaptive detection on log rate samples.
-func (e *Engine) EvaluateLogRate(ctx context.Context, metricName string, samples []ingestion.Sample) []Anomaly {
-	results := e.adaptive.Evaluate(ctx, metricName, samples)
+// The int is the number of series tested past warm-up (FDR family size) —
+// log-rate anomalies keep Detector="adaptive", so they belong to the same
+// BH family as metric anomalies.
+func (e *Engine) EvaluateLogRate(ctx context.Context, metricName string, samples []ingestion.Sample) ([]Anomaly, int) {
+	results, tested := e.adaptive.Evaluate(ctx, metricName, samples)
 	for i := range results {
 		results[i].Signal = "logs"
 	}
 	metrics.WorkerDetections.Add(ctx, int64(len(results)), metric.WithAttributes(attribute.String("detector", "adaptive")))
-	return results
+	return results, tested
 }

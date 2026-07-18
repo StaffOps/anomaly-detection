@@ -24,7 +24,7 @@ detection:
 | `high_restart_rate` | > 3 restarts in 5 minutes | 3 |
 | `high_memory_ratio` | Memory usage > 85% of limit | 0.85 |
 
-> This deployment queries a federated VictoriaMetrics spanning multiple
+> This deployment queries a federated Prometheus spanning multiple
 > Kubernetes clusters (`cluster` label). Every rule's `by()` includes
 > `cluster` — see [Writing Custom Rules](#writing-custom-rules) below.
 
@@ -39,18 +39,44 @@ detection:
   adaptive_metrics:
     - name: cpu_by_workload         # Unique name
       query: |                      # PromQL query
-        max(rate(container_cpu_usage_seconds_total{...}[1m])) by (cluster, namespace, pod)
+        max(rate(container_cpu_usage_seconds_total{...}[2m])) by (cluster, namespace, pod)
       group_by: [cluster, namespace, pod]   # Labels that identify a unique series
+      direction: up_bad             # optional: up_bad | down_bad | both_bad (default)
 ```
+
+!!! note "`rate()` windows"
+    Use `[2m]` (not `[1m]`) — the org scrape interval is 30s and `rate()` needs ≥4× the
+    scrape interval to survive a missed scrape.
+
+### `direction` — direction-of-badness
+
+The Z-Score fires symmetrically on `|z|`. Set `direction` so a rule only fires when the
+metric moves the **bad** way, dropping the false positives from the harmless direction
+(e.g. latency *improving*):
+
+| Value | Fires when | Use for |
+|-------|-----------|---------|
+| `up_bad` | value rises above baseline | latency, error rate, queue depth, GC heap, throttling |
+| `down_bad` | value falls below baseline | ready replicas, available capacity |
+| `both_bad` (or empty) | any deviation | request/traffic rate (a drop can be an outage) |
+
+Filtering runs in the controller before FDR; drops are counted by
+`staffops_ad_detection_direction_filtered_total`.
 
 ### Default Adaptive Metrics
 
-| Name | Signal | Group by |
-|------|--------|----------|
-| `cpu_by_workload` | CPU usage rate per pod | cluster, namespace, pod |
-| `error_rate_by_service` | Error rate from span metrics | cluster, service_name |
-| `request_rate_by_service` | Request rate from span metrics | cluster, service_name |
-| `latency_p99_by_service` | P99 latency from span metrics | cluster, service_name |
+| Name | Signal | Group by | Direction |
+|------|--------|----------|-----------|
+| `error_rate_by_service` | Error rate (span metrics) | cluster, service_name | up_bad |
+| `request_rate_by_service` | Request rate (span metrics) | cluster, service_name | both_bad |
+| `latency_p99_by_service` | P99 latency (span metrics) | cluster, service_name | up_bad |
+| `http_error_ratio_by_service` | Unbiased 5xx ratio (OTel SDK) | cluster, service_name | up_bad |
+| `http_latency_p99_by_service` | Unbiased p99 latency (OTel SDK) | cluster, service_name | up_bad |
+| `db_latency_p99_by_service` | DB op latency (OTel SDK) | cluster, service_name | up_bad |
+| `cpu_throttling_ratio` | CFS throttled/total periods | cluster, namespace, pod | up_bad |
+
+The tuned deployed set (per-cluster via the Helm `detection:` override) is larger — see the
+chart values and the program map for the full list.
 
 ---
 
@@ -107,7 +133,7 @@ detection:
 ### Guidelines
 
 1. **Always include `cluster`** in every `by()`/`group_by` — this deployment
-   queries a federated multi-cluster VictoriaMetrics/Loki. Omitting `cluster`
+   queries a federated multi-cluster Prometheus/Loki. Omitting `cluster`
    silently collapses every cluster's series into one, breaks per-cluster
    baselines, and (for workload-pattern detection) can incorrectly correlate
    identically-named pods/namespaces across different clusters as the same

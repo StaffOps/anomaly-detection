@@ -1,5 +1,5 @@
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMRule
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
 metadata:
   name: staffops-ad-recording
   namespace: monitoring
@@ -36,8 +36,8 @@ spec:
               increase(staffops_ad_detection_anomalies_by_workload_total[1h])
             )
 ---
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMRule
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
 metadata:
   name: staffops-ad-health
   namespace: monitoring

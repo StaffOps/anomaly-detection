@@ -5,7 +5,7 @@ Distributed anomaly detection for Kubernetes clusters. Consumes metrics, logs, a
 ## Architecture
 
 ```
-Controller (active/standby) → gRPC → Workers (3+ stateless) → VM/Loki/K8s Events
+Controller (active/standby) → gRPC → Workers (3+ stateless) → Prometheus/Loki/K8s Events
                                               ↕
                                            Redis (baseline, dedup)
                                               
@@ -52,13 +52,13 @@ docker compose logs controller --tail 50
 Main config: `config.yaml`
 
 Key settings:
-- `datasources.victoriametrics.timeout`: 30s (queries to VM)
+- `datasources.victoriametrics.timeout`: 30s (queries to Prometheus)
 - `datasources.loki.timeout`: 30s (queries to Loki)
 - `suppression.exclude_static_only`: namespaces where static rules are suppressed (batch/cron workloads)
 - `ml.enabled`: true (ML service endpoint)
 - `controller.job_interval`: 30s (detection cycle frequency)
 
-All endpoints come from env vars (`${VM_URL}`, `${LOKI_URL}`, etc.) — see `.env.example`.
+All endpoints come from env vars (`${PROMETHEUS_URL}`, `${LOKI_URL}`, etc.) — see `.env.example`.
 
 ## Suppression
 
@@ -138,7 +138,7 @@ controller --replay \
 | `--max-range` | 7d | reject windows larger than this |
 | `--max-anomalies` | 1000 | cap anomalies in report |
 
-Window must be ≥ 2.5h (warm-up + detection phase). Output is UTC. Pre-flight checks validate VM/Loki reachability and output writability before processing.
+Window must be ≥ 2.5h (warm-up + detection phase). Output is UTC. Pre-flight checks validate Prometheus/Loki reachability and output writability before processing.
 
 > **Status**: Complete (T1-T16). Smoke-tested against production endpoints. ML wiring and ground-truth comparison are V2. See [`specs/replay-mode/`](../specs/replay-mode/).
 

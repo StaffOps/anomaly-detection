@@ -13,8 +13,8 @@ redis:
 
 datasources:
   prometheus:
-    url: ${VM_URL}
-    timeout: ${VM_TIMEOUT:30s}
+    url: ${PROMETHEUS_URL}
+    timeout: ${PROMETHEUS_TIMEOUT:30s}
   loki:
     url: ${LOKI_URL}
     timeout: ${LOKI_TIMEOUT:30s}
@@ -88,7 +88,11 @@ detection:
       severity: warning
 
     - name: dotnet_threadpool_saturated
-      query: max(dotnet_thread_pool_queue_length_total) by (cluster, namespace, pod) > 0 or max(process_runtime_dotnet_thread_pool_queue_length) by (cluster, namespace, pod) > 0
+      # dotnet_thread_pool_queue_length_total (the .NET 9+ native meter name)
+      # is not emitted by any current workload — only the legacy
+      # process_runtime_dotnet_* era exists in the inventory (verified
+      # 2026-07-17). Re-add the `or` alternative when services move to .NET 9.
+      query: max(process_runtime_dotnet_thread_pool_queue_length) by (cluster, namespace, pod)
       threshold: 100
       operator: ">"
       severity: warning
@@ -117,12 +121,14 @@ detection:
     # RED metrics from spanmetrics (30+ services)
     # Note: spanmetrics lack k8s namespace — only service_name available.
     # namespace shows as "unknown" in dashboards for these.
+    # rate() windows are [2m], not [1m]: the org scrape interval is 30s and
+    # rate() needs ≥4× the scrape interval to survive a missed scrape.
     - name: error_rate_by_service
-      query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[1m])) by (cluster, service_name)
+      query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[2m])) by (cluster, service_name)
       group_by: [cluster, service_name]
 
     - name: request_rate_by_service
-      query: sum(rate(spanmetrics_apm_calls_total[1m])) by (cluster, service_name)
+      query: sum(rate(spanmetrics_apm_calls_total[2m])) by (cluster, service_name)
       group_by: [cluster, service_name]
 
     - name: latency_p99_by_service
@@ -131,14 +137,13 @@ detection:
 
     # Istio mesh — service-to-service error rate
     - name: istio_error_rate_by_workload
-      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[1m])) by (cluster, destination_workload, destination_workload_namespace)
+      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[2m])) by (cluster, destination_workload, destination_workload_namespace)
       group_by: [cluster, destination_workload, destination_workload_namespace]
 
-    # .NET saturation signals (leading indicators)
-    - name: dotnet_gc_pause_rate
-      query: sum(rate(dotnet_gc_pause_time_seconds_total[1m])) by (cluster, namespace, pod)
-      group_by: [cluster, namespace, pod]
-
+    # .NET saturation signals (leading indicators).
+    # NOTE (hygiene 2026-07-17): dotnet_gc_pause_rate removed — its metric
+    # (dotnet_gc_pause_time_seconds_total, .NET 9+ native meter) is absent from
+    # the live inventory; the rule never fired. Re-add on .NET 9 migration.
     - name: dotnet_heap_growth
       query: max(process_runtime_dotnet_gc_heap_size_bytes) by (cluster, namespace, pod)
       group_by: [cluster, namespace, pod]
@@ -147,22 +152,16 @@ detection:
       query: max(http_client_active_requests) by (cluster, namespace, pod)
       group_by: [cluster, namespace, pod]
 
-    # Queue depth (SQS-backed and Kestrel)
-    - name: queue_depth
-      query: max(queue_depth_messages) by (cluster, namespace, pod)
-      group_by: [cluster, namespace, pod]
+    # Queue depth rules (queue_depth_messages / queue_messages_failed_total)
+    # removed 2026-07-17: no workload emits these custom metrics today (absent
+    # from the live inventory — rules never fired). Restore when a queue-backed
+    # service ships them.
 
-    - name: queue_failed_rate
-      query: sum(rate(queue_messages_failed_total[1m])) by (cluster, namespace, pod)
-      group_by: [cluster, namespace, pod]
-
-    # DB connection pool saturation
+    # DB connection pool saturation.
+    # go_sql_waiting removed 2026-07-17: go_sql_stats_connections_waited_for_total
+    # absent from the live inventory (no Go service exports database/sql stats).
     - name: hikari_pool_pending
       query: max(hikaricp_connections_pending) by (cluster, namespace, pod)
-      group_by: [cluster, namespace, pod]
-
-    - name: go_sql_waiting
-      query: max(go_sql_stats_connections_waited_for_total) by (cluster, namespace, pod)
       group_by: [cluster, namespace, pod]
 
     # OTel Collector pipeline health
@@ -170,17 +169,17 @@ detection:
       query: max(otelcol_exporter_queue_size) by (cluster, service_name)
       group_by: [cluster, service_name]
 
-    # Karpenter scheduling
-    - name: karpenter_scheduling_duration
-      query: histogram_quantile(0.99, sum(rate(karpenter_provisioner_scheduling_duration_seconds_bucket[5m])) by (le, cluster))
-      group_by: [cluster]
+    # karpenter_scheduling_duration removed 2026-07-17: the
+    # karpenter_provisioner_* metric family was renamed upstream (Karpenter
+    # ≥v0.33 uses karpenter_nodeclaims_*/karpenter_pods_*) and is absent from
+    # the inventory. Reintroduce against the new names via the P1.4 catalog.
 
   log_patterns:
     - name: error_rate_by_namespace
-      query: sum(rate({service_namespace=~".+"} |= "error" [1m])) by (cluster, service_namespace)
+      query: sum(rate({service_namespace=~".+"} |= "error" [2m])) by (cluster, service_namespace)
       group_by: [cluster, service_namespace]
     - name: log_volume_by_workload
-      query: sum(rate({service_namespace=~".+"}[1m])) by (cluster, service_namespace, service_workload)
+      query: sum(rate({service_namespace=~".+"}[2m])) by (cluster, service_namespace, service_workload)
       group_by: [cluster, service_namespace, service_workload]
     - name: panic_oom
       query: '{service_namespace=~".+"} |~ "(?i)(panic|oom|out of memory|fatal)"'

@@ -131,7 +131,7 @@ func TestSetDefaults_SetsSuppressionLists(t *testing.T) {
 // ─── Load ─────────────────────────────────────────────────────────────────────
 
 func TestLoad_ValidMinimalConfig(t *testing.T) {
-	t.Setenv("VM_URL", "http://vm:9090")
+	t.Setenv("PROMETHEUS_URL", "http://vm:9090")
 	t.Setenv("LOKI_URL", "http://loki:3100")
 	t.Setenv("ALERTMANAGER_URL", "http://am:9093")
 
@@ -139,7 +139,7 @@ func TestLoad_ValidMinimalConfig(t *testing.T) {
 cluster: test
 datasources:
   prometheus:
-    url: ${VM_URL}
+    url: ${PROMETHEUS_URL}
   loki:
     url: ${LOKI_URL}
   alertmanager:
@@ -154,7 +154,7 @@ datasources:
 		t.Errorf("cluster: want test, got %q", cfg.Cluster)
 	}
 	if cfg.Datasources.Prometheus.URL != "http://vm:9090" {
-		t.Errorf("VM URL: want http://vm:9090, got %q", cfg.Datasources.Prometheus.URL)
+		t.Errorf("Prometheus URL: want http://vm:9090, got %q", cfg.Datasources.Prometheus.URL)
 	}
 }
 

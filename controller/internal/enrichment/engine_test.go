@@ -135,7 +135,7 @@ func TestEngine_Run_VMError_ReturnsErrorResult(t *testing.T) {
 		t.Fatalf("expected 1 result even on error, got %d", len(bundle.Results))
 	}
 	if bundle.Results[0].Error == "" {
-		t.Error("result error should be set when VM query fails")
+		t.Error("result error should be set when Prometheus query fails")
 	}
 }
 
@@ -145,7 +145,7 @@ func TestEngine_Run_VMEmpty_ReturnsNoDataError(t *testing.T) {
 
 	bundle := e.Run(context.Background(), podIdentity())
 	if bundle.Results[0].Error != "no_data" {
-		t.Errorf("empty VM result should produce no_data error, got %q", bundle.Results[0].Error)
+		t.Errorf("empty Prometheus result should produce no_data error, got %q", bundle.Results[0].Error)
 	}
 }
 

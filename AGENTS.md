@@ -7,9 +7,15 @@ Distributed anomaly detection for Kubernetes: **Go controller + Go workers + Pyt
 Detects statistical anomalies (EWMA Z-Score), static threshold breaches, log rate spikes, and
 ML-confirmed multivariate failures. Dispatches to Alertmanager (dry-run by default).
 
-> **Status**: v0.7.0 — deployed to **homolog** (cluster `devops-core`, namespace `staffops`,
-> **dry-run**) via the Helm chart. Core detection + FDR + ML live. Most PH/P0/P2 blockers
-> cleared (see below); remaining work: exit dry-run, CI-published images, docs sync.
+> **Status**: v0.11.0 — deployed to **homolog** (cluster `devops-core`, namespace `staffops`,
+> **dry-run**) via the Helm chart. Core detection + FDR + ML live. Since 0.7.0:
+> **F0** (FDR now corrects over the full test family, not the censored fired set — it
+> actually rejects now), **direction-of-badness** (adaptive rules only fire in the
+> declared bad direction), **rule hygiene** (dead rules dropped, `rate()` windows → `[2m]`,
+> repo↔chart drift resolved on devops-core), a tuned 18-rule set + Group A rules
+> (unbiased RED via OTel SDK http metrics, DB latency, CPU throttling, service-graph
+> self-health), and a full VictoriaMetrics→Prometheus terminology sweep.
+> Remaining: exit dry-run, CI-published images, the P0.1 recall/FP measurement.
 > Trunk-based on `main` (branch `dev` retired 2026-07-13).
 
 ---
@@ -22,11 +28,11 @@ Controller (Go, :8080) ──gRPC batch──► Workers (Go, :50052) × 3
       │  ◄── anomalies ─────────────────────┘
       │
       ├── Correlate + Deduplicate (Redis TTL 5min)
-      ├── Enrich (VM + Loki queries, cached 30s)
+      ├── Enrich (Prometheus + Loki queries, cached 30s)
       ├── ML evaluate (gRPC → Python :50051, if ≥2 correlated)
       └── Dispatch (Alertmanager or dry-run log)
 
-Backing: Redis (baselines, dedup), VictoriaMetrics (PromQL), Loki (LogQL)
+Backing: Redis (baselines, dedup), Prometheus (PromQL), Loki (LogQL)
 ```
 
 ### Detection methods (in order of execution)
@@ -37,6 +43,15 @@ Backing: Redis (baselines, dedup), VictoriaMetrics (PromQL), Loki (LogQL)
 | Adaptive | EWMA Z-Score > 3.0 | Unexpected deviation from learned baseline |
 | Log pattern | LogQL rate query | Error rate spike, panic/OOM patterns |
 | ML multivariate | Isolation Forest | ≥2 correlated anomalies, 10-feature canonical vector |
+
+**Adaptive post-filters (before dispatch):**
+- **Direction-of-badness** — adaptive rules carry `direction: up_bad|down_bad|both_bad`
+  (empty = `both_bad`). The z-score is symmetric (`|z|`), so the controller drops firings
+  that ran the harmless way (e.g. latency *improving*) before FDR. Metric:
+  `staffops_ad_detection_direction_filtered_total`.
+- **FDR (Benjamini-Hochberg)** — corrects for multiple comparisons across the *full* family
+  of adaptive evaluations this cycle (workers report `adaptive_series_tested`; the controller
+  passes it to BH). Only adaptive anomalies are filtered; static/pattern pass through.
 
 ### Severity escalation
 
@@ -81,7 +96,7 @@ docker run --rm -v "$(pwd)/ml":/app -w /app python:3.11-slim sh -c \
 
 # Full local stack (controller + 3 workers + redis + ml + prometheus + grafana + loki)
 cd scripts
-cp ../.env.example .env    # then fill VM_URL, LOKI_URL, ALERTMANAGER_URL
+cp ../.env.example .env    # then fill PROMETHEUS_URL, LOKI_URL, ALERTMANAGER_URL
 ./start.sh                 # build + docker-compose up
 ./monitor.sh               # real-time TUI dashboard
 ./stop.sh                  # cleanup
@@ -107,14 +122,14 @@ controller/
     correlation/              ← Dedup, workload grouping, severity escalation
     detection/                ← Static, adaptive, pattern detection engines
     enrichment/               ← Pod/service context queries + template substitution
-    ingestion/                ← VictoriaMetrics PromQL + Loki LogQL clients
+    ingestion/                ← Prometheus PromQL + Loki LogQL clients
     leader/                   ← K8s Lease-based leader election (HA, single-leader)
     ml/                       ← gRPC client + BuildFeatureVector()
     metrics/                  ← Prometheus registry (staffops_ad_* prefix)
-    readiness/                ← Health probe aggregator (VM, Loki, AM, ML)
+    readiness/                ← Health probe aggregator (Prometheus, Loki, AM, ML)
     redis/                    ← Connection pool
     replay/                   ← Offline simulation engine (12/16 tasks done)
-    ratelimit/                ← Token bucket: VM 20/s, Loki 50/s
+    ratelimit/                ← Token bucket: Prometheus 20/s, Loki 50/s
     suppression/              ← Namespace CSV filtering
   proto/                      ← worker.proto + ml.proto + generated stubs
 
@@ -184,7 +199,7 @@ Main config at `controller/config.yaml` — supports `${ENV_VAR:default}` substi
 
 | Variable | Purpose |
 |----------|---------|
-| `VM_URL` | VictoriaMetrics query endpoint |
+| `PROMETHEUS_URL` | Prometheus query endpoint |
 | `LOKI_URL` | Loki API endpoint |
 | `ALERTMANAGER_URL` | Alertmanager API endpoint |
 
@@ -227,6 +242,8 @@ no restart needed.
 - name: my_metric
   query: "avg(some_metric) by (pod, namespace)"
   group_by: [pod, namespace]
+  direction: up_bad   # up_bad | down_bad | both_bad (default). Only fire when
+                      # the metric moves the bad way (latency/errors → up_bad).
 ```
 
 **Log pattern** (`detection.log_patterns`):
@@ -248,6 +265,9 @@ All metrics prefixed `staffops_ad_`. Key ones:
 | `_cycles_total{result}` | Detection cycles (success/error) |
 | `_cycle_duration_seconds` | How long each cycle takes |
 | `_anomalies_total{severity,signal}` | Anomalies found per signal type |
+| `_detection_fdr_accepted_total` / `_fdr_rejected_total` | Adaptive anomalies kept / cut by Benjamini-Hochberg FDR |
+| `_detection_fdr_family_size` | BH family size `m` (adaptive evaluations/cycle); ~0 ⇒ censored family (F0 regression) |
+| `_detection_direction_filtered_total` | Adaptive anomalies dropped for firing in the harmless direction |
 | `_alert_fired_total{severity}` | Alerts dispatched (or dry-run) |
 | `_alert_deduplicated_total` | Alerts suppressed by 5min cooldown |
 | `_is_leader` | 1 if this controller replica is leader |
@@ -281,14 +301,16 @@ Work on these in the order listed. Never mark a blocker done without validating 
 ### Before calling it production-ready
 - **PH.15** ✅ *done* — Helm chart is canonical in the `helm-charts` repo
   (`charts/anomaly-detection`) and deployed to homolog. Carries the PH.1 securityContext.
-- **PH.19** ✅ *done* — chart renders `VMServiceScrape` (enabled on the VM monitoring stack).
+- **PH.19** ✅ *done* — chart renders `ServiceMonitor` (enabled on the Prometheus monitoring stack).
 - **PH.24** ✅ *done* — runtime `grpcio` bumped to 1.65.4 (CVE-2024-7246). `grpcio-tools`
   stays 1.62.1 (build-time only; avoids forcing protobuf 5.x + stub regen).
 
 ### Remaining before production
-- **Exit dry-run** — controller runs `--dry-run`; ~12.8k alerts/day in homolog with FDR
-  rejecting 0 (it runs post-correlation on small batches). Reposition/throttle before flipping
-  `controller.dryRun: false`.
+- **Exit dry-run** — controller runs `--dry-run`; ~12.8k alerts/day in homolog. FDR runs
+  before correlation but historically rejected ~0 because it was handed a *censored* family
+  (only the anomalies that fired, not the full ~400 tests/cycle). Fixed in F0 (2026-07-17):
+  workers now report `adaptive_series_tested` and the controller passes the true family size
+  to BH — measure the new rejection rate in replay before flipping `controller.dryRun: false`.
 - **CI-published image** (PH.2 tail) + settle canonical registry.
 
 ---
@@ -300,7 +322,7 @@ Work on these in the order listed. Never mark a blocker done without validating 
 | Baseline resets on pod restart | `baseline/store.go` | Cold-start after every rollout | ✅ P2.8: workload-stable keying |
 | Baseline poisoning | `store.go::Evaluate()` — EWMA drift on anomalous samples | Slow FP erosion | ✅ P2.9: anti-poison gate skips update on extreme anomalies |
 | Enrichment cache hit = 0% | `enrichment/engine.go` | No caching benefit today | Planned removal |
-| FP rate from multiple comparisons | ~400 adaptive series, z > 3 | Alert fatigue | 🟡 P0.4 FDR shipped but runs post-correlation on small batches (rejects ~0) — needs repositioning |
+| FP rate from multiple comparisons | ~400 adaptive series, z > 3 | Alert fatigue | ✅ F0 (2026-07-17): FDR now corrects over the full family — workers report `adaptive_series_tested`, controller passes it to BH. Was rejecting ~0 due to a censored (fired-only) family, not pipeline position. Measure rejection rate in replay before exit-dry-run |
 | ML feature dimension mismatch | Fixed with CANONICAL_FEATURES (10 fixed, 0.0 padding) | Was causing ~33% errors | ✅ Done — monitor score distribution |
 | Absence-of-signal undetected | `absence/tracker.go` — dead man's switch | Blind to metric dropout | ✅ P2.10: shipped |
 | Prophet not wired | `ml/forecaster.py` ready, controller doesn't call Forecast | No predictive alerts | Needs baseline time-series export first |

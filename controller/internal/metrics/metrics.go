@@ -107,7 +107,7 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 // global API buffers instrument creation and retroactively wires it once
 // otelhelper.Setup calls otel.SetMeterProvider. Exported through
 // otelhelper.MetricsHandler() — no direct client_golang registration.
-// Cluster/environment identity is added at the scrape layer (VMServiceScrape/
+// Cluster/environment identity is added at the scrape layer (ServiceMonitor/
 // ServiceMonitor externalLabels), not emitted by the app.
 // =============================================================================
 
@@ -161,7 +161,7 @@ var (
 	// Cardinality: severity(3) × cluster(4, one per monitored K8s cluster) ×
 	// namespace(~50) × workload(~20-50/ns) ≈ 12-28k series total — the
 	// `cluster` dimension is monitored-workload cardinality (this deployment
-	// queries a federated multi-cluster VictoriaMetrics/Loki), not a
+	// queries a federated multi-cluster Prometheus/Loki), not a
 	// per-cluster-deployment multiplier, so it does NOT divide across
 	// separate Prometheus instances the way `namespace`/`workload` do.
 	// Revisit if the steering-mandated 2k/metric limit is measured on this
@@ -181,6 +181,10 @@ var (
 		"Adaptive anomalies accepted after FDR correction")
 	FDRRejected = mustInt64Counter("staffops_ad_detection_fdr_rejected_total",
 		"Adaptive anomalies rejected by FDR correction")
+	FDRFamilySize = mustInt64Gauge("staffops_ad_detection_fdr_family_size",
+		"Adaptive evaluations in the last cycle (BH family size m); ~0 means workers are not reporting tested series and FDR is running on a censored family")
+	DirectionFiltered = mustInt64Counter("staffops_ad_detection_direction_filtered_total",
+		"Adaptive anomalies dropped because they deviated in the harmless direction for their rule (direction-of-badness)")
 
 	WorkloadPatterns = mustInt64Counter("staffops_ad_detection_workload_patterns_total",
 		"Workload-level patterns detected (≥N replicas of same workload anomalous)")

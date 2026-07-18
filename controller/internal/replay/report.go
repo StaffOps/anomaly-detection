@@ -84,6 +84,7 @@ type Totals struct {
 	ByKind        map[string]int `json:"by_kind"`
 	WarmupSkipped int            `json:"warmup_skipped"`
 	QueryErrors   int            `json:"query_errors"`
+	FDRRejected   int            `json:"fdr_rejected"`
 }
 
 // WorkloadCount is a top-workload entry.
@@ -129,6 +130,7 @@ type reportBuilder struct {
 	maxAnomalies  int
 	warmupSkipped int
 	queryErrors   int
+	fdrRejected   int
 	timeline      map[time.Time]*TimelineEntry
 	workloads     map[string]int // "ns/workload" → count
 }
@@ -176,6 +178,7 @@ func (b *reportBuilder) build(meta Metadata) *Report {
 		ByKind:        make(map[string]int),
 		WarmupSkipped: b.warmupSkipped,
 		QueryErrors:   b.queryErrors,
+		FDRRejected:   b.fdrRejected,
 	}
 	entries := make([]AnomalyEntry, 0, len(b.anomalies))
 	for _, a := range b.anomalies {

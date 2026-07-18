@@ -41,7 +41,7 @@ func TestMetricsPoller_QueryRange_VMErrorStatus(t *testing.T) {
 	now := time.Now()
 	_, err := p.QueryRange(context.Background(), "test", now.Add(-time.Hour), now, time.Minute)
 	if err == nil {
-		t.Error("expected error when VM range returns status=error")
+		t.Error("expected error when Prometheus range returns status=error")
 	}
 }
 

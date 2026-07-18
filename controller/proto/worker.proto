@@ -40,6 +40,11 @@ enum JobType {
 message JobResults {
   repeated AnomalyResult anomalies = 1;
   repeated JobError errors = 2;
+  // Number of adaptive evaluations performed in this batch (series past
+  // warm-up that could have fired). This is the statistical family size the
+  // controller needs for Benjamini-Hochberg FDR — correcting only over the
+  // anomalies that fired (a censored family) makes BH accept ~everything.
+  int64 adaptive_series_tested = 3;
 }
 
 message AnomalyResult {

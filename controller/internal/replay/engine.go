@@ -54,6 +54,10 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 	step := cfg.Controller.JobInterval
 	rb := newReportBuilder(rcfg.MaxAnomalies)
 
+	// Same BH FDR filter the controller applies per cycle — replay mirrors it
+	// per tick so FP counts are comparable with production behavior.
+	fdrFilter := detection.NewFDR(cfg.Controller.FDRTarget)
+
 	// Count total ticks for progress logging.
 	totalTicks := int(rcfg.To.Sub(rcfg.From) / step)
 	progressInterval := totalTicks / 10
@@ -76,6 +80,13 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 		tickIdx++
 		isWarmup := tick.Before(warmupEnd)
 
+		// Anomalies from all detectors at this tick, filtered through FDR
+		// before entering the report (mirrors the controller's cycle flow).
+		// tickTested accumulates the adaptive evaluations past warm-up — the
+		// BH family size.
+		var tickAnomalies []detection.Anomaly
+		tickTested := 0
+
 		// Determine chunk boundaries (1h chunks).
 		chunkStart := tick.Add(-time.Hour)
 		if chunkStart.Before(rcfg.From) {
@@ -84,9 +95,14 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 
 		// Query metrics for all adaptive metrics + static rules.
 		{
-			var metricSeries []ingestion.TimeSeries
+			// Series are kept per metric: each rule evaluates ONLY its own
+			// series. Pooling all series and evaluating every rule against the
+			// pool (as this loop once did) creates baselines for foreign label
+			// sets under every rule name — cross-metric contamination the
+			// production worker path never has.
+			perMetric := make([][]ingestion.TimeSeries, len(cfg.Detection.AdaptiveMetrics))
 			skipTick := false
-			for _, am := range cfg.Detection.AdaptiveMetrics {
+			for i, am := range cfg.Detection.AdaptiveMetrics {
 				qStart := time.Now()
 				series, err := vm.QueryRange(ctx, am.Query, chunkStart, tick, step)
 				mc.recordPromQuery(time.Since(qStart))
@@ -102,21 +118,22 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 				if injector != nil {
 					series = injector.Apply(am.Name, series)
 				}
-				metricSeries = append(metricSeries, series...)
+				perMetric[i] = series
 			}
 			if skipTick {
 				goto progress
 			}
 
-			// Run adaptive detection on metric samples at this tick.
-			samples := SamplesAt(tick, metricSeries)
-			for _, am := range cfg.Detection.AdaptiveMetrics {
-				anomalies := engine.EvaluateMetricsAdaptive(ctx, am.Name, samples)
+			// Run adaptive detection on each metric's own samples at this tick.
+			for i, am := range cfg.Detection.AdaptiveMetrics {
+				samples := SamplesAt(tick, perMetric[i])
+				anomalies, tested := engine.EvaluateMetricsAdaptive(ctx, am.Name, samples)
 				if !isWarmup {
-					for i := range anomalies {
-						anomalies[i].Timestamp = tick
+					tickTested += tested
+					for j := range anomalies {
+						anomalies[j].Timestamp = tick
 					}
-					addAll(rb, anomalies)
+					tickAnomalies = append(tickAnomalies, anomalies...)
 				} else {
 					rb.warmupSkipped += len(anomalies)
 				}
@@ -140,7 +157,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 				for i := range anomalies {
 					anomalies[i].Timestamp = tick
 				}
-				addAll(rb, anomalies)
+				tickAnomalies = append(tickAnomalies, anomalies...)
 			}
 		}
 
@@ -149,7 +166,7 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 			qStart := time.Now()
 			series, err := loki.QueryMetricRange(ctx, lp.Query, chunkStart, tick, step)
 			mc.recordLokiQuery()
-			_ = qStart // loki duration not tracked in p95 (only VM)
+			_ = qStart // loki duration not tracked in p95 (only Prometheus)
 			if err != nil {
 				slog.Warn("[REPLAY] loki query failed",
 					"tick", tick.Format(time.RFC3339), "pattern", lp.Name, "error", err)
@@ -157,14 +174,29 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 				continue
 			}
 			samples := SamplesAt(tick, series)
-			anomalies := engine.EvaluateLogRate(ctx, lp.Name, samples)
+			anomalies, tested := engine.EvaluateLogRate(ctx, lp.Name, samples)
 			if !isWarmup {
+				tickTested += tested
 				for i := range anomalies {
 					anomalies[i].Timestamp = tick
 				}
-				addAll(rb, anomalies)
+				tickAnomalies = append(tickAnomalies, anomalies...)
 			} else {
 				rb.warmupSkipped += len(anomalies)
+			}
+		}
+
+		// FDR over the tick's full family, exactly like the controller cycle:
+		// adaptive anomalies filtered, static/pattern pass through.
+		if len(tickAnomalies) > 0 {
+			ptrs := make([]*detection.Anomaly, len(tickAnomalies))
+			for i := range tickAnomalies {
+				ptrs[i] = &tickAnomalies[i]
+			}
+			accepted, rejected := fdrFilter.Apply(ptrs, tickTested)
+			rb.fdrRejected += rejected
+			for _, a := range accepted {
+				rb.addAnomaly(*a)
 			}
 		}
 
@@ -241,10 +273,4 @@ func convertGroundTruths(gts []inject.GroundTruthJSON) []GroundTruthEntry {
 		}
 	}
 	return out
-}
-
-func addAll(rb *reportBuilder, anomalies []detection.Anomaly) {
-	for _, a := range anomalies {
-		rb.addAnomaly(a)
-	}
 }

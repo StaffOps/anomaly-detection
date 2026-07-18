@@ -7,8 +7,8 @@ All three components — Controller, Workers, and the ML Service — expose Prom
 ## Scraping configuration
 
 The chart exposes a single, vendor-neutral scrape mechanism — `ServiceMonitor`. vm-operator
-honors the `ServiceMonitor` CRD natively on VictoriaMetrics clusters, so there is no separate
-`VMServiceScrape` resource to configure.
+honors the `ServiceMonitor` CRD natively on Prometheus clusters, so there is no separate
+`ServiceMonitor` resource to configure.
 
 === "ServiceMonitor (Prometheus Operator / vm-operator)"
 
@@ -184,7 +184,7 @@ sum by (reason) (rate(staffops_ad_controller_suppressed_total[10m]))
 |---|---|
 | Type | Counter |
 | Labels | `cluster`, `namespace`, `workload`, `severity` |
-| Description | Anomalies sliced by cluster/namespace/workload — bounded labels for "top noisy workloads" dashboards, suppression tuning, and drift detection. `workload` is extracted from pod names (`correlation.ExtractWorkload`), never a raw pod ID; service-level anomalies use `service_name` as workload. `cluster` reflects the *monitored* workload's own cluster (this deployment queries a federated multi-cluster VictoriaMetrics/Loki), not necessarily the cluster the controller itself runs in. Any of the three identity labels default to `"unknown"` when absent from the source query's `by()`/`group_by`. |
+| Description | Anomalies sliced by cluster/namespace/workload — bounded labels for "top noisy workloads" dashboards, suppression tuning, and drift detection. `workload` is extracted from pod names (`correlation.ExtractWorkload`), never a raw pod ID; service-level anomalies use `service_name` as workload. `cluster` reflects the *monitored* workload's own cluster (this deployment queries a federated multi-cluster Prometheus/Loki), not necessarily the cluster the controller itself runs in. Any of the three identity labels default to `"unknown"` when absent from the source query's `by()`/`group_by`. |
 
 ```promql
 # Top 10 noisiest workloads across all clusters, last 24h
@@ -195,6 +195,40 @@ topk(10, sum by (cluster, namespace, workload) (
 # Confirm anomalies are attributed to real clusters, not just one
 count by (cluster) (staffops_ad_detection_anomalies_by_workload_total)
 ```
+
+### `staffops_ad_detection_fdr_accepted_total` / `_fdr_rejected_total`
+
+| Property | Value |
+|---|---|
+| Type | Counter |
+| Labels | none |
+| Description | Adaptive anomalies accepted / rejected by the per-cycle Benjamini-Hochberg False Discovery Rate filter (`controller.fdr_target`, default 0.05). Only `detector="adaptive"` anomalies enter the FDR family; static and pattern anomalies always pass through. |
+
+### `staffops_ad_detection_fdr_family_size`
+
+| Property | Value |
+|---|---|
+| Type | Gauge |
+| Labels | none |
+| Description | The BH family size `m` used in the last detection cycle — the number of adaptive evaluations performed by workers (past warm-up), fired or not, reported via `JobResults.adaptive_series_tested`. This is the count FDR corrects over. A value **near 0 while anomalies are firing** means workers are not reporting tested series and the filter is falling back to the censored (fired-only) family, where BH rejects almost nothing — the exact defect F0 fixed. Expect it to track the number of adaptive series in `config.yaml` (order of hundreds). |
+
+```promql
+# FDR rejection ratio — how much multiple-comparison noise is being cut
+sum(rate(staffops_ad_detection_fdr_rejected_total[1h]))
+  / clamp_min(sum(rate(staffops_ad_detection_fdr_accepted_total[1h]))
+    + sum(rate(staffops_ad_detection_fdr_rejected_total[1h])), 1)
+
+# Alert if the family collapses (workers not reporting tested series)
+staffops_ad_detection_fdr_family_size < 10
+```
+
+### `staffops_ad_detection_direction_filtered_total`
+
+| Property | Value |
+|---|---|
+| Type | Counter |
+| Labels | none |
+| Description | Adaptive anomalies dropped because they deviated in the *harmless* direction for their rule (direction-of-badness). A rule declares `direction: up_bad \| down_bad \| both_bad` (empty = `both_bad`); the controller drops firings that run the other way (e.g. latency *improving*) before FDR. A rising counter means the symmetric z-score was catching one-sided-metric noise that this now suppresses. |
 
 ---
 
@@ -208,7 +242,7 @@ Workers expose metrics about query execution, algorithm performance, and Redis b
 |---|---|
 | Type | Counter |
 | Labels | `pod`, `result` |
-| Description | Total detection jobs processed by this worker. `result` is `success` or `error`. A high error rate usually indicates connectivity issues with VictoriaMetrics, Loki, or Redis. |
+| Description | Total detection jobs processed by this worker. `result` is `success` or `error`. A high error rate usually indicates connectivity issues with Prometheus, Loki, or Redis. |
 
 ```promql
 # Total job throughput across all workers
@@ -256,7 +290,7 @@ histogram_quantile(0.99,
   )
 )
 
-# Slow query alert: p95 VictoriaMetrics latency above 3 seconds
+# Slow query alert: p95 Prometheus latency above 3 seconds
 histogram_quantile(0.95,
   sum by (le) (
     rate(staffops_ad_worker_query_duration_seconds_bucket{datasource="victoriametrics"}[5m])

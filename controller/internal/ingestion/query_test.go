@@ -92,7 +92,7 @@ func TestMetricsPoller_Query_VMErrorStatus(t *testing.T) {
 	p := NewMetricsPoller(config.DatasourceEndpoint{URL: srv.URL, Timeout: time.Second})
 	_, err := p.Query(context.Background(), "bad_query")
 	if err == nil {
-		t.Error("expected error when VM returns status=error")
+		t.Error("expected error when Prometheus returns status=error")
 	}
 }
 

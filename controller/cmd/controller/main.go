@@ -279,11 +279,33 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 		})
 	}
 
-	accepted, rejected := fdr.Apply(allAnomalies)
+	// Direction-of-badness: drop adaptive anomalies that deviated in the
+	// harmless direction for their rule (e.g. latency/error rate FALLING).
+	// Runs before FDR so wrong-direction firings don't consume acceptance.
+	// Built per-cycle so config hot-reloads take effect.
+	directions := make(map[string]string, len(cfg.Detection.AdaptiveMetrics))
+	for _, am := range cfg.Detection.AdaptiveMetrics {
+		if am.Direction != "" {
+			directions[am.Name] = am.Direction
+		}
+	}
+	var dirDropped int
+	allAnomalies, dirDropped = detection.FilterByDirection(allAnomalies, directions)
+	if dirDropped > 0 {
+		metrics.DirectionFiltered.Add(ctx, int64(dirDropped))
+		slog.Info("direction_filtered", "dropped", dirDropped)
+	}
+
+	// Full BH family = adaptive evaluations performed by workers this cycle
+	// (fired or not). Without it FDR corrects over a censored family and
+	// rejects nothing.
+	family := int(results.AdaptiveSeriesTested)
+	accepted, rejected := fdr.Apply(allAnomalies, family)
 	metrics.FDRAccepted.Add(ctx, int64(len(accepted)))
 	metrics.FDRRejected.Add(ctx, int64(rejected))
+	metrics.FDRFamilySize.Record(ctx, results.AdaptiveSeriesTested)
 	if rejected > 0 {
-		slog.Info("fdr_applied", "accepted", len(accepted), "rejected", rejected, "target", cfg.Controller.FDRTarget)
+		slog.Info("fdr_applied", "accepted", len(accepted), "rejected", rejected, "family", family, "target", cfg.Controller.FDRTarget)
 	}
 
 	for _, a := range accepted {

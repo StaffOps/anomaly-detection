@@ -122,7 +122,7 @@ func makeAnomaly(detector string, score float64) *Anomaly {
 
 func TestFDR_Apply_EmptyInput(t *testing.T) {
 	fdr := NewFDR(0.05)
-	accepted, rejected := fdr.Apply(nil)
+	accepted, rejected := fdr.Apply(nil, 0)
 	if len(accepted) != 0 {
 		t.Errorf("empty input: got %d accepted, want 0", len(accepted))
 	}
@@ -138,7 +138,7 @@ func TestFDR_Apply_OnlyStatic_AllPassThrough(t *testing.T) {
 		makeAnomaly("static", 3.0),
 		makeAnomaly("pattern", 4.0),
 	}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 3 {
 		t.Errorf("all static/pattern: got %d accepted, want 3", len(accepted))
 	}
@@ -151,7 +151,7 @@ func TestFDR_Apply_SingleAdaptive_HighZ_Accepted(t *testing.T) {
 	fdr := NewFDR(0.05)
 	// z=5.0 → p≈5.7e-7, BH critical = (1/1)*0.05 = 0.05. p < critical → accepted.
 	input := []*Anomaly{makeAnomaly("adaptive", 5.0)}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 1 {
 		t.Errorf("single high-z adaptive: got %d accepted, want 1", len(accepted))
 	}
@@ -164,7 +164,7 @@ func TestFDR_Apply_SingleAdaptive_LowZ_Rejected(t *testing.T) {
 	fdr := NewFDR(0.05)
 	// z=1.0 → p≈0.317, BH critical = (1/1)*0.05 = 0.05. p > critical → rejected.
 	input := []*Anomaly{makeAnomaly("adaptive", 1.0)}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 0 {
 		t.Errorf("single low-z adaptive: got %d accepted, want 0", len(accepted))
 	}
@@ -193,7 +193,7 @@ func TestFDR_Apply_MultipleAdaptive_FiltersWeakOnes(t *testing.T) {
 		makeAnomaly("adaptive", 2.0),
 		makeAnomaly("adaptive", 1.0),
 	}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 2 {
 		t.Errorf("mixed z-scores: got %d accepted, want 2", len(accepted))
 	}
@@ -208,7 +208,7 @@ func TestFDR_Apply_AllVeryHighZ_AllAccepted(t *testing.T) {
 	for i := range input {
 		input[i] = makeAnomaly("adaptive", 6.0+float64(i))
 	}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 10 {
 		t.Errorf("all high-z: got %d accepted, want 10", len(accepted))
 	}
@@ -233,7 +233,7 @@ func TestFDR_Apply_AllMarginalZ_MostRejected(t *testing.T) {
 	for i := range input {
 		input[i] = makeAnomaly("adaptive", 1.5) // p≈0.134
 	}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 0 {
 		t.Errorf("all marginal z=1.5: got %d accepted, want 0", len(accepted))
 	}
@@ -250,7 +250,7 @@ func TestFDR_Apply_MixedAdaptiveAndStatic(t *testing.T) {
 		makeAnomaly("adaptive", 5.0), // significant → accepted
 		makeAnomaly("adaptive", 0.5), // p≈0.617 → rejected
 	}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	// Static + pattern (2) + adaptive survivors.
 	// m=2 adaptive. z=5→p≈5.7e-7, z=0.5→p≈0.617.
 	// Sorted: [5.7e-7, 0.617]. BH criticals: [0.025, 0.05].
@@ -271,7 +271,7 @@ func TestFDR_Apply_Target1_AllAccepted(t *testing.T) {
 		makeAnomaly("adaptive", 0.5),
 		makeAnomaly("adaptive", 1.0),
 	}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 3 {
 		t.Errorf("target=1.0: got %d accepted, want 3", len(accepted))
 	}
@@ -285,7 +285,7 @@ func TestFDR_Apply_Target0_UsesDefault005(t *testing.T) {
 	// Constructor clamps to 0.05. Verify behavior matches target=0.05.
 	// z=5 → accepted at target=0.05.
 	input := []*Anomaly{makeAnomaly("adaptive", 5.0)}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 1 {
 		t.Errorf("target=0 (clamped to 0.05): got %d accepted, want 1", len(accepted))
 	}
@@ -298,7 +298,7 @@ func TestFDR_Apply_ZeroScore_Rejected(t *testing.T) {
 	fdr := NewFDR(0.05)
 	// z=0 → p=1.0. BH critical = (1/1)*0.05 = 0.05. 1.0 > 0.05 → rejected.
 	input := []*Anomaly{makeAnomaly("adaptive", 0)}
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 	if len(accepted) != 0 {
 		t.Errorf("z=0: got %d accepted, want 0", len(accepted))
 	}
@@ -312,8 +312,8 @@ func TestFDR_Apply_NegativeScores_SameAsPositive(t *testing.T) {
 	posInput := []*Anomaly{makeAnomaly("adaptive", 5.0)}
 	negInput := []*Anomaly{makeAnomaly("adaptive", -5.0)}
 
-	posAccepted, posRejected := fdr.Apply(posInput)
-	negAccepted, negRejected := fdr.Apply(negInput)
+	posAccepted, posRejected := fdr.Apply(posInput, 0)
+	negAccepted, negRejected := fdr.Apply(negInput, 0)
 
 	if len(posAccepted) != len(negAccepted) {
 		t.Errorf("positive z=%d accepted vs negative z=%d accepted; should be equal", len(posAccepted), len(negAccepted))
@@ -335,7 +335,7 @@ func TestFDR_Apply_LargeBatch_CorrectBH(t *testing.T) {
 		input[i] = makeAnomaly("adaptive", 1.5) // p≈0.134
 	}
 
-	accepted, rejected := fdr.Apply(input)
+	accepted, rejected := fdr.Apply(input, 0)
 
 	// m=400. The 200 with z=5 have p≈5.7e-7.
 	// The 200 with z=1.5 have p≈0.134.
@@ -353,11 +353,80 @@ func TestFDR_Apply_LargeBatch_CorrectBH(t *testing.T) {
 
 func TestFDR_Apply_EmptySlice(t *testing.T) {
 	fdr := NewFDR(0.05)
-	accepted, rejected := fdr.Apply([]*Anomaly{})
+	accepted, rejected := fdr.Apply([]*Anomaly{}, 0)
 	if len(accepted) != 0 {
 		t.Errorf("empty slice: got %d accepted, want 0", len(accepted))
 	}
 	if rejected != 0 {
 		t.Errorf("empty slice: got %d rejected, want 0", rejected)
+	}
+}
+
+// ─── Full-family (F0) tests ──────────────────────────────────────────────────
+//
+// These are the point of F0: workers ship only fired anomalies, but the BH
+// family is the full number of adaptive evaluations. Correcting over the
+// censored (fired-only) family is what made the original FDR reject ~0.
+
+func TestFDR_Apply_FullFamily_MarginalAnomalyRejected(t *testing.T) {
+	fdr := NewFDR(0.05)
+	// One marginal anomaly fired (z=3.0 → p≈0.0027). In the censored family
+	// (m=1) it passes: BH critical = (1/1)*0.05 = 0.05 ≥ 0.0027.
+	// But the cycle actually ran 400 adaptive tests. With m=400 the critical
+	// for the single candidate (k=1) is (1/400)*0.05 = 1.25e-4 < 0.0027 → reject.
+	input := []*Anomaly{makeAnomaly("adaptive", 3.0)}
+
+	acceptedCensored, rejectedCensored := fdr.Apply(input, 0)
+	if len(acceptedCensored) != 1 || rejectedCensored != 0 {
+		t.Fatalf("censored family (m=1): got accepted=%d rejected=%d, want 1/0 (baseline for the point being made)", len(acceptedCensored), rejectedCensored)
+	}
+
+	acceptedFull, rejectedFull := fdr.Apply(input, 400)
+	if len(acceptedFull) != 0 || rejectedFull != 1 {
+		t.Errorf("full family (m=400): got accepted=%d rejected=%d, want 0/1 — the marginal anomaly must be rejected once the true family size is known", len(acceptedFull), rejectedFull)
+	}
+}
+
+func TestFDR_Apply_FullFamily_StrongAnomalySurvives(t *testing.T) {
+	fdr := NewFDR(0.05)
+	// z=6 → p≈2e-9. Even against a family of 400, k=1 critical = 1.25e-4,
+	// and 2e-9 < 1.25e-4 → the genuinely strong signal still passes.
+	input := []*Anomaly{makeAnomaly("adaptive", 6.0)}
+	accepted, rejected := fdr.Apply(input, 400)
+	if len(accepted) != 1 || rejected != 0 {
+		t.Errorf("strong anomaly vs large family: got accepted=%d rejected=%d, want 1/0", len(accepted), rejected)
+	}
+}
+
+func TestFDR_Apply_FamilySmallerThanFired_FallsBackToFired(t *testing.T) {
+	fdr := NewFDR(0.05)
+	// Defensive: if a worker under-reports (totalTests < fired), the family
+	// must not shrink below the candidate count — fall back to len(adaptive).
+	input := []*Anomaly{
+		makeAnomaly("adaptive", 5.0),
+		makeAnomaly("adaptive", 5.0),
+		makeAnomaly("adaptive", 5.0),
+	}
+	accepted, rejected := fdr.Apply(input, 1) // 1 < 3 → m clamps to 3
+	if len(accepted) != 3 || rejected != 0 {
+		t.Errorf("family < fired: got accepted=%d rejected=%d, want 3/0 (clamped to fired count)", len(accepted), rejected)
+	}
+}
+
+func TestFDR_Apply_FullFamily_StaticStillPassesThrough(t *testing.T) {
+	fdr := NewFDR(0.05)
+	// Static/pattern must be immune to family size — they are not part of the
+	// adaptive multiple-comparison family.
+	input := []*Anomaly{
+		makeAnomaly("static", 3.0),
+		makeAnomaly("pattern", 3.0),
+		makeAnomaly("adaptive", 3.0), // marginal → rejected against m=400
+	}
+	accepted, rejected := fdr.Apply(input, 400)
+	if len(accepted) != 2 {
+		t.Errorf("full family with static: got %d accepted, want 2 (static+pattern survive)", len(accepted))
+	}
+	if rejected != 1 {
+		t.Errorf("full family with static: got %d rejected, want 1 (the marginal adaptive)", rejected)
 	}
 }
