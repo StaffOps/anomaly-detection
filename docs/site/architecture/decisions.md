@@ -197,3 +197,62 @@ building on it):
 univariate detector achieving competitive precision/recall on the curated golden
 signals — then "commodity" would be too harsh. Considered unlikely given the
 multiple-comparisons math, but it is the falsifier.
+
+---
+
+## Decision 9: Local homolog build deployed; CI publishes the versioned image as the record
+
+**Choice**: The deployed image is the **locally-built** multi-arch image in Harbor
+(`labs/staffops-anomaly-detection-*:<version>`). The CI `release.yml` (on a `v*` git
+tag) builds and publishes the **same source** to Docker Hub as the immutable versioned
+image + GitHub Release. The cluster keeps running the Harbor build; Docker Hub is the
+provenance/record, not the deploy source.
+
+**Justification:**
+
+1. We homologate the local build *first*, then push the code that was validated. The
+   pushed commit (and the `v*` tag CI builds from) is exactly the homologated source —
+   the compiled binary is identical (post-homolog diffs are comments/tests only, which
+   don't compile into the runtime image).
+2. Repointing the deploy at Docker Hub adds a pull-path/registry-auth change with **no
+   behavioural difference** — the running code is already the released code.
+3. "Local is always ahead of what's pushed; we push *because* we homologated locally"
+   (2026-07-19). The official path receives already-validated code.
+
+**Trade-offs:**
+
+| Cost | Reality |
+|------|---------|
+| Two registries (Harbor deploy, Docker Hub record) | Intentional. Harbor = what runs (homologated), Docker Hub = versioned provenance |
+| Not GitOps-pure (deploy image ≠ CI artifact) | Acceptable for homolog; revisit when exiting dry-run / going to a fresh cluster that has no local Harbor build |
+
+**Do not "fix" this by repointing the gotmpl at Docker Hub** unless the goal is
+specifically registry consolidation — it changes provenance, not behaviour.
+
+---
+
+## Decision 10: `controller/config.yaml` (repo) and the gotmpl `detection:` (deploy) are allowed to diverge
+
+**Choice**: The **deployed** detection rule set lives in the per-cluster Helm values
+override (`k8s-setup/.../anomaly-detection/values.yaml.gotmpl`, `detection:`). The repo's
+`controller/config.yaml` is the **local-dev / replay reference** set. They are NOT kept
+in lockstep, and that is by design.
+
+**Justification:**
+
+1. The deployed set is tuned per cluster (18+ rules, Group A, per-workload suppression,
+   direction-of-badness) and is GitOps-managed where the cluster config lives.
+2. The repo `config.yaml` runs the local docker-compose stack and `--replay`; a smaller
+   representative set is fine there.
+3. Same philosophy as Decision 9: the deployed artifact is the source of truth for what
+   runs; the repo file is a reference, not a mirror.
+
+**Trade-offs:**
+
+| Cost | Reality |
+|------|---------|
+| Rule tuning in `config.yaml` does NOT reach the cluster | Correct — cluster tuning goes in the gotmpl. Editing `config.yaml` only affects local/replay |
+| Reader might expect them to match | Mitigated by this decision + the header note in both files |
+
+**The gotmpl `detection:` block is the deploy source of truth.** Do not treat the
+repo↔deploy difference as drift to reconcile.

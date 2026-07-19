@@ -60,3 +60,39 @@ Phases 1-4 constroem e validam o harness. **Phase 5 é o objetivo** — o númer
 destrava o roadmap. Phase 6 fecha o loop: o número volta pros docs de decisão e
 hipótese, transformando "não sei" em evidência. Não declarar P0.1 done antes da
 Phase 5 produzir números reais (não só "o harness compila e testa").
+
+## Retomada — achados práticos (2026-07-18) + testes mínimos
+
+Rodadas manuais do harness in-cluster (Job on-demand, imagem 0.11.0) contra dados
+reais. **Conclusão: o encanamento roda** (harness executa, gera JSON, FDR filtra —
+155/420 rejeições observadas), **mas o número de recall não sai** por dois defeitos
+concretos na cadeia injeção → detecção → scorer. Ordem de retomada:
+
+### Blocker 1 — a falta injetada não dispara de forma confiável (CENTRAL)
+- 3 tentativas (namespace amplo → 1372 séries planas; alvo único de alta variância
+  `DataPlatform.People`) deram **recall=0**: a série injetada não virou anomalia,
+  apesar do ground truth ser registrado (a falta foi aplicada).
+- Causa provável: `faultSpike`/`faultStep` escalam por `seriesStddev` (série plana →
+  perturbação ~0), e/ou o EWMA do baseline in-mem absorve a falta sustentada (só o 1º
+  tick fica anômalo), e/ou magnitude vs piso de stddev.
+- **Teste mínimo (unit, sem cluster)**: injetar falta numa `TimeSeries` sintética de
+  stddev conhecido → 1 tick de detecção no in-mem baseline → **assertar z esperado e
+  IsAnomaly=true**. Isola injeção→z-score.
+
+### Blocker 2 — casamento detectado ↔ ground truth no scorer
+- Na rodada de alvo único: 3 anomalias detectadas contadas como **FP**, a injetada como
+  **FN**. O fingerprint do detectado pode não bater com o do ground truth.
+- **Teste mínimo (unit)**: ground truth na série X + anomalia detectada na série X →
+  **assertar TP** (não FP/FN). Verifica `Fingerprint(metricName, labels)` nos dois lados.
+
+### Blocker 3 — scoring não renderiza no markdown
+- `report_md.go` não escreve o bloco Injection/Scoring (só o JSON tem).
+- **Teste mínimo**: golden test com injeção ativa → bloco de scoring presente no MD.
+
+### Medição (Phase 5, depois dos 3 blockers)
+- Janela limpa + faltas conhecidas em séries **com variância**. Rodar 2x: `fdr_target=1.0`
+  (off) vs `0.05` (on). Esperado: recall ~igual, FP menor com FDR on. Esse é o número.
+- Infra já provada: Job on-demand + extração do JSON (ver histórico de 2026-07-18).
+
+**Não declarar P0.1 done** até os 3 blockers terem teste unit verde E a Phase 5 produzir
+recall/FP reais.
