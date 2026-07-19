@@ -128,6 +128,37 @@ func (r *Report) WriteMarkdown(w io.Writer) error {
 		p("")
 	}
 
+	// Injection scoring (only populated when --inject was used).
+	if r.Scoring != nil {
+		s := r.Scoring
+		p("## Injection Scoring")
+		p("")
+		p("| Metric | Value |")
+		p("|--------|-------|")
+		p("| Precision | %.3f |", s.Precision)
+		p("| Recall | %.3f |", s.Recall)
+		p("| F1 | %.3f |", s.F1)
+		p("| TP / FP / FN | %d / %d / %d |", s.TP, s.FP, s.FN)
+		p("")
+		if len(s.RecallByType) > 0 {
+			p("| Fault type | Recall |")
+			p("|------------|--------|")
+			ftypes := make([]string, 0, len(s.RecallByType))
+			for k := range s.RecallByType {
+				ftypes = append(ftypes, k)
+			}
+			sort.Strings(ftypes)
+			for _, k := range ftypes {
+				p("| %s | %.3f |", k, s.RecallByType[k])
+			}
+			p("")
+		}
+		if s.FPCaveat != "" {
+			p("> %s", s.FPCaveat)
+			p("")
+		}
+	}
+
 	// Execution metrics
 	p("## Execution")
 	p("")

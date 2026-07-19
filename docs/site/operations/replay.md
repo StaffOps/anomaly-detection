@@ -42,6 +42,22 @@ controller --replay \
 | `--warmup-fraction` | `0.2` | Fraction of window used to warm baselines |
 | `--max-range` | `7d` | Maximum allowed window size |
 | `--max-anomalies` | `1000` | Cap anomalies in report |
+| `--inject` | `` | Path to a synthetic-fault injection profile (empty/`none` = off) |
+
+!!! note "Detection parity with production"
+    The in-memory baseline mirrors the production baseline **exactly**, including
+    detecting the z-score against the *pre-update* stats and the stddev floor. (It
+    did not before 2026-07-19 — it detected on post-update stats and under-fired;
+    replay reports from before that fix under-count anomalies.)
+
+### Synthetic fault injection (`--inject`)
+
+Pass an injection profile to perturb series in-memory (spike/ramp/step/silence) over
+a window and score detection against the injected ground truth. The report then carries
+an **Injection Scoring** block (precision/recall/F1, TP/FP/FN, recall-by-type) in both
+the JSON and the markdown. This is the basis of the P0.1 recall/FP measurement — see
+`specs/synthetic-injection/`. Faults scale by the series' own stddev, so target
+series that actually vary (a flat series can't be perturbed meaningfully).
 
 ## How It Works
 

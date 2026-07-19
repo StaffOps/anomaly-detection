@@ -8,7 +8,22 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ## [Unreleased]
 
-_Nothing yet._
+### replay
+
+**Fixed — replay in-mem baseline under-detected vs production (P0.1 blocker, 2026-07-19)**
+- `internal/replay/inmem_baseline.go` computed the z-score **after** folding the
+  sample into EWMA/stddev (dampened numerator — the EWMA already moved toward the
+  value — and a denominator inflated by the spike itself) and had **no stddev
+  floor** — unlike production (`internal/baseline/store.go`), which detects against
+  the **prior** baseline with a floor. Replay therefore under-detected, so injected
+  and real faults under-fired. Rewritten to mirror production exactly (z on
+  pre-update stats + floor + anti-poison gate); the warm-up off-by-one is aligned too
+  (`stats.Count < WarmUpSamples`). Test: `TestInMemStore_SpikeFiresAfterWarmup`.
+- **Consequence**: prior replay numbers came from the under-detecting path and are
+  not trustworthy — remeasure. This unblocks the P0.1 recall/FP measurement
+  (`specs/synthetic-injection/`).
+- The replay markdown report now renders an **Injection Scoring** block
+  (precision/recall/F1, TP/FP/FN, recall-by-type) — previously JSON-only.
 
 ## controller — [0.11.0] — 2026-07-18
 

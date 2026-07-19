@@ -96,3 +96,25 @@ concretos na cadeia injeção → detecção → scorer. Ordem de retomada:
 
 **Não declarar P0.1 done** até os 3 blockers terem teste unit verde E a Phase 5 produzir
 recall/FP reais.
+
+### Status 2026-07-19 — blockers resolvidos (harness agora fiel)
+
+- **Blocker 1 ✅ RESOLVIDO** — causa raiz era um bug: `internal/replay/inmem_baseline.go`
+  calculava o z-score **depois** de dobrar a amostra no EWMA/stddev (numerador
+  amortecido, denominador inflado pelo próprio spike) e **sem piso de stddev** — ao
+  contrário da produção (`internal/baseline/store.go`), que detecta contra o baseline
+  **anterior** com piso. O replay sub-detectava vs produção, por isso faltas injetadas
+  não disparavam. Reescrito pra espelhar produção (z pré-update + piso + gate anti-poison).
+  Teste: `TestInMemStore_SpikeFiresAfterWarmup`. (Off-by-one de warm-up também alinhado:
+  `stats.Count < WarmUpSamples`, como produção.)
+- **Blocker 2 ✅ NÃO ERA BUG** — o scorer está correto (`TestScore_AllTP`) e
+  `toAnomalyEntry` preserva Metric+Labels crus, então o fingerprint do detectado bate
+  com o do ground truth. O "FP em vez de TP" era 100% sintoma do Blocker 1 (nada
+  injetado disparava).
+- **Blocker 3 ✅ RESOLVIDO** — `report_md.go` agora renderiza o bloco "Injection Scoring"
+  (precision/recall/F1/TP/FP/FN + recall por tipo) no markdown, não só no JSON.
+
+**Implicação**: todos os números de replay anteriores (incl. os 286/155/420 de
+2026-07-18) vieram de um replay que **sub-detectava** — não são confiáveis. Refazer a
+medição com o harness corrigido é a Phase 5. Precisa de: imagem nova (com o fix) +
+run in-cluster com `--inject`, FDR off vs on.

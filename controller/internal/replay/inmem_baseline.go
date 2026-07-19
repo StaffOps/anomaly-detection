@@ -72,51 +72,60 @@ func (s *InMemStore) Evaluate(_ context.Context, metric string, labels map[strin
 		}, nil
 	}
 
-	// Update EWMA + Welford running mean / stddev.
-	alpha := s.cfg.EWMAAlpha
-	newEWMA := alpha*value + (1-alpha)*stats.EWMA
-
-	newCount := stats.Count + 1
-	delta := value - stats.Mean
-	newMean := stats.Mean + delta/float64(newCount)
-	delta2 := value - newMean
-	m2 := stats.Stddev * stats.Stddev * float64(stats.Count)
-	newM2 := m2 + delta*delta2
-	var newStddev float64
-	if newCount > 1 {
-		newStddev = math.Sqrt(newM2 / float64(newCount))
+	// Z-score against the CURRENT baseline (BEFORE any update) — matches
+	// production (internal/baseline/store.go), including the stddev floor.
+	// Detecting on POST-update stats (as this store used to) dampens the
+	// numerator — the EWMA has already moved toward `value` — and inflates the
+	// denominator — the stddev now includes the spike — so injected/real faults
+	// under-fire in replay vs production. That gap is exactly what broke the
+	// P0.1 recall measurement.
+	stddev := stats.Stddev
+	if stddev == 0 {
+		floor := math.Max(math.Abs(stats.EWMA)*0.01, math.Abs(value)*0.01)
+		stddev = math.Max(floor, 1e-9)
 	}
+	zscore := math.Abs(value-stats.EWMA) / stddev
 
-	s.series[key] = &baseline.Stats{
-		Mean:       newMean,
-		Stddev:     newStddev,
-		EWMA:       newEWMA,
-		Count:      newCount,
-		LastUpdate: time.Now().UTC(),
-	}
+	// Anti-poisoning gate (production parity): skip the baseline update when the
+	// sample is extremely anomalous (z > poison_threshold). 0 disables it.
+	poisoned := s.cfg.PoisonThreshold > 0 && zscore > s.cfg.PoisonThreshold
+	isWarmingUp := stats.Count < int64(s.cfg.WarmUpSamples)
 
-	if newCount < int64(s.cfg.WarmUpSamples) {
+	if !poisoned || isWarmingUp {
+		alpha := s.cfg.EWMAAlpha
+		newEWMA := alpha*value + (1-alpha)*stats.EWMA
+		newCount := stats.Count + 1
+		delta := value - stats.Mean
+		newMean := stats.Mean + delta/float64(newCount)
+		delta2 := value - newMean
+		m2 := stats.Stddev * stats.Stddev * float64(stats.Count)
+		newM2 := m2 + delta*delta2
+		var newStddev float64
+		if newCount > 1 {
+			newStddev = math.Sqrt(newM2 / float64(newCount))
+		}
+		s.series[key] = &baseline.Stats{
+			Mean:       newMean,
+			Stddev:     newStddev,
+			EWMA:       newEWMA,
+			Count:      newCount,
+			LastUpdate: time.Now().UTC(),
+		}
+		if isWarmingUp {
+			return &baseline.Result{
+				IsWarmingUp: true, Value: value, Mean: newMean, Stddev: newStddev, EWMA: newEWMA,
+			}, nil
+		}
 		return &baseline.Result{
-			IsWarmingUp: true,
-			Value:       value,
-			Mean:        newMean,
-			Stddev:      newStddev,
-			EWMA:        newEWMA,
+			IsAnomaly: zscore > s.cfg.ZScoreThreshold, ZScore: zscore,
+			Value: value, Mean: newMean, Stddev: newStddev, EWMA: newEWMA,
 		}, nil
 	}
 
-	var zscore float64
-	if newStddev > 0 {
-		zscore = math.Abs(value-newEWMA) / newStddev
-	}
-
+	// Poisoned: return the anomaly WITHOUT updating the baseline.
 	return &baseline.Result{
-		IsAnomaly: zscore > s.cfg.ZScoreThreshold,
-		ZScore:    zscore,
-		Value:     value,
-		Mean:      newMean,
-		Stddev:    newStddev,
-		EWMA:      newEWMA,
+		IsAnomaly: zscore > s.cfg.ZScoreThreshold, ZScore: zscore,
+		Value: value, Mean: stats.Mean, Stddev: stats.Stddev, EWMA: stats.EWMA,
 	}, nil
 }
 

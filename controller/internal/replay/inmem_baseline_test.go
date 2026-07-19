@@ -36,19 +36,44 @@ func TestInMemStore_FirstSampleWarmingUp(t *testing.T) {
 func TestInMemStore_WarmupCompletes(t *testing.T) {
 	s := newTestStore() // warm-up=5
 	labels := map[string]string{"pod": "p1"}
-	for i := 0; i < 4; i++ {
+	// Production parity: isWarmingUp is checked on the PRE-update count
+	// (stats.Count < WarmUpSamples), so samples 1..5 warm up and detection
+	// starts on the 6th.
+	for i := 0; i < 5; i++ {
 		r, _ := s.Evaluate(context.Background(), "cpu", labels, 0.5)
 		if !r.IsWarmingUp {
 			t.Errorf("sample %d should still be warming up", i+1)
 		}
 	}
 	r, _ := s.Evaluate(context.Background(), "cpu", labels, 0.5)
-	// 5th sample → warmed up. Variance is 0 → no anomaly possible.
+	// 6th sample → warmed up. Variance is 0 (stddev floor applies) → no anomaly.
 	if r.IsWarmingUp {
-		t.Errorf("5th sample should not be warming up")
+		t.Errorf("6th sample should not be warming up")
 	}
 	if r.IsAnomaly {
 		t.Errorf("zero-variance series cannot be anomaly")
+	}
+}
+
+// TestInMemStore_SpikeFiresAfterWarmup is the P0.1 Blocker-1 guard: a clear
+// spike on a warmed baseline MUST fire. The store used to compute the z-score
+// AFTER folding the sample into EWMA/stddev, which dampened it below threshold —
+// injected/real faults under-fired in replay vs production. Detecting on the
+// pre-update baseline (production parity) fixes it.
+func TestInMemStore_SpikeFiresAfterWarmup(t *testing.T) {
+	s := newTestStore() // warm-up=5, threshold=3
+	labels := map[string]string{"pod": "p1"}
+	for _, v := range []float64{1.0, 1.02, 0.98, 1.01, 0.99, 1.0, 1.03, 0.97} {
+		if _, err := s.Evaluate(context.Background(), "cpu", labels, v); err != nil {
+			t.Fatalf("warmup evaluate: %v", err)
+		}
+	}
+	r, _ := s.Evaluate(context.Background(), "cpu", labels, 3.0) // clear spike on a ~1.0 baseline
+	if !r.IsAnomaly {
+		t.Errorf("spike to 3.0 must fire, got z=%.2f (threshold %.1f)", r.ZScore, s.cfg.ZScoreThreshold)
+	}
+	if r.ZScore <= s.cfg.ZScoreThreshold {
+		t.Errorf("z-score should clear threshold %.1f, got %.2f", s.cfg.ZScoreThreshold, r.ZScore)
 	}
 }
 
