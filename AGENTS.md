@@ -195,12 +195,14 @@ type CorrelatedAlert struct {
 Main config at `controller/config.yaml` — supports `${ENV_VAR:default}` substitution.
 **Never hardcode endpoints, namespaces, or org-specific values** — always use env vars.
 
-> **Deploy vs local rule set (Decision 10)**: `controller/config.yaml` here is the
-> **local-dev / replay reference** set. The **deployed** detection rules live in the
-> per-cluster Helm values override (`k8s-setup/.../anomaly-detection/values.yaml.gotmpl`,
-> `detection:`) — that gotmpl is the source of truth for what runs. They diverge **by
-> design**; editing `config.yaml` affects local/replay only, not the cluster. See
-> `docs/site/architecture/decisions.md` Decision 10.
+> **Deploy vs local rule set (Decision 10)**: `controller/config.yaml` here is
+> **for local testing (docker-compose) and `--replay` only**. The **deployed**
+> detection rules — what runs on the cluster — live in the per-cluster Helm values
+> override (`k8s-setup/.../anomaly-detection/values.yaml.gotmpl`, `detection:`) — that
+> gotmpl is the source of truth. Editing `config.yaml` affects local/replay only, not
+> the cluster. They diverge **by design**. ⚠️ **If unsure which file to edit for a
+> rule change, ask first — don't guess.** See `docs/site/architecture/decisions.md`
+> Decision 10.
 
 ### Required environment variables
 

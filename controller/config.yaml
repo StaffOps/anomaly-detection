@@ -4,11 +4,14 @@
 #
 # See `.env.example` at the repo root for the full list of required vars.
 #
-# SCOPE (Decision 10): this is the LOCAL-DEV / REPLAY reference rule set. The
-# DEPLOYED detection rules live in the per-cluster Helm override
-# (k8s-setup/.../anomaly-detection/values.yaml.gotmpl, `detection:`) — that gotmpl
-# is the source of truth for what runs. Editing rules here affects local/replay
-# only; they diverge from the deployed set by design.
+# SCOPE (Decision 10): this file is FOR LOCAL TESTING (docker-compose) and
+# `--replay` ONLY. The DEPLOYED detection rules — what actually runs on the
+# cluster — live in the per-cluster Helm override
+# (k8s-setup/.../anomaly-detection/values.yaml.gotmpl, `detection:`). That gotmpl
+# is the source of truth for the cluster; editing rules HERE affects local/replay
+# only and does NOT reach the cluster. They diverge by design.
+#
+# ⚠️ If you are unsure WHICH file to edit for a rule change, ASK first — don't guess.
 
 cluster: ${CLUSTER_NAME:unknown}
 
