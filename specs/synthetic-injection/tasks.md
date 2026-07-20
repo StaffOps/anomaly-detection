@@ -118,3 +118,35 @@ recall/FP reais.
 2026-07-18) vieram de um replay que **sub-detectava** — não são confiáveis. Refazer a
 medição com o harness corrigido é a Phase 5. Precisa de: imagem nova (com o fix) +
 run in-cluster com `--inject`, FDR off vs on.
+
+### Phase 5 — primeira medição real (2026-07-19/20)
+
+Rodada in-cluster com o harness corrigido (imagem `...:0.11.0-p0meas`): 2 Jobs on-demand,
+`--replay --inject`, spike (magnitude 12) em 6 serviços de alta variância
+(`request_rate_by_service`) + `cpu_by_pod` como ruído ambiente, `--max-anomalies=200000`
+(sem cap), FDR **off** (`fdr_target=1.0`) vs **on** (`0.05`).
+
+| | FDR off | FDR on |
+|---|---|---|
+| Recall (faltas injetadas) | **1.000** (22/22) | **1.000** (21/21) |
+| Anomalias totais | 3531 | 3435 |
+| FP | 3509 | 3414 |
+| FDR rejeitou | 0 | 96 (**~2,7% de FP**) |
+
+**Aprendizados (evidência, não veredito — o veredito do gate é decisão à parte):**
+
+1. **O FDR preserva recall.** Todas as faltas injetadas sobreviveram ao filtro
+   (recall 1.000 com e sem FDR). O F0 não derruba sinal real. **Resultado sólido.**
+2. **A redução de FP do FDR depende do perfil de ruído / rule set.** Aqui foi só
+   **2,7%** — porque `cpu_by_pod` tem variância *genuína* (z alto), o BH corretamente
+   o mantém e só corta o tail marginal (96 séries). Em produção, com o set de 18 regras
+   tunadas, o mesmo FDR rejeita **18–30%**. Ou seja, **o benefício do FDR não é uma
+   constante — escala com quanto ruído *marginal* (z pouco acima de 3) o rule set gera.**
+3. **Corolário para o desenho da medição:** medir FP com `cpu_by_pod` **subestima** o
+   valor do FDR vs produção. Uma medição production-representativa deve usar as 18 regras
+   tunadas do gotmpl como ambiente.
+
+**Pendente (decisão de julgamento, candidata ao Fable):**
+- Re-medir com o rule set de produção para o número de FP representativo.
+- Veredito sobre Decision 8 ("detector é commodity") e o critério de recall/FP para
+  exit-dry-run. NÃO decidido aqui — só a evidência está registrada.

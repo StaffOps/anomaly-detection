@@ -94,6 +94,9 @@ The controller applies a [Benjamini-Hochberg](https://en.wikipedia.org/wiki/Fals
 
     Workers therefore report `adaptive_series_tested` (evaluations past warm-up) on each `JobResults`, and the controller passes it as `m`. A marginal anomaly (z≈3.0) that would pass against `m=1` is correctly rejected once the cycle's ~400 tests are counted, while genuinely strong signals survive. The gauge `staffops_ad_detection_fdr_family_size` exposes `m` — a value near 0 while anomalies fire means the family has collapsed to the censored case. See [metrics reference](../reference/metrics.md#staffops_ad_detection_fdr_family_size).
 
+!!! info "How much FDR cuts depends on the rule set (measured 2026-07-19)"
+    FDR only removes the **marginal** firings (z just above the threshold). A synthetic-injection replay confirmed it **preserves recall** (injected faults survive), but the FP reduction is not a constant — it scales with how much *marginal* noise a rule set produces. On per-pod CPU (genuine, high-z variance) FDR cut only ~3%; on the tuned service-level rule set deployed in homolog it rejects ~18–30%. Rules that fire on strong, real deviations barely feed the FDR; rules that graze the threshold across many series feed it a lot. See `specs/synthetic-injection/`.
+
 ## Direction-of-badness
 
 The z-score is symmetric — `|z| > 3` fires whether a metric spikes **up** or **down**. But most metrics are only anomalous one way: latency, error rate, queue depth, and GC heap matter when they **rise**; ready replicas and (arguably) throughput when they **fall**. Without a direction, the detector alerts even when a metric *improves* (latency dropped, errors fell) — a pure false positive.
