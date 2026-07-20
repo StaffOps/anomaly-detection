@@ -77,6 +77,29 @@ func TestInMemStore_SpikeFiresAfterWarmup(t *testing.T) {
 	}
 }
 
+// TestInMemStore_PoisonSkipsUpdate covers the anti-poisoning gate (production
+// parity): a sample with z > poison_threshold fires but does NOT update the
+// baseline, so an extreme spike can't drag the mean until it reads as normal.
+func TestInMemStore_PoisonSkipsUpdate(t *testing.T) {
+	s := NewInMemStore(config.Baseline{
+		EWMAAlpha: 0.3, ZScoreThreshold: 3.0, WarmUpSamples: 3, PoisonThreshold: 4.0,
+	})
+	labels := map[string]string{"pod": "p1"}
+	for _, v := range []float64{1.0, 1.02, 0.98, 1.0} { // warm past warm-up=3
+		if _, err := s.Evaluate(context.Background(), "cpu", labels, v); err != nil {
+			t.Fatalf("warmup: %v", err)
+		}
+	}
+	r, _ := s.Evaluate(context.Background(), "cpu", labels, 100.0) // z >> poison_threshold
+	if !r.IsAnomaly {
+		t.Fatalf("extreme spike should fire, z=%.2f", r.ZScore)
+	}
+	// Poisoned → baseline not updated → the returned EWMA stays the pre-spike ~1.0.
+	if r.EWMA > 1.5 {
+		t.Errorf("poisoned sample must not drag the baseline; EWMA=%.3f (should stay ~1.0)", r.EWMA)
+	}
+}
+
 func TestInMemStore_DetectsSpike(t *testing.T) {
 	// Use a larger warmup window so Welford's variance estimate is well
 	// established before we throw an outlier at it. Otherwise the outlier

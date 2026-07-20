@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,6 +104,25 @@ func TestWriteMarkdown_Golden(t *testing.T) {
 	}
 	if !bytes.Equal(buf.Bytes(), expected) {
 		t.Errorf("Markdown output differs from golden file.\nGot:\n%s", buf.String())
+	}
+}
+
+func TestWriteMarkdown_ScoringBlock(t *testing.T) {
+	report := testReport()
+	report.Scoring = &ScoringBlock{
+		Precision: 0.857, Recall: 1.0, F1: 0.923, TP: 6, FP: 1, FN: 0,
+		RecallByType: map[string]float64{"spike": 1.0},
+		FPCaveat:     "FP is an upper-bound",
+	}
+	var buf bytes.Buffer
+	if err := report.WriteMarkdown(&buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"## Injection Scoring", "Recall", "1.000", "6 / 1 / 0", "spike", "upper-bound"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("scoring markdown missing %q\n---\n%s", want, out)
+		}
 	}
 }
 
