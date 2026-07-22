@@ -8,7 +8,141 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ## [Unreleased]
 
+### detection
+
+**Added — `min_value` absolute floor on adaptive rules (P0.1 FP fix, 2026-07-21)**
+- The adaptive z-score is scale-free: it measures how *unusual* a reading is for a
+  series, never whether it is *large enough to matter*. On a gauge that idles near
+  zero the stddev collapses, so a handful of units scores 6–14σ. Measured on the live
+  cluster (6h, 1109 fired alerts), this was the dominant FP source:
+  `http_client_active_requests` alone was **30.7% of all fired alerts** (median z 6.0,
+  median reading **2 in-flight requests** against a baseline of 0.09), with the
+  now-deleted `dotnet_heap_growth` at 23.2% — together 54% of everything.
+  The minimum |z| among these was 3.27, so raising `zscore_threshold` would **not**
+  have helped: they are genuine statistical outliers, just operationally irrelevant.
+- New optional `min_value:` field on adaptive rules. A rule now fires only when the
+  deviation is **both** significant (`|z| > threshold`) **and** the reading crosses
+  the floor. Compared on `|Value|`; omitted or `0` = no floor (backward-compatible);
+  static and log-pattern detections are never floored.
+  Implementation: `internal/detection/floor.go` (`FilterByFloor`), wired in
+  `cmd/controller/main.go` **before** FDR so floored firings don't consume BH
+  acceptance, and mirrored in `internal/replay/engine.go` (reported as
+  `floor_filtered` in the JSON/markdown report).
+- Metric: `staffops_ad_detection_floor_filtered_total`.
+- `controller/config.yaml` (local/replay only) sets `min_value: 20` on
+  `http_client_active_requests`. The **deployed** floors live in the per-cluster Helm
+  values override — see Decision 10.
+- Floor sensitivity measured on 6h of live cluster alerts (1109 fired): floor 5 cuts
+  20.2% of total volume, 10 → 21.8%, **20 → 26.3%**, 50 → 27.9%. Returns saturate
+  past 20, so 20 is the knee.
+
+**Removed — `dotnet_heap_growth`, not replaced (2026-07-22)**
+- The rule alerted on **absolute** .NET heap bytes: not comparable across services
+  (34 MB and 800 MB are both "normal" depending on the pod) and not actionable. It
+  produced 23.2% of all fired alerts over 6h (257), every one with an empty
+  namespace, while the heap-to-memory-limit ratio across the whole .NET fleet
+  measured `q50=0.042`, `q99=0.205`, `max=0.524` — **not one pod anywhere near
+  memory pressure**.
+- A dimensionless heap/limit ratio rule was drafted as the replacement, but every
+  candidate floor sat at or above the observed fleet maximum, so the rule would
+  have shipped permanently silent. A rule that never fires is worse than no rule:
+  it puts "heap monitored" on the coverage list without monitoring anything.
+  Deleted rather than shipped disabled.
+- To reintroduce, derive the threshold from where these workloads actually
+  OOMKill, not from the distribution of healthy pods. The ratio query that
+  resolves cluster/namespace correctly is kept in the gotmpl comment.
+- A `min_value` in MB was considered and rejected as the wrong axis: any absolute
+  floor either cuts a real leak on a small container or admits a large service
+  idling above it.
+
+**Fixed — full rule-set label audit: 86% of alerts had no namespace (2026-07-21)**
+- Swept all 24 rules (8 static, 13 adaptive, 3 log) in the deployed gotmpl, checking
+  each `group_by` against the labels the metric actually carries. 86.0% of fired
+  alerts (954/1109 over 6h) had an empty namespace, matching the dashboard, where
+  `staffops_ad_detection_anomalies_by_workload_total` was **85.8% `namespace="unknown"`**.
+- Root cause is structural: PromQL's `by (cluster, namespace, pod)` **discards**
+  `service_namespace` before the worker ever sees the result, so this cannot be
+  normalized controller-side — it has to be fixed in the query. Verified:
+  `max(http_client_active_requests) by (cluster, namespace, pod)` returns
+  `{pod:...}` and nothing else.
+- Fixes applied, by class:
+    - **OTel SDK / spanmetrics metrics** (`service_namespace`/`eks_cluster` →
+      canonical) via `label_replace`: `error_rate_by_service`,
+      `request_rate_by_service`, `latency_p99_by_service`,
+      `http_error_ratio_by_service`, `http_latency_p99_by_service`,
+      `db_latency_p99_by_service`, `dotnet_threadpool_saturated`,
+      `http_client_queue_time_high`, `http_client_active_requests`.
+    - **Istio** (`destination_workload_namespace` → `namespace`):
+      `istio_5xx_rate_high`, `istio_error_rate_by_workload`.
+    - **Loki** via LogQL `label_format` (no `label_replace` in LogQL; verified
+      against Loki): `error_rate_by_namespace`, `log_volume_by_workload`.
+    - **Label present but never requested**: `otel_collector_queue_size` now groups
+      by `namespace` too (848/867 series carry it).
+    - **Honest reduction**: `otel_collector_dropping_spans` carries neither cluster
+      nor namespace — `group_by` narrowed to `[service_name]` instead of asking for
+      labels that silently resolve to empty.
+- **Corrected a false premise** carried in `controller/config.yaml`: "spanmetrics
+  lack k8s namespace — only service_name available". Spanmetrics carry
+  `service_namespace` on 48553 of 49286 series. The stale note is what kept every
+  service-level rule namespace-less.
+- Post-fix label coverage verified against the live cluster per rule: 85–100%.
+- **Operational cost**: the baseline key derives from the series labels, so every
+  rule touched here starts a fresh baseline and is blind until warm-up completes.
+
+**Fixed — `rollout_stuck` filed every alert against the `argo` namespace (2026-07-21)**
+- `rollout_info_replicas_unavailable` is exported by the argo-rollouts controller,
+  so its `namespace` label is where the **controller** runs, not where the rollout
+  is. All 92 `rollout_stuck` alerts over 6h were attributed to `argo` — which is
+  the entire `argo` 11.1% slice of the anomalies-by-namespace dashboard. The
+  rollout's real namespace is `exported_namespace`. The rule also grouped by a
+  `rollout` label that does not exist (0 of 156 series); the name is in `name`.
+- Both mapped via `label_replace`; verified the rule now reports
+  `namespace=dpm-btc rollout=dpm-querant-prc-btc` instead of `namespace=argo`.
+
+**Fixed — `kestrel_queued_requests_high` was a dead rule (2026-07-21)**
+- `kestrel_queued_requests` has **0 series** in the inventory — the rule could never
+  fire. Kestrel emits `kestrel_queued_connections` (274 series). Renamed to
+  `kestrel_queued_connections_high` and pointed at the real metric. Same class as the
+  dead rules dropped in the 2026-07-17 hygiene pass.
+
+### docs
+
+**Corrected — FDR reject rate on the deployed rule set is ≈0%, not 18–30% (P0.1, 2026-07-20)**
+- `docs/site/detection/adaptive.md` claimed FDR rejects ~18–30% on the tuned
+  service-level rule set. Two independent sources contradict it: the **live
+  cluster** (~82.3k accepted / **0 rejected over 24h**) and a synthetic-injection
+  replay on the production rule set (**0 rejected** at both `target=1.0` and
+  `target=0.05`). Mechanism: BH accepts every fired anomaly when per-evaluation
+  firing count `k` exceeds `m·target`; the deployed multi-rule set fires
+  ~50–90 series/eval against a family of ~1000–1500, so `k > m·0.05`. FDR only
+  bites in the single-rule / high-family regime (per-pod CPU, ~3%). **Recall is
+  preserved regardless.** Net: on the deployed rules the FDR is effectively a
+  no-op — the real FP levers are direction-of-badness, rule hygiene, and the
+  z-threshold. Doc updated to reflect the measurement.
+
 ### replay
+
+**Fixed — one failing rule blanked every tick, silently zeroing the whole run (2026-07-22)**
+- The adaptive query loop in `internal/replay/engine.go` aborted the **entire tick**
+  on the first failing query (`skipTick = true; break`). A single expensive rule was
+  therefore enough to blank all the others: hit live, `latency_p99_by_service` and
+  `request_rate_by_service` exceed VictoriaMetrics'
+  `-search.maxSamplesPerQuery=1e9` on the spanmetrics family, and **100% of ticks
+  were skipped** — the run completed "successfully" reporting zero anomalies.
+- That failure mode is indistinguishable from a genuine "detected nothing" result in
+  the totals, and is the same class of artifact behind the earlier recall-0
+  measurement (2026-07-19, then attributed to query timeouts).
+- Now degrades **per metric**: the failing rule is skipped for that tick and counted
+  in `query_errors`, the remaining rules still evaluate. A tick counts as skipped
+  only when *every* adaptive query failed. This also matches production, where one
+  rule's query failing does not blind the others and the BH family is whatever was
+  actually evaluated.
+- Tests: `TestRun_OneFailingAdaptiveRule_DoesNotBlankTick` and
+  `TestRun_AllAdaptiveRulesFailing_SkipsTick`. Go coverage 90.4% → **92.0%**.
+- Docs: `operations/replay.md` gains the degradation semantics, a warning to read
+  `query_errors` before trusting a low anomaly count, and a note that replay should
+  run in-cluster (measured ~100s/tick over a laptop port-forward vs tens of minutes
+  for the whole window in-cluster).
 
 **Fixed — replay in-mem baseline under-detected vs production (P0.1 blocker, 2026-07-19)**
 - `internal/replay/inmem_baseline.go` computed the z-score **after** folding the

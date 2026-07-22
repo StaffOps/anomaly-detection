@@ -230,6 +230,25 @@ staffops_ad_detection_fdr_family_size < 10
 | Labels | none |
 | Description | Adaptive anomalies dropped because they deviated in the *harmless* direction for their rule (direction-of-badness). A rule declares `direction: up_bad \| down_bad \| both_bad` (empty = `both_bad`); the controller drops firings that run the other way (e.g. latency *improving*) before FDR. A rising counter means the symmetric z-score was catching one-sided-metric noise that this now suppresses. |
 
+### `staffops_ad_detection_floor_filtered_total`
+
+| Property | Value |
+|---|---|
+| Type | Counter |
+| Labels | none |
+| Description | Adaptive anomalies dropped because the current reading did not cross the rule's `min_value` floor. The z-score is scale-free, so a gauge idling near zero yields a large `z` for a reading of a few units — statistically anomalous, operationally noise. The floor is applied in the controller before FDR, so floored firings do not consume BH acceptance. Rules without `min_value` never contribute here. |
+
+```promql
+# Share of adaptive firings suppressed by the floor (last 1h)
+sum(rate(staffops_ad_detection_floor_filtered_total[1h]))
+  / clamp_min(sum(rate(staffops_ad_detection_floor_filtered_total[1h]))
+    + sum(rate(staffops_ad_detection_fdr_accepted_total[1h])), 1)
+```
+
+A floor that suppresses ~everything means `min_value` is set too high for that rule — the
+detector has gone silent rather than quiet. Compare against `staffops_ad_alert_fired_total`
+before and after a floor change.
+
 ---
 
 ## Worker metrics

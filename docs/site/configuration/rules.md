@@ -42,6 +42,7 @@ detection:
         max(rate(container_cpu_usage_seconds_total{...}[2m])) by (cluster, namespace, pod)
       group_by: [cluster, namespace, pod]   # Labels that identify a unique series
       direction: up_bad             # optional: up_bad | down_bad | both_bad (default)
+      min_value: 20                 # optional: absolute floor the reading must cross
 ```
 
 !!! note "`rate()` windows"
@@ -62,6 +63,39 @@ metric moves the **bad** way, dropping the false positives from the harmless dir
 
 Filtering runs in the controller before FDR; drops are counted by
 `staffops_ad_detection_direction_filtered_total`.
+
+### `min_value` — absolute floor
+
+The Z-Score is **scale-free**: it answers "is this reading unusual for this series?", never
+"is this reading large enough to matter?". A gauge that idles near zero therefore has a tiny
+stddev, so any reading of a few units is a large `z` — statistically anomalous, operationally
+noise.
+
+This was the dominant false-positive source in homolog: `http_client_active_requests`
+alone produced **62% of all fired alerts**, with baselines around `0.08`–`0.30` and firings
+like `0.0846 → 2` (6.1σ) or `0.2973 → 46` (13.9σ). Note these are *high*-z firings — raising
+the z-threshold does not help; the readings are genuinely unusual, just irrelevant.
+
+`min_value` adds an operational-magnitude gate on top of the statistical one. The rule fires
+only when the deviation is **both** significant (`|z| > threshold`) **and** the reading crosses
+the floor:
+
+```yaml
+- name: http_client_active_requests
+  query: max(http_client_active_requests) by (cluster, namespace, pod)
+  direction: up_bad
+  min_value: 20        # ignore a quiet pod going from 0.08 to 2 in-flight requests
+```
+
+- Compared against the **absolute** reading (`|value|`), so it is meaningful in either direction.
+- Omitted or `0` = no floor (the default; fully backward-compatible).
+- Applies to adaptive rules only — static and log-pattern detections are unaffected.
+- Runs in the controller **before** FDR, so floored firings do not consume BH acceptance.
+  Drops are counted by `staffops_ad_detection_floor_filtered_total`.
+
+Prefer `min_value` over converting the rule to a static threshold: the floor keeps the
+per-series adaptivity (each service still learns its own normal) while suppressing the
+firings that are too small to act on.
 
 ### Default Adaptive Metrics
 

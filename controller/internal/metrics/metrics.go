@@ -185,6 +185,8 @@ var (
 		"Adaptive evaluations in the last cycle (BH family size m); ~0 means workers are not reporting tested series and FDR is running on a censored family")
 	DirectionFiltered = mustInt64Counter("staffops_ad_detection_direction_filtered_total",
 		"Adaptive anomalies dropped because they deviated in the harmless direction for their rule (direction-of-badness)")
+	FloorFiltered = mustInt64Counter("staffops_ad_detection_floor_filtered_total",
+		"Adaptive anomalies dropped because the current reading did not cross the rule's min_value floor (near-zero-baseline noise suppression)")
 
 	WorkloadPatterns = mustInt64Counter("staffops_ad_detection_workload_patterns_total",
 		"Workload-level patterns detected (≥N replicas of same workload anomalous)")

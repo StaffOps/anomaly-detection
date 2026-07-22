@@ -253,7 +253,19 @@ no restart needed.
   group_by: [pod, namespace]
   direction: up_bad   # up_bad | down_bad | both_bad (default). Only fire when
                       # the metric moves the bad way (latency/errors → up_bad).
+  min_value: 20       # optional absolute floor. The z-score is scale-free, so a
+                      # gauge idling near zero scores 6–14σ for a few units —
+                      # statistically anomalous, operationally noise. Fires only
+                      # when z > threshold AND |value| ≥ min_value. 0 = no floor.
+                      # Rejected at load if combined with direction: down_bad.
 ```
+
+⚠️ **Check `group_by` against the labels the metric actually has.** If a label is absent,
+PromQL's `by (...)` silently drops it and the alert comes out with an empty `namespace` —
+unroutable. OTel SDK metrics and spanmetrics carry `service_namespace`/`eks_cluster`, **not**
+`namespace`/`cluster`; map them in the query (`label_replace`, or `label_format` in LogQL),
+because the aggregation discards the original label before the controller ever sees it.
+Verify by running the query and confirming every `group_by` label comes back populated.
 
 **Log pattern** (`detection.log_patterns`):
 ```yaml
@@ -277,6 +289,7 @@ All metrics prefixed `staffops_ad_`. Key ones:
 | `_detection_fdr_accepted_total` / `_fdr_rejected_total` | Adaptive anomalies kept / cut by Benjamini-Hochberg FDR |
 | `_detection_fdr_family_size` | BH family size `m` (adaptive evaluations/cycle); ~0 ⇒ censored family (F0 regression) |
 | `_detection_direction_filtered_total` | Adaptive anomalies dropped for firing in the harmless direction |
+| `_detection_floor_filtered_total` | Adaptive anomalies dropped for not crossing the rule's `min_value` (near-zero-baseline noise) |
 | `_alert_fired_total{severity}` | Alerts dispatched (or dry-run) |
 | `_alert_deduplicated_total` | Alerts suppressed by 5min cooldown |
 | `_is_leader` | 1 if this controller replica is leader |

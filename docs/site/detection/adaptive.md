@@ -94,8 +94,22 @@ The controller applies a [Benjamini-Hochberg](https://en.wikipedia.org/wiki/Fals
 
     Workers therefore report `adaptive_series_tested` (evaluations past warm-up) on each `JobResults`, and the controller passes it as `m`. A marginal anomaly (z≈3.0) that would pass against `m=1` is correctly rejected once the cycle's ~400 tests are counted, while genuinely strong signals survive. The gauge `staffops_ad_detection_fdr_family_size` exposes `m` — a value near 0 while anomalies fire means the family has collapsed to the censored case. See [metrics reference](../reference/metrics.md#staffops_ad_detection_fdr_family_size).
 
-!!! info "How much FDR cuts depends on the rule set (measured 2026-07-19)"
-    FDR only removes the **marginal** firings (z just above the threshold). A synthetic-injection replay confirmed it **preserves recall** (injected faults survive), but the FP reduction is not a constant — it scales with how much *marginal* noise a rule set produces. On per-pod CPU (genuine, high-z variance) FDR cut only ~3%; on the tuned service-level rule set deployed in homolog it rejects ~18–30%. Rules that fire on strong, real deviations barely feed the FDR; rules that graze the threshold across many series feed it a lot. See `specs/synthetic-injection/`.
+!!! warning "On the deployed rule set, FDR rejects ≈0% (measured 2026-07-20)"
+    BH accepts **every** fired anomaly whenever the per-evaluation firing count
+    `k` exceeds `m·target` (family size × target) — the step-up finds a high `k`
+    that satisfies `p(k) ≤ (k/m)·target` and accepts all ranks below it. On the
+    deployed service-level rule set this is the normal regime: ~50–90 series fire
+    per evaluation against a family of ~1000–1500, so `k > m·0.05` and BH rejects
+    nothing. Two independent sources confirm it: the **live cluster** reports
+    ~82.3k accepted / **0 rejected over 24h**, and a synthetic-injection replay
+    (both `target=1.0` and `target=0.05`) rejected **0** on the same rule set.
+
+    FDR does cut in the opposite regime — one high-cardinality rule with few
+    firings relative to its family (per-pod CPU: ~3% cut) — but that is not how the
+    deployed set behaves. **Recall is preserved** either way (injected faults that
+    match survive). Net: on the deployed rules the FDR is effectively a no-op; the
+    real FP levers are direction-of-badness, rule hygiene, and the z-threshold —
+    not the FDR. See `specs/synthetic-injection/`.
 
 ## Direction-of-badness
 
@@ -114,6 +128,110 @@ The controller derives the deviation direction from `Value` vs `Mean` (both carr
 
 !!! tip "When to keep `both_bad`"
     Traffic/throughput rules (`request_rate`) stay `both_bad` — a sudden **drop** can signal an upstream outage just as a spike signals a storm.
+
+## Absolute floor (`min_value`)
+
+The z-score is **scale-free** by construction: it measures how unusual a reading is *for that
+series*, never whether the reading is large enough to act on. On a gauge that idles near zero
+the stddev collapses, so a handful of units becomes a 6–14σ event.
+
+Measured on the live cluster (2026-07-21, 6h = 1109 fired alerts), this — not the
+multiple-comparisons problem — was the dominant false-positive source:
+
+| Rule | Share of fired alerts | Median z | Median reading | Median baseline |
+|------|----------------------|----------|----------------|-----------------|
+| `http_client_active_requests` | **30.7%** | 6.0 | **2 requests** | 0.09 |
+| `dotnet_heap_growth` (deleted, see below) | 23.2% | 4.7 | 312 MB | 76 MB |
+
+The minimum `|z|` observed among these firings was 3.27 and the median 6.0, so **raising
+`zscore_threshold` would not have removed them** — the readings really are statistical
+outliers. They are simply not operationally interesting: a pod going from 0.09 to 2
+in-flight outbound requests is a quiet service waking up, not an incident.
+
+Measured floor sensitivity for `http_client_active_requests`:
+
+| `min_value` | Dropped from this rule | Cut in total alert volume |
+|---|---|---|
+| 5 | 65.7% | 20.2% |
+| 10 | 71.0% | 21.8% |
+| **20** (chosen) | **85.6%** | **26.3%** |
+| 50 | 90.6% | 27.9% |
+
+Returns saturate past 20, so 20 is the knee.
+
+`min_value` adds the missing magnitude test. A rule fires only when the deviation is **both**
+statistically significant **and** large enough to matter:
+
+```yaml
+- name: http_client_active_requests
+  query: max(http_client_active_requests) by (cluster, namespace, pod)
+  group_by: [cluster, namespace, pod]
+  direction: up_bad
+  min_value: 20     # a quiet pod at 0.08 → 2 in-flight requests is not an incident
+```
+
+The floor is compared against `|Value|` and applied in the controller **before** FDR, so
+floored firings don't consume BH acceptance. Omitted or `0` disables it (backward-compatible),
+and static/log-pattern detections are never floored. Drops are counted by
+`staffops_ad_detection_floor_filtered_total`. Replay mirrors the same filter and reports the
+count as `floor_filtered`.
+
+!!! tip "Floor, don't staticize"
+    The alternative — replacing the rule with a static threshold — throws away the per-series
+    adaptivity that makes the rule useful (one service idles at `0.1`, another legitimately
+    runs at `80`). The floor keeps the learned baseline and only mutes what is too small to
+    act on. Pick the floor from the *distribution of real incidents*, not from the baseline:
+    the goal is to sit above operational noise, not just above the mean.
+
+!!! warning "A floor cannot rescue a rule measured on the wrong axis"
+    `min_value` gates *magnitude*; it cannot fix a metric that is not comparable across
+    services in the first place. `dotnet_heap_growth` alerted on **absolute heap bytes**, so
+    any floor either cut a real leak on a small container or waved through a large service
+    idling above it. The heap/limit ratio measured across every .NET pod was `q50=0.042`,
+    `q99=0.205`, `max=0.524` — **not one pod near memory pressure**, yet the rule produced
+    23% of all alerts. The right move was to change the measurement, not to floor it:
+
+    ```yaml
+    query: max(process_runtime_dotnet_gc_heap_size_bytes) by (pod)
+      / on(pod) group_left(cluster, namespace)
+        max(container_spec_memory_limit_bytes{container!=""}) by (cluster, namespace, pod)
+    ```
+
+    Ask "is this reading comparable across the series the rule covers?" before reaching for
+    a floor. If the answer is no, normalize first — then the floor becomes meaningful.
+
+!!! danger "Don't ship a rule that can never fire"
+    The ratio above still needed a floor, and every candidate sat at or above the observed
+    fleet maximum (`0.524`) — the rule would have shipped permanently silent. It was
+    **deleted instead of shipped disabled**.
+
+    A rule that never fires is worse than no rule: it puts the signal on the coverage list
+    without covering anything, and nobody discovers the gap until the incident it was
+    supposed to catch. If tuning a rule lands you at "it will basically never fire", that is
+    not a tuned rule — either derive the threshold from real failures (here: the heap/limit
+    ratio observed *before actual OOMKills*, not the distribution of healthy pods) or remove
+    the rule and say so.
+
+## Label alignment (`group_by` must match the metric)
+
+A rule's `group_by` names the labels that identify a series. If the metric does not carry
+those labels, they resolve to **empty** — the anomaly still fires, but with no namespace and
+no cluster, so it cannot be routed, correlated, or drilled into.
+
+This bit both offending rules above: OTel SDK metrics carry `service_namespace` and
+`eks_cluster`, **not** `namespace` and `cluster`, so 100% of their alerts came out with an
+empty namespace. Map them explicitly:
+
+```yaml
+query: 'label_replace(label_replace(
+          max(http_client_active_requests) by (eks_cluster, service_namespace, pod),
+          "namespace", "$1", "service_namespace", "(.*)"),
+          "cluster", "$1", "eks_cluster", "(.*)")'
+group_by: [cluster, namespace, pod]
+```
+
+Verify before shipping a rule: run the query and confirm every label in `group_by` comes back
+populated. An empty grouping label also silently merges series that should be distinct.
 
 ## Seasonal Awareness
 

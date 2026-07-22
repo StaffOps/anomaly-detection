@@ -90,6 +90,34 @@ After warm-up, the engine simulates detection cycles:
 - Runs the same detection engine as production
 - Accumulates anomalies in memory
 
+#### Query failures degrade per rule, not per tick
+
+If one rule's query fails, only that rule is skipped for that tick — the others still
+evaluate, and the failure is counted in `totals.query_errors`. A tick counts as
+`ticks_skipped_query_error` only when **every** adaptive query failed, since nothing
+could be evaluated.
+
+This mirrors production: one rule's query failing does not blind the rest, and the BH
+family is whatever actually got evaluated.
+
+!!! warning "Read `query_errors` before trusting a low anomaly count"
+    A run can complete successfully and still report near-zero anomalies simply because
+    an expensive rule failed on every tick. The two look identical in the totals. Always
+    check `query_errors` and `ticks_skipped_query_error` before concluding that a rule
+    set is quiet.
+
+    Common cause: a histogram rule over a very large series family exceeding the
+    backend's limits — on VictoriaMetrics, `cannot select more than
+    -search.maxSamplesPerQuery`. Narrow the rule's label filters, or raise the limit on
+    the query tier used for replay.
+
+!!! tip "Run replay close to the data"
+    Replay issues one range query per rule per tick, so a 6h window at a 60s interval
+    with ~24 rules is ~8600 range queries. Measured over a `kubectl port-forward` from a
+    laptop this ran at ~100s per tick (≈10h for the window); the same work in-cluster
+    runs in tens of minutes. For anything beyond a smoke test, run replay as a Job in
+    the cluster.
+
 ### 4. Report Generation
 
 Outputs both JSON and Markdown:

@@ -85,13 +85,15 @@ detection:
       severity: critical
 
     - name: istio_5xx_rate_high
-      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[5m])) by (cluster, destination_workload, destination_workload_namespace) / sum(rate(istio_requests_total{destination_workload!=""}[5m])) by (cluster, destination_workload, destination_workload_namespace) > 0.05
+      query: 'label_replace(sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[5m])) by (cluster, destination_workload, destination_workload_namespace) / sum(rate(istio_requests_total{destination_workload!=""}[5m])) by (cluster, destination_workload, destination_workload_namespace) > 0.05, "namespace", "$1", "destination_workload_namespace", "(.*)")'
       threshold: 0.05
       operator: ">"
       severity: warning
 
-    - name: kestrel_queued_requests_high
-      query: max(kestrel_queued_requests) by (cluster, namespace, pod)
+    # Dead rule fixed 2026-07-21: kestrel_queued_requests does not exist (0
+    # series). Kestrel emits kestrel_queued_connections.
+    - name: kestrel_queued_connections_high
+      query: 'label_replace(label_replace(max(kestrel_queued_connections) by (eks_cluster, service_namespace, pod), "namespace", "$1", "service_namespace", "(.*)"), "cluster", "$1", "eks_cluster", "(.*)")'
       threshold: 50
       operator: ">"
       severity: warning
@@ -101,25 +103,28 @@ detection:
       # is not emitted by any current workload — only the legacy
       # process_runtime_dotnet_* era exists in the inventory (verified
       # 2026-07-17). Re-add the `or` alternative when services move to .NET 9.
-      query: max(process_runtime_dotnet_thread_pool_queue_length) by (cluster, namespace, pod)
+      query: 'label_replace(label_replace(max(process_runtime_dotnet_thread_pool_queue_length) by (eks_cluster, service_namespace, pod), "namespace", "$1", "service_namespace", "(.*)"), "cluster", "$1", "eks_cluster", "(.*)")'
       threshold: 100
       operator: ">"
       severity: warning
 
     - name: http_client_queue_time_high
-      query: histogram_quantile(0.99, sum(rate(http_client_request_time_in_queue_seconds_bucket[5m])) by (le, cluster, namespace, pod))
+      query: 'label_replace(label_replace(histogram_quantile(0.99, sum(rate(http_client_request_time_in_queue_seconds_bucket[5m])) by (le, eks_cluster, service_namespace, pod)), "namespace", "$1", "service_namespace", "(.*)"), "cluster", "$1", "eks_cluster", "(.*)")'
       threshold: 2.0
       operator: ">"
       severity: warning
 
     - name: otel_collector_dropping_spans
-      query: sum(rate(otelcol_exporter_enqueue_failed_spans_total[5m])) by (cluster, service_name)
+      # otelcol_exporter_* carries neither cluster nor namespace - only service_name.
+      query: sum(rate(otelcol_exporter_enqueue_failed_spans_total[5m])) by (service_name)
       threshold: 0
       operator: ">"
       severity: critical
 
     - name: rollout_stuck
-      query: max(rollout_info_replicas_unavailable) by (cluster, namespace, rollout)
+      # `namespace` here is where the argo-rollouts CONTROLLER runs; the rollout's
+      # real namespace is exported_namespace, and its name is `name` (no `rollout`).
+      query: 'label_replace(label_replace(max(rollout_info_replicas_unavailable) by (cluster, exported_namespace, name), "namespace", "$1", "exported_namespace", "(.*)"), "rollout", "$1", "name", "(.*)")'
       threshold: 0
       operator: ">"
       severity: warning
@@ -128,38 +133,50 @@ detection:
   # These learn baseline per series and alert on deviations.
   adaptive_metrics:
     # RED metrics from spanmetrics (30+ services)
-    # Note: spanmetrics lack k8s namespace — only service_name available.
-    # namespace shows as "unknown" in dashboards for these.
+    # CORRECTED 2026-07-21: the old note here claimed "spanmetrics lack k8s
+    # namespace — only service_name available". That is false: spanmetrics carry
+    # service_namespace + eks_cluster (48553 of 49286 series). The stale
+    # assumption is what made namespace show as "unknown" in the dashboards —
+    # the `by (cluster, service_name)` clause was discarding a label that was
+    # there all along. label_replace maps them to the canonical names the
+    # controller reads.
     # rate() windows are [2m], not [1m]: the org scrape interval is 30s and
     # rate() needs ≥4× the scrape interval to survive a missed scrape.
     - name: error_rate_by_service
-      query: sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[2m])) by (cluster, service_name)
-      group_by: [cluster, service_name]
+      query: 'label_replace(label_replace(sum(rate(spanmetrics_apm_calls_total{status_code="STATUS_CODE_ERROR"}[2m])) by (eks_cluster, service_namespace, service_name), "namespace", "$1", "service_namespace", "(.*)"), "cluster", "$1", "eks_cluster", "(.*)")'
+      group_by: [cluster, namespace, service_name]
 
     - name: request_rate_by_service
-      query: sum(rate(spanmetrics_apm_calls_total[2m])) by (cluster, service_name)
-      group_by: [cluster, service_name]
+      query: 'label_replace(label_replace(sum(rate(spanmetrics_apm_calls_total[2m])) by (eks_cluster, service_namespace, service_name), "namespace", "$1", "service_namespace", "(.*)"), "cluster", "$1", "eks_cluster", "(.*)")'
+      group_by: [cluster, namespace, service_name]
 
     - name: latency_p99_by_service
-      query: histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket[5m])) by (le, cluster, service_name))
-      group_by: [cluster, service_name]
+      query: 'label_replace(label_replace(histogram_quantile(0.99, sum(rate(spanmetrics_apm_duration_milliseconds_bucket[5m])) by (le, eks_cluster, service_namespace, service_name)), "namespace", "$1", "service_namespace", "(.*)"), "cluster", "$1", "eks_cluster", "(.*)")'
+      group_by: [cluster, namespace, service_name]
 
     # Istio mesh — service-to-service error rate
     - name: istio_error_rate_by_workload
-      query: sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[2m])) by (cluster, destination_workload, destination_workload_namespace)
-      group_by: [cluster, destination_workload, destination_workload_namespace]
+      query: 'label_replace(sum(rate(istio_requests_total{response_code=~"5..",destination_workload!=""}[2m])) by (cluster, destination_workload, destination_workload_namespace), "namespace", "$1", "destination_workload_namespace", "(.*)")'
+      group_by: [cluster, namespace, destination_workload]
 
     # .NET saturation signals (leading indicators).
     # NOTE (hygiene 2026-07-17): dotnet_gc_pause_rate removed — its metric
     # (dotnet_gc_pause_time_seconds_total, .NET 9+ native meter) is absent from
     # the live inventory; the rule never fired. Re-add on .NET 9 migration.
-    - name: dotnet_heap_growth
-      query: max(process_runtime_dotnet_gc_heap_size_bytes) by (cluster, namespace, pod)
-      group_by: [cluster, namespace, pod]
-
+    # REMOVED 2026-07-22: dotnet_heap_growth. It alerted on ABSOLUTE .NET heap
+    # bytes — not comparable across services and not actionable: 23% of all fired
+    # alerts over 6h, every one with an empty namespace, while the heap/limit
+    # ratio across the whole fleet was q99=0.205, max=0.524 (nothing near memory
+    # pressure). A heap/limit replacement was drafted, but every candidate floor
+    # sat above the fleet maximum — the rule would ship permanently silent, which
+    # is worse than no rule. Reintroduce with a threshold derived from actual
+    # OOMKills. See the gotmpl for the query that resolves labels correctly.
+    # label_replace: the metric carries eks_cluster/service_namespace, not
+    # cluster/namespace — without the mapping every alert had an empty namespace.
     - name: http_client_active_requests
-      query: max(http_client_active_requests) by (cluster, namespace, pod)
+      query: 'label_replace(label_replace(max(http_client_active_requests) by (eks_cluster, service_namespace, pod), "namespace", "$1", "service_namespace", "(.*)"), "cluster", "$1", "eks_cluster", "(.*)")'
       group_by: [cluster, namespace, pod]
+      min_value: 20
 
     # Queue depth rules (queue_depth_messages / queue_messages_failed_total)
     # removed 2026-07-17: no workload emits these custom metrics today (absent
@@ -175,8 +192,8 @@ detection:
 
     # OTel Collector pipeline health
     - name: otel_collector_queue_size
-      query: max(otelcol_exporter_queue_size) by (cluster, service_name)
-      group_by: [cluster, service_name]
+      query: max(otelcol_exporter_queue_size) by (cluster, namespace, service_name)
+      group_by: [cluster, namespace, service_name]
 
     # karpenter_scheduling_duration removed 2026-07-17: the
     # karpenter_provisioner_* metric family was renamed upstream (Karpenter
@@ -185,11 +202,12 @@ detection:
 
   log_patterns:
     - name: error_rate_by_namespace
-      query: sum(rate({service_namespace=~".+"} |= "error" [2m])) by (cluster, service_namespace)
-      group_by: [cluster, service_namespace]
+      # LogQL has no label_replace; label_format is the equivalent.
+      query: 'sum(rate({service_namespace=~".+"} |= "error" | label_format namespace=service_namespace [2m])) by (cluster, namespace)'
+      group_by: [cluster, namespace]
     - name: log_volume_by_workload
-      query: sum(rate({service_namespace=~".+"}[2m])) by (cluster, service_namespace, service_workload)
-      group_by: [cluster, service_namespace, service_workload]
+      query: 'sum(rate({service_namespace=~".+"} | label_format namespace=service_namespace [2m])) by (cluster, namespace, service_workload)'
+      group_by: [cluster, namespace, service_workload]
     - name: panic_oom
       query: '{service_namespace=~".+"} |~ "(?i)(panic|oom|out of memory|fatal)"'
       type: pattern_match

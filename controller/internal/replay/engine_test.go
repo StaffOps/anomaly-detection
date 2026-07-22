@@ -172,3 +172,89 @@ func TestReportBuilder_AddAnomaly_RespectsMax(t *testing.T) {
 		t.Errorf("maxAnomalies cap not honored: got %d, want 2", len(rb.anomalies))
 	}
 }
+
+// TestRun_OneFailingAdaptiveRule_DoesNotBlankTick pins the per-metric (not
+// per-tick) degradation. The loop used to abort the whole tick on the first
+// failing adaptive query, so one expensive rule hitting a backend limit blanked
+// every other rule and the run reported zero anomalies — an infrastructure
+// artifact indistinguishable from a real "detected nothing" result.
+func TestRun_OneFailingAdaptiveRule_DoesNotBlankTick(t *testing.T) {
+	early := time.Now().UTC().Add(-5 * time.Hour).Unix()
+	matrix := `{"status":"success","data":{"resultType":"matrix","result":[` +
+		`{"metric":{"namespace":"production","pod":"api-1"},"values":[[` +
+		strconv.FormatInt(early, 10) + `,"0.5"]]}]}}`
+
+	vmSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The heavy rule always fails; the healthy one always answers.
+		if q := r.URL.Query().Get("query"); q == "heavy_rule" {
+			w.WriteHeader(500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(matrix))
+	}))
+	defer vmSrv.Close()
+	lokiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(emptyRangeResponse))
+	}))
+	defer lokiSrv.Close()
+
+	cfg := newReplayConfig(vmSrv.URL, lokiSrv.URL)
+	cfg.Detection.AdaptiveMetrics = []config.AdaptiveMetric{
+		{Name: "heavy", Query: "heavy_rule", GroupBy: []string{"namespace", "pod"}},
+		{Name: "healthy", Query: "healthy_rule", GroupBy: []string{"namespace", "pod"}},
+	}
+	now := time.Now().UTC()
+	rcfg := DefaultReplayConfig()
+	rcfg.From = now.Add(-4 * time.Hour)
+	rcfg.To = now.Add(-1 * time.Hour)
+
+	report, err := Run(context.Background(), rcfg, cfg, nil)
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if report.Totals.QueryErrors == 0 {
+		t.Error("expected the failing rule to be counted in QueryErrors")
+	}
+	// The whole point: ticks still ran despite one rule failing every time.
+	if report.Metadata.ExecutionMetrics.TicksProcessed == 0 {
+		t.Fatal("every tick was skipped — one failing rule must not blank the tick")
+	}
+	if report.Metadata.ExecutionMetrics.TicksSkippedQueryError != 0 {
+		t.Errorf("no tick should count as skipped while a healthy rule still ran, got %d",
+			report.Metadata.ExecutionMetrics.TicksSkippedQueryError)
+	}
+}
+
+// TestRun_AllAdaptiveRulesFailing_SkipsTick is the other half: when nothing
+// could be evaluated, the tick is genuinely lost and must be counted as skipped.
+func TestRun_AllAdaptiveRulesFailing_SkipsTick(t *testing.T) {
+	vmSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+	}))
+	defer vmSrv.Close()
+	lokiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(emptyRangeResponse))
+	}))
+	defer lokiSrv.Close()
+
+	cfg := newReplayConfig(vmSrv.URL, lokiSrv.URL)
+	cfg.Detection.AdaptiveMetrics = []config.AdaptiveMetric{
+		{Name: "a", Query: "a", GroupBy: []string{"pod"}},
+		{Name: "b", Query: "b", GroupBy: []string{"pod"}},
+	}
+	now := time.Now().UTC()
+	rcfg := DefaultReplayConfig()
+	rcfg.From = now.Add(-4 * time.Hour)
+	rcfg.To = now.Add(-1 * time.Hour)
+
+	report, err := Run(context.Background(), rcfg, cfg, nil)
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if report.Metadata.ExecutionMetrics.TicksSkippedQueryError == 0 {
+		t.Error("a tick where every adaptive rule failed must count as skipped")
+	}
+}

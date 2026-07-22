@@ -283,17 +283,24 @@ func runCycle(ctx context.Context, cfg *config.Config, client pb.WorkerServiceCl
 	// harmless direction for their rule (e.g. latency/error rate FALLING).
 	// Runs before FDR so wrong-direction firings don't consume acceptance.
 	// Built per-cycle so config hot-reloads take effect.
-	directions := make(map[string]string, len(cfg.Detection.AdaptiveMetrics))
-	for _, am := range cfg.Detection.AdaptiveMetrics {
-		if am.Direction != "" {
-			directions[am.Name] = am.Direction
-		}
-	}
+	directions := cfg.Detection.DirectionMap()
 	var dirDropped int
 	allAnomalies, dirDropped = detection.FilterByDirection(allAnomalies, directions)
 	if dirDropped > 0 {
 		metrics.DirectionFiltered.Add(ctx, int64(dirDropped))
 		slog.Info("direction_filtered", "dropped", dirDropped)
+	}
+
+	// Absolute floor (min_value): drop adaptive anomalies whose reading is too
+	// small to be operationally relevant, fixing the near-zero-baseline false
+	// positive (a quiet gauge at ~0.1 yields a huge z-score for a few units).
+	// Runs before FDR so floored firings don't consume acceptance either.
+	floors := cfg.Detection.FloorMap()
+	var floorDropped int
+	allAnomalies, floorDropped = detection.FilterByFloor(allAnomalies, floors)
+	if floorDropped > 0 {
+		metrics.FloorFiltered.Add(ctx, int64(floorDropped))
+		slog.Info("floor_filtered", "dropped", floorDropped)
 	}
 
 	// Full BH family = adaptive evaluations performed by workers this cycle

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -196,4 +197,55 @@ func writeTempConfig(t *testing.T, content string) string {
 		t.Fatalf("write temp config: %v", err)
 	}
 	return path
+}
+
+// TestLoad_RejectsMinValueOnDownBad pins the guard on a combination that is
+// silently self-defeating: the floor drops readings BELOW it, while a down_bad
+// rule fires precisely because the reading fell.
+func TestLoad_RejectsMinValueOnDownBad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cfg.yaml")
+	body := `
+detection:
+  adaptive_metrics:
+    - name: ready_replicas
+      query: min(kube_deployment_status_replicas_available) by (namespace)
+      group_by: [namespace]
+      direction: down_bad
+      min_value: 2
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil {
+		t.Fatal("min_value on a down_bad rule must be rejected at load")
+	} else if !strings.Contains(err.Error(), "ready_replicas") {
+		t.Errorf("error should name the offending rule, got: %v", err)
+	}
+}
+
+// TestLoad_AllowsMinValueOnUpBad is the companion: the intended combination
+// must keep loading.
+func TestLoad_AllowsMinValueOnUpBad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cfg.yaml")
+	body := `
+detection:
+  adaptive_metrics:
+    - name: active_requests
+      query: max(http_client_active_requests) by (pod)
+      group_by: [pod]
+      direction: up_bad
+      min_value: 20
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("min_value on an up_bad rule must load: %v", err)
+	}
+	if cfg.Detection.AdaptiveMetrics[0].MinValue != 20 {
+		t.Errorf("min_value = %v, want 20", cfg.Detection.AdaptiveMetrics[0].MinValue)
+	}
 }

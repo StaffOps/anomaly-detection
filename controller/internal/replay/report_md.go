@@ -46,6 +46,8 @@ func (r *Report) WriteMarkdown(w io.Writer) error {
 	p("| Warmup skipped | %d |", r.Totals.WarmupSkipped)
 	p("| Query errors | %d |", r.Totals.QueryErrors)
 	p("| FDR rejected | %d |", r.Totals.FDRRejected)
+	p("| Floor filtered (min_value) | %d |", r.Totals.FloorFiltered)
+	p("| Direction filtered | %d |", r.Totals.DirectionFiltered)
 	p("")
 
 	// By severity

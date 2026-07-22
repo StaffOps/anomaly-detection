@@ -123,6 +123,16 @@ type AdaptiveMetric struct {
 	// latency improving). One of: "up_bad", "down_bad", "both_bad".
 	// Empty = "both_bad" (backward-compatible: fire on any deviation).
 	Direction string `yaml:"direction"`
+	// MinValue is an absolute floor the current reading must reach for the
+	// anomaly to fire, applied on top of the z-score test. It fixes the
+	// near-zero-baseline false positive: a gauge that idles at ~0.1 (e.g.
+	// http_client_active_requests on a quiet service) has a tiny stddev, so any
+	// value of a few units is a large z-score — statistically anomalous but
+	// operationally noise. With min_value the rule fires only when the deviation
+	// is BOTH significant (z > threshold) AND the reading crosses a floor of
+	// operational relevance. Zero (the default) disables the floor —
+	// backward-compatible.
+	MinValue float64 `yaml:"min_value"`
 }
 
 type LogPattern struct {
@@ -206,7 +216,58 @@ func Load(path string) (*Config, error) {
 	}
 
 	setDefaults(cfg)
+	if err := validate(cfg); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+// DirectionMap returns rule name → direction-of-badness for the adaptive rules
+// that declare one. Rules with an empty direction are omitted (the filter treats
+// a missing entry as "both_bad", the permissive default).
+//
+// Both the controller cycle and the replay engine need this; deriving it in one
+// place keeps the two post-filter paths from drifting apart, which would show up
+// as replay and production disagreeing on FP counts.
+func (d Detection) DirectionMap() map[string]string {
+	m := make(map[string]string, len(d.AdaptiveMetrics))
+	for _, am := range d.AdaptiveMetrics {
+		if am.Direction != "" {
+			m[am.Name] = am.Direction
+		}
+	}
+	return m
+}
+
+// FloorMap returns rule name → min_value for the adaptive rules that declare a
+// positive floor. See DirectionMap for why this lives here.
+func (d Detection) FloorMap() map[string]float64 {
+	m := make(map[string]float64, len(d.AdaptiveMetrics))
+	for _, am := range d.AdaptiveMetrics {
+		if am.MinValue > 0 {
+			m[am.Name] = am.MinValue
+		}
+	}
+	return m
+}
+
+// validate rejects rule combinations that are silently wrong at runtime.
+//
+// min_value + down_bad is the one that matters: the floor drops readings BELOW
+// it, but a down_bad rule fires precisely because the reading fell. Combining
+// them suppresses exactly the anomaly the rule exists to catch — and the lower
+// the reading (the worse the incident), the more certain the suppression. There
+// is no sane reading of "minimum value" for a metric whose badness is downward,
+// so this fails fast at load instead of quietly detecting nothing.
+func validate(cfg *Config) error {
+	for _, am := range cfg.Detection.AdaptiveMetrics {
+		if am.MinValue > 0 && am.Direction == "down_bad" {
+			return fmt.Errorf(
+				"adaptive metric %q: min_value cannot be combined with direction: down_bad — "+
+					"the floor would drop the low readings the rule is meant to catch", am.Name)
+		}
+	}
+	return nil
 }
 
 // envVarPattern matches ${NAME} and ${NAME:default}. Default may contain any

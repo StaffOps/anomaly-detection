@@ -13,6 +13,13 @@ import (
 	"github.com/staffops/staffops-anomaly-detection/internal/replay/inject"
 )
 
+// systemicFailureThreshold is how many adaptive queries may fail back-to-back
+// from the start of a tick before the engine stops trying the rest. A handful of
+// consecutive failures with nothing succeeding means the backend is unreachable,
+// not that individual rules are too expensive — and hammering it with the full
+// rule set every tick only makes it worse.
+const systemicFailureThreshold = 3
+
 // Run executes the replay tick simulator over the configured window.
 // It loads metric/log data in 1h chunks, iterates ticks from warmup_end to To,
 // and runs detection on each tick's samples.
@@ -58,6 +65,13 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 	// per tick so FP counts are comparable with production behavior.
 	fdrFilter := detection.NewFDR(cfg.Controller.FDRTarget)
 
+	// Direction-of-badness and absolute-floor (min_value) maps. Both post-filters
+	// the controller applies per cycle are mirrored here, in the same order, so
+	// replay FP counts are comparable with production instead of inflated by
+	// firings production would have dropped.
+	directions := cfg.Detection.DirectionMap()
+	floors := cfg.Detection.FloorMap()
+
 	// Count total ticks for progress logging.
 	totalTicks := int(rcfg.To.Sub(rcfg.From) / step)
 	progressInterval := totalTicks / 10
@@ -101,26 +115,50 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 			// sets under every rule name — cross-metric contamination the
 			// production worker path never has.
 			perMetric := make([][]ingestion.TimeSeries, len(cfg.Detection.AdaptiveMetrics))
-			skipTick := false
+			failed, succeeded := 0, 0
 			for i, am := range cfg.Detection.AdaptiveMetrics {
 				qStart := time.Now()
 				series, err := vm.QueryRange(ctx, am.Query, chunkStart, tick, step)
 				mc.recordPromQuery(time.Since(qStart))
 				if err != nil {
-					slog.Warn("[REPLAY] vm query failed, skipping tick",
+					// Degrade per METRIC, not per tick. This loop used to abort the
+					// whole tick on the first failing query, so a single expensive
+					// rule (e.g. a histogram over a very large series family hitting
+					// the backend's sample limit) blanked every other rule and the
+					// run reported zero anomalies — an infrastructure artifact
+					// indistinguishable from "detected nothing".
+					// Production does not behave that way: one rule's query failing
+					// does not blind the other rules, and the BH family is whatever
+					// actually got evaluated. Skipping just this metric mirrors that.
+					slog.Warn("[REPLAY] vm query failed, skipping this metric for the tick",
 						"tick", tick.Format(time.RFC3339), "metric", am.Name, "error", err)
 					rb.addQueryError()
-					mc.recordSkip()
-					skipTick = true
-					break
+					failed++
+					// Per-metric degradation must not turn into a stampede: if the
+					// backend is down, every rule will fail, and retrying all of
+					// them each tick multiplies the load on the thing that is
+					// already struggling. Once nothing has succeeded in this tick's
+					// first few attempts, treat it as systemic and stop early —
+					// the tick is lost either way.
+					if failed >= systemicFailureThreshold && i+1 == failed {
+						slog.Warn("[REPLAY] consecutive query failures from the start, treating as systemic",
+							"tick", tick.Format(time.RFC3339), "failures", failed)
+						break
+					}
+					continue
 				}
 				// Inject synthetic faults in-memory (no-op when injector is nil).
 				if injector != nil {
 					series = injector.Apply(am.Name, series)
 				}
 				perMetric[i] = series
+				succeeded++
 			}
-			if skipTick {
+			// A tick is genuinely lost only when nothing could be evaluated:
+			// every adaptive query failed, or the systemic short-circuit fired.
+			// Anything less still carries signal worth scoring.
+			if len(cfg.Detection.AdaptiveMetrics) > 0 && succeeded == 0 {
+				mc.recordSkip()
 				goto progress
 			}
 
@@ -186,13 +224,18 @@ func Run(ctx context.Context, rcfg ReplayConfig, cfg *config.Config, injector *i
 			}
 		}
 
-		// FDR over the tick's full family, exactly like the controller cycle:
-		// adaptive anomalies filtered, static/pattern pass through.
+		// Direction, then floor, then FDR — the same order as the controller
+		// cycle, so neither wrong-direction nor floored firings consume BH
+		// acceptance and the counts stay comparable with production.
 		if len(tickAnomalies) > 0 {
 			ptrs := make([]*detection.Anomaly, len(tickAnomalies))
 			for i := range tickAnomalies {
 				ptrs[i] = &tickAnomalies[i]
 			}
+			ptrs, dirDropped := detection.FilterByDirection(ptrs, directions)
+			rb.directionFiltered += dirDropped
+			ptrs, floorDropped := detection.FilterByFloor(ptrs, floors)
+			rb.floorFiltered += floorDropped
 			accepted, rejected := fdrFilter.Apply(ptrs, tickTested)
 			rb.fdrRejected += rejected
 			for _, a := range accepted {

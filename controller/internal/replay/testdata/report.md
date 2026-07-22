@@ -22,6 +22,8 @@
 | Warmup skipped | 0 |
 | Query errors | 0 |
 | FDR rejected | 0 |
+| Floor filtered (min_value) | 0 |
+| Direction filtered | 0 |
 
 ### By Severity
 

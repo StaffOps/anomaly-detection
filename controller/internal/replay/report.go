@@ -77,14 +77,16 @@ type ConfigSummary struct {
 
 // Totals aggregates anomaly counts.
 type Totals struct {
-	Anomalies     int            `json:"anomalies"`
-	BySeverity    map[string]int `json:"by_severity"`
-	BySignal      map[string]int `json:"by_signal"`
-	ByDetector    map[string]int `json:"by_detector"`
-	ByKind        map[string]int `json:"by_kind"`
-	WarmupSkipped int            `json:"warmup_skipped"`
-	QueryErrors   int            `json:"query_errors"`
-	FDRRejected   int            `json:"fdr_rejected"`
+	Anomalies         int            `json:"anomalies"`
+	BySeverity        map[string]int `json:"by_severity"`
+	BySignal          map[string]int `json:"by_signal"`
+	ByDetector        map[string]int `json:"by_detector"`
+	ByKind            map[string]int `json:"by_kind"`
+	WarmupSkipped     int            `json:"warmup_skipped"`
+	QueryErrors       int            `json:"query_errors"`
+	FDRRejected       int            `json:"fdr_rejected"`
+	FloorFiltered     int            `json:"floor_filtered"`
+	DirectionFiltered int            `json:"direction_filtered"`
 }
 
 // WorkloadCount is a top-workload entry.
@@ -126,13 +128,15 @@ func (r *Report) WriteJSON(w io.Writer) error {
 
 // reportBuilder accumulates anomalies and builds the final Report.
 type reportBuilder struct {
-	anomalies     []detection.Anomaly
-	maxAnomalies  int
-	warmupSkipped int
-	queryErrors   int
-	fdrRejected   int
-	timeline      map[time.Time]*TimelineEntry
-	workloads     map[string]int // "ns/workload" → count
+	anomalies         []detection.Anomaly
+	maxAnomalies      int
+	warmupSkipped     int
+	queryErrors       int
+	fdrRejected       int
+	floorFiltered     int
+	directionFiltered int
+	timeline          map[time.Time]*TimelineEntry
+	workloads         map[string]int // "ns/workload" → count
 }
 
 func newReportBuilder(maxAnomalies int) *reportBuilder {
@@ -171,14 +175,16 @@ func (b *reportBuilder) addQueryError()    { b.queryErrors++ }
 
 func (b *reportBuilder) build(meta Metadata) *Report {
 	totals := Totals{
-		Anomalies:     len(b.anomalies),
-		BySeverity:    make(map[string]int),
-		BySignal:      make(map[string]int),
-		ByDetector:    make(map[string]int),
-		ByKind:        make(map[string]int),
-		WarmupSkipped: b.warmupSkipped,
-		QueryErrors:   b.queryErrors,
-		FDRRejected:   b.fdrRejected,
+		Anomalies:         len(b.anomalies),
+		BySeverity:        make(map[string]int),
+		BySignal:          make(map[string]int),
+		ByDetector:        make(map[string]int),
+		ByKind:            make(map[string]int),
+		WarmupSkipped:     b.warmupSkipped,
+		QueryErrors:       b.queryErrors,
+		FDRRejected:       b.fdrRejected,
+		FloorFiltered:     b.floorFiltered,
+		DirectionFiltered: b.directionFiltered,
 	}
 	entries := make([]AnomalyEntry, 0, len(b.anomalies))
 	for _, a := range b.anomalies {
