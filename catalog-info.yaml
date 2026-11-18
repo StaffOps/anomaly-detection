@@ -1,0 +1,68 @@
+# Backstage catalog: Domain (GitHub org) -> System (this repo) -> Component(s).
+# Names aligned with Dependency-Track (StaffOps/homelab-gitops helm-charts/argo-events/image-scan/catalog.yaml).
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: anomaly-detection
+  title: anomaly-detection
+  description: "anomaly-detection (StaffOps)"
+  annotations:
+    github.com/project-slug: StaffOps/anomaly-detection
+  links:
+    - url: https://github.com/StaffOps/anomaly-detection
+      title: Repository
+      icon: github
+spec:
+  owner: group:staffops
+  domain: staffops
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: staffops-anomaly-detection-controller
+  title: staffops-anomaly-detection/controller
+  description: "Container image ghcr.io/staffops/staffops-anomaly-detection/controller"
+  annotations:
+    github.com/project-slug: StaffOps/anomaly-detection
+    staffops.space/image: ghcr.io/staffops/staffops-anomaly-detection/controller
+    staffops.space/dependency-track-project: ghcr.io/staffops/staffops-anomaly-detection/controller
+  tags: [container-image, go]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:staffops
+  system: anomaly-detection
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: staffops-anomaly-detection-worker
+  title: staffops-anomaly-detection/worker
+  description: "Container image ghcr.io/staffops/staffops-anomaly-detection/worker"
+  annotations:
+    github.com/project-slug: StaffOps/anomaly-detection
+    staffops.space/image: ghcr.io/staffops/staffops-anomaly-detection/worker
+    staffops.space/dependency-track-project: ghcr.io/staffops/staffops-anomaly-detection/worker
+  tags: [container-image, go]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:staffops
+  system: anomaly-detection
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: staffops-anomaly-detection-ml
+  title: staffops-anomaly-detection/ml
+  description: "Container image ghcr.io/staffops/staffops-anomaly-detection/ml"
+  annotations:
+    github.com/project-slug: StaffOps/anomaly-detection
+    staffops.space/image: ghcr.io/staffops/staffops-anomaly-detection/ml
+    staffops.space/dependency-track-project: ghcr.io/staffops/staffops-anomaly-detection/ml
+  tags: [container-image, python]
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:staffops
+  system: anomaly-detection
