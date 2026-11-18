@@ -8,6 +8,8 @@ metadata:
   description: "anomaly-detection (StaffOps)"
   annotations:
     github.com/project-slug: StaffOps/anomaly-detection
+    backstage.io/techdocs-ref: dir:.
+  tags: [go, python, grpc, kubernetes, opentelemetry, machine-learning]
   links:
     - url: https://github.com/StaffOps/anomaly-detection
       title: Repository
@@ -26,12 +28,14 @@ metadata:
     github.com/project-slug: StaffOps/anomaly-detection
     staffops.space/image: ghcr.io/staffops/staffops-anomaly-detection/controller
     staffops.space/dependency-track-project: ghcr.io/staffops/staffops-anomaly-detection/controller
-  tags: [container-image, go]
+    backstage.io/techdocs-ref: dir:.
+  tags: [container-image, go, grpc, kubernetes]
 spec:
   type: service
   lifecycle: experimental
   owner: group:staffops
   system: anomaly-detection
+  consumesApis: [anomaly-detection-worker-grpc, anomaly-detection-ml-grpc]
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Component
@@ -43,12 +47,14 @@ metadata:
     github.com/project-slug: StaffOps/anomaly-detection
     staffops.space/image: ghcr.io/staffops/staffops-anomaly-detection/worker
     staffops.space/dependency-track-project: ghcr.io/staffops/staffops-anomaly-detection/worker
-  tags: [container-image, go]
+    backstage.io/techdocs-ref: dir:.
+  tags: [container-image, go, grpc, opentelemetry]
 spec:
   type: service
   lifecycle: experimental
   owner: group:staffops
   system: anomaly-detection
+  providesApis: [anomaly-detection-worker-grpc]
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Component
@@ -60,9 +66,43 @@ metadata:
     github.com/project-slug: StaffOps/anomaly-detection
     staffops.space/image: ghcr.io/staffops/staffops-anomaly-detection/ml
     staffops.space/dependency-track-project: ghcr.io/staffops/staffops-anomaly-detection/ml
-  tags: [container-image, python]
+    backstage.io/techdocs-ref: dir:.
+  tags: [container-image, python, grpc, scikit-learn]
 spec:
   type: service
   lifecycle: experimental
   owner: group:staffops
   system: anomaly-detection
+  providesApis: [anomaly-detection-ml-grpc]
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: anomaly-detection-worker-grpc
+  description: "anomaly.WorkerService: job processing and event reporting between controller and workers"
+  annotations:
+    github.com/project-slug: StaffOps/anomaly-detection
+  tags: [grpc]
+spec:
+  type: grpc
+  lifecycle: experimental
+  owner: group:staffops
+  system: anomaly-detection
+  definition:
+    $text: ./controller/proto/worker.proto
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: anomaly-detection-ml-grpc
+  description: "anomaly.MLDetector: forecasting and multivariate detection"
+  annotations:
+    github.com/project-slug: StaffOps/anomaly-detection
+  tags: [grpc]
+spec:
+  type: grpc
+  lifecycle: experimental
+  owner: group:staffops
+  system: anomaly-detection
+  definition:
+    $text: ./ml/proto/ml.proto
