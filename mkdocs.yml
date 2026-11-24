@@ -67,6 +67,7 @@ nav:
       - Threat Model & Limitations: threat-model-and-limitations.md
       - Evaluation Scorecard: evaluation-scorecard.md
       - Product Hypothesis (gated): hypothesis-causal-origination.md
+      - "Program: Causal Correlation": program-causal-correlation.md
       - Critical Review (2026-07-04): review-2026-07-04.md
   - Detection:
       - detection/index.md

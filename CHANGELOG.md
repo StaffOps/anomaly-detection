@@ -27,6 +27,8 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
   `git`, `scripts/dev`, docs) and `go.sum` pins the hash of the current tag contents.
   Remove once we move to otel-libs 0.3.0 (module path `github.com/staffops/otel-libs/go`).
 - `lint-ml` pins `ruff==0.17.6`.
+- Docs: `program-causal-correlation.md` added to the MkDocs nav; it was missing, so
+  `mkdocs build --strict` failed the PR `build_check` whenever `docs/site/**` changed.
 
 **Fixed — gosec and ruff findings on `main` (2026-11-24)**
 - gosec (22 findings, report-only job): unchecked errors are now handled or logged
