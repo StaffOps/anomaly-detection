@@ -40,8 +40,6 @@ jobs:
 
   lint-ml:
     runs-on: ubuntu-latest
-    # TODO: report-only during rollout — flip to blocking once stable.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
