@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -221,7 +222,12 @@ func main() {
 		runCycleLoop(ctx)
 	}
 
-	metricsSrv.Shutdown(ctx)
+	// ctx is already cancelled here; give the metrics server its own deadline.
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelShutdown()
+	if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("metrics server shutdown", "error", err)
+	}
 	slog.Info("controller stopped")
 }
 
@@ -578,31 +584,37 @@ func runReplay(configPath, fromStr, toStr, outputPath string, warmupFraction flo
 	if !strings.HasSuffix(jsonPath, ".json") {
 		jsonPath += ".json"
 	}
-	jf, err := os.Create(jsonPath)
+	jf, err := os.Create(filepath.Clean(jsonPath))
 	if err != nil {
 		slog.Error("failed to create JSON output", "error", err)
 		os.Exit(1)
 	}
 	if err := report.WriteJSON(jf); err != nil {
-		jf.Close()
+		_ = jf.Close() // the write error is the one worth reporting
 		slog.Error("failed to write JSON", "error", err)
 		os.Exit(1)
 	}
-	jf.Close()
+	if err := jf.Close(); err != nil {
+		slog.Error("failed to close JSON output", "error", err)
+		os.Exit(1)
+	}
 
 	// Write Markdown.
 	mdPath := strings.TrimSuffix(jsonPath, ".json") + ".md"
-	mf, err := os.Create(mdPath)
+	mf, err := os.Create(filepath.Clean(mdPath))
 	if err != nil {
 		slog.Error("failed to create MD output", "error", err)
 		os.Exit(1)
 	}
 	if err := report.WriteMarkdown(mf); err != nil {
-		mf.Close()
+		_ = mf.Close() // the write error is the one worth reporting
 		slog.Error("failed to write Markdown", "error", err)
 		os.Exit(1)
 	}
-	mf.Close()
+	if err := mf.Close(); err != nil {
+		slog.Error("failed to close Markdown output", "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("[REPLAY] complete",
 		"json", jsonPath,
@@ -634,7 +646,7 @@ func preflightProm(ds config.DatasourceEndpoint) error {
 	if err != nil {
 		return fmt.Errorf("prometheus query failed: %w", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close() // only the status code is needed
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("prometheus returned status %d", resp.StatusCode)
 	}
@@ -649,7 +661,7 @@ func preflightLoki(ds config.DatasourceEndpoint) error {
 	if err != nil {
 		return fmt.Errorf("Loki labels failed: %w", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close() // only the status code is needed
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("Loki returned status %d", resp.StatusCode)
 	}
@@ -658,11 +670,13 @@ func preflightLoki(ds config.DatasourceEndpoint) error {
 
 // preflightOutput checks the output path is writable.
 func preflightOutput(path string) error {
-	f, err := os.Create(path + ".preflight")
+	probe := filepath.Clean(path + ".preflight")
+	f, err := os.Create(probe)
 	if err != nil {
 		return err
 	}
-	f.Close()
-	os.Remove(path + ".preflight")
-	return nil
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Remove(probe)
 }

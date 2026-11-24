@@ -52,7 +52,9 @@ func New(cfg config.ML) (*Client, error) {
 // Close shuts down the gRPC connection.
 func (c *Client) Close() {
 	if c.conn != nil {
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			slog.Warn("ml client close", "error", err)
+		}
 	}
 }
 

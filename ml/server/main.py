@@ -7,8 +7,8 @@ from concurrent import futures
 import grpc
 from otel_helper import TelemetryOptions, get_meter, setup_telemetry
 
-from server.generated import ml_pb2, ml_pb2_grpc
 from server.forecaster import Forecaster
+from server.generated import ml_pb2, ml_pb2_grpc
 from server.multivariate import MultivariateDetector
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ class MLDetectorServicer(ml_pb2_grpc.MLDetectorServicer):
             )
         except Exception as e:
             ML_REQUESTS.add(1, {"method": "Forecast", "status": "error"})
-            logger.exception("forecast failed: %s", e)
+            logger.exception("forecast failed")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return ml_pb2.ForecastResponse()
@@ -134,7 +134,7 @@ class MLDetectorServicer(ml_pb2_grpc.MLDetectorServicer):
             )
         except Exception as e:
             ML_REQUESTS.add(1, {"method": "DetectMultivariate", "status": "error"})
-            logger.exception("multivariate failed: %s", e)
+            logger.exception("multivariate failed")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return ml_pb2.MultivariateResponse()

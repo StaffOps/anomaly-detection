@@ -3,6 +3,7 @@ package inject
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -44,7 +45,7 @@ const (
 // LoadConfig reads and parses an injection profile YAML file.
 // Returns an error if the file is unreadable or malformed.
 func LoadConfig(path string) (*InjectionConfig, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("read injection profile: %w", err)
 	}

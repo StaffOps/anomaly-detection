@@ -8,6 +8,19 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ## [Unreleased]
 
+### ci
+
+**Fixed — gosec and ruff findings on `main` (2026-11-24)**
+- gosec (22 findings, report-only job): unchecked errors are now handled or logged
+  (report file `Close`, metrics server `Shutdown`, seasonal profile `Update`, ML client
+  `Close`, readiness body drain); file paths from flags/config go through
+  `filepath.Clean`; the metrics server shutdown gets its own 5s deadline instead of the
+  already-cancelled run context. The seeded `math/rand` in replay fault injection is a
+  reviewed false positive (`#nosec G404`, reproducibility from the profile seed).
+- ruff (unpinned in CI, now 0.17.6) reports I001 and TRY401 with its default rule set:
+  `ml/pyproject.toml` declares `[tool.ruff] src` so `server` is first-party, imports
+  re-sorted, and redundant exception arguments dropped from `logger.exception`.
+
 ### detection
 
 **Added — `min_value` absolute floor on adaptive rules (P0.1 FP fix, 2026-07-21)**
