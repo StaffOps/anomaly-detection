@@ -18,7 +18,7 @@ func probeHTTP(ctx context.Context, client *http.Client, url string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body) // drain for connection reuse; only the status matters
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("status %d", resp.StatusCode)
 	}
@@ -37,7 +37,7 @@ func probeJSON(ctx context.Context, client *http.Client, url string, validate fu
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body) // best-effort drain; the status is the error
 		return fmt.Errorf("status %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(resp.Body)

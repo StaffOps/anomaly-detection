@@ -149,7 +149,11 @@ func main() {
 	}
 
 	grpcServer.GracefulStop()
-	metricsSrv.Shutdown(ctx)
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelShutdown()
+	if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("metrics server shutdown", "error", err)
+	}
 	cancel()
 	slog.Info("worker stopped")
 }
@@ -204,7 +208,9 @@ func (s *workerServer) ProcessJobs(ctx context.Context, batch *pb.JobBatch) (*pb
 
 		for _, a := range anomalies {
 			// Update seasonal profile
-			s.seasonal.Update(ctx, a.MetricName, a.Labels, a.Value)
+			if err := s.seasonal.Update(ctx, a.MetricName, a.Labels, a.Value); err != nil {
+				slog.Warn("seasonal profile update failed", "metric", a.MetricName, "error", err)
+			}
 
 			results.Anomalies = append(results.Anomalies, &pb.AnomalyResult{
 				JobId:          job.Id,

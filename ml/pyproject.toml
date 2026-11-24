@@ -60,3 +60,8 @@ addopts = "--cov=server --cov-report=term-missing --cov-fail-under=90"
 source = ["server"]
 # Auto-generated protobuf stubs are not hand-written code — exclude from the gate.
 omit = ["server/generated/*"]
+
+[tool.ruff]
+# CI runs `ruff check ml/` from the repo root; resolve first-party imports
+# (`server`) relative to this directory so isort groups them correctly.
+src = ["."]

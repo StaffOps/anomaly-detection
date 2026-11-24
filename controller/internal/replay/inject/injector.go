@@ -49,7 +49,9 @@ func (inj *Injector) Apply(metricName string, series []ingestion.TimeSeries) []i
 		}
 
 		// Deterministic RNG per injection entry: seed + entry index (stable).
-		rng := rand.New(rand.NewSource(inj.cfg.Seed + int64(entryHash(entry))))
+		// Replay fault injection must be reproducible from the profile seed, so a
+		// seeded math/rand source is required; the values are never security-relevant.
+		rng := rand.New(rand.NewSource(inj.cfg.Seed + int64(entryHash(entry)))) // #nosec G404 -- deterministic test-data generator, not used for secrets
 
 		for i := range series {
 			if !matchLabels(entry.Target.Labels, series[i].Labels) {
