@@ -181,12 +181,12 @@ All endpoints, cluster names and namespace lists come from env vars. See `.env.e
 
 ```bash
 # Build Go binaries
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c \
+docker run --rm -v "$(pwd)/controller":/src -w /src -e GOPRIVATE='github.com/staffops/*' -e GONOSUMDB='github.com/staffops/*' golang:1.26 sh -c \
   "CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ && \
    CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/"
 
 # Run Go tests
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine go test ./...
+docker run --rm -v "$(pwd)/controller":/src -w /src -e GOPRIVATE='github.com/staffops/*' -e GONOSUMDB='github.com/staffops/*' golang:1.26 go test ./...
 
 # Build ML image
 docker build -t staffops-anomaly-ml ./ml

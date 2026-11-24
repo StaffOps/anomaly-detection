@@ -225,7 +225,7 @@ blinding the pipeline) but **does not address attacks on the detector's own imag
 and dependencies**. Concrete gaps observed in `controller/Dockerfile`,
 `ml/Dockerfile`, and `go.mod`:
 
-- Base images are `golang:1.25-alpine`, `alpine:3.20`, `python:3.11-slim` — **not
+- Base images are `golang:1.26.11-alpine`, `alpine:3.20`, `python:3.11-slim` — **not
   golden apko-built and not cosign-signed**. A compromised upstream image (or its
   registry) ships malicious code into every replica.
 - ~~`go.mod` imports `github.com/karlipegomes/staffops-otel-libs/go` at a

@@ -4,7 +4,7 @@
 
 ```bash
 # Build both binaries
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c \
+docker run --rm -v "$(pwd)/controller":/src -w /src -e GOPRIVATE='github.com/staffops/*' -e GONOSUMDB='github.com/staffops/*' golang:1.26 sh -c \
   "CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ && \
    CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/"
 ```
@@ -39,7 +39,10 @@ docker compose -f scripts/docker-compose.yaml up --build -d
 ### Controller/Worker Dockerfile
 
 ```dockerfile
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26.11-alpine AS builder
+# Direct fetch of staffops-otel-libs (rewritten history, see AGENTS.md)
+RUN apk add --no-cache git
+ENV GOPRIVATE=github.com/staffops/* GONOSUMDB=github.com/staffops/*
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

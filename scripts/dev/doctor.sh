@@ -35,14 +35,14 @@ fi
 
 echo ""
 echo "== go modules (staffops-otel-libs is public — no token needed) =="
-# Sanity-check the public module resolves via the default proxy. A failure here
-# is network/proxy, not auth — surfaced so it doesn't blow up mid-build.
-if docker run --rm golang:1.25-alpine sh -c \
-    'go list -m github.com/staffops/staffops-otel-libs/go@latest >/dev/null 2>&1'; then
-  echo "  staffops-otel-libs resolvable via proxy       OK"
+# Sanity-check the pinned module resolves with the same direct-fetch settings the
+# build uses (see GO_MODULE_ENV in lib.sh). A failure here is network, not auth.
+if docker run --rm "${GO_MODULE_ENV[@]}" "$GO_IMAGE" sh -c \
+    'go mod download github.com/staffops/staffops-otel-libs/go@v0.2.1 >/dev/null 2>&1'; then
+  echo "  staffops-otel-libs fetchable (direct)        OK"
 else
-  echo "  staffops-otel-libs resolvable via proxy       MISSING"
-  echo "    -> check network/proxy access to proxy.golang.org (module is public)."
+  echo "  staffops-otel-libs fetchable (direct)        MISSING"
+  echo "    -> check network access to github.com (module is public)."
   problems=$((problems + 1))
 fi
 

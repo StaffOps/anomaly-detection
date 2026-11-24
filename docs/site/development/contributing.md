@@ -68,7 +68,7 @@ chore(deps): bump golang from 1.24 to 1.25
 2. Regenerate Go stubs:
    ```bash
    docker run --rm -v "$(pwd)/controller":/src -w /src \
-     golang:1.25-alpine sh -c \
+     -e GOPRIVATE='github.com/staffops/*' -e GONOSUMDB='github.com/staffops/*' golang:1.26 sh -c \
      "go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
       go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest && \
       protoc --go_out=. --go-grpc_out=. proto/*.proto"

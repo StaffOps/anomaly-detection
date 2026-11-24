@@ -10,6 +10,26 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ### ci
 
+**Changed — Go 1.26, dependency CVE remediation, otel-libs direct fetch (2026-11-24)**
+- `dep_scan` (Trivy fs) reported 9 HIGH in `controller/go.mod`. Bumped
+  `google.golang.org/grpc` 1.81.1 → 1.83.2, `golang.org/x/net` 0.55.0 → 0.62.0,
+  `golang.org/x/text` 0.37.0 → 0.43.0 (required by x/net 0.62.0),
+  `github.com/klauspost/compress` 1.17.9 → 1.18.7; `go mod tidy` also moved x/sys,
+  x/term and otelhttp.
+- x/net ≥ 0.60.0 requires Go 1.26: `go.mod` is now `go 1.26.0` / `toolchain go1.26.11`,
+  CI `setup-go` uses 1.26.11, the builder image is `golang:1.26.11-alpine`, and the dev
+  commands in docs and `scripts/` use `golang:1.26`.
+- `staffops-otel-libs` history was rewritten (git filter-repo, 2026-10-28): its
+  `go/v0.2.x` tags no longer match sum.golang.org and proxy.golang.org does not serve the
+  module, so a cold module cache failed `go mod download` (the cause of the failing
+  Build & Push on `main`). Every Go build now sets
+  `GOPRIVATE`/`GONOSUMDB=github.com/staffops/*` (CI workflow env, Dockerfile builder with
+  `git`, `scripts/dev`, docs) and `go.sum` pins the hash of the current tag contents.
+  Remove once we move to otel-libs 0.3.0 (module path `github.com/staffops/otel-libs/go`).
+- `lint-ml` pins `ruff==0.17.6`.
+- Docs: `program-causal-correlation.md` added to the MkDocs nav; it was missing, so
+  `mkdocs build --strict` failed the PR `build_check` whenever `docs/site/**` changed.
+
 **Fixed — gosec and ruff findings on `main` (2026-11-24)**
 - gosec (22 findings, report-only job): unchecked errors are now handled or logged
   (report file `Close`, metrics server `Shutdown`, seasonal profile `Update`, ML client

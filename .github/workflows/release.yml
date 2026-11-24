@@ -71,7 +71,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
-      # 2) GATE — report-only. Go/dependency CVEs are cleared (Go 1.25 migration,
+      # 2) GATE — report-only. Go/dependency CVEs are cleared (Go 1.25/1.26 migrations,
       # 2026-07-01) and dep_scan is armed. This IMAGE gate stays report-only until
       # PH.3 (golden apko base images): the ML runtime still inherits python:3.11-slim
       # (debian) perl-base CVEs that are fix_deferred/affected upstream. Flip
