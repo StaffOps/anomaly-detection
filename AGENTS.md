@@ -431,12 +431,15 @@ Five workflows in `.github/workflows/` (org-standard layout, mirrors staffops-ai
   builder, `scripts/dev`) sets `GOPRIVATE`/`GONOSUMDB=github.com/staffops/*` and fetches
   it directly with git. `go.sum` pins the current tag contents. Drop this when moving to
   otel-libs 0.3.0 (module path `github.com/staffops/otel-libs/go`).
-- **Rollout = report-only gates**: `lint-*`, `dep_scan`, `gosec`, `bandit` run
-  `continue-on-error`, and the Trivy image scan is `exit-code: 0`. They surface
-  pre-existing debt (gofmt, `go vet`, grpc/otel/base-image CVEs) without blocking `main`.
-  Flip each back to blocking (`continue-on-error` off / `exit-code: 1`) as the debt clears.
-  `lint-go` and the coverage gates (`test-go` at 90.4%, `test-ml`) are now **blocking** —
-  PH.9/PH.10 landed.
+- **CI gates are blocking** (2026-11-24): `lint-go`, `lint-ml` (ruff pinned), `dep_scan`
+  (Trivy fs, CRITICAL/HIGH), `gosec`, `bandit` and the coverage gates (`test-go` ≥90%,
+  `test-ml` ≥90%) all fail the run on findings. Reviewed false positives are suppressed
+  inline only (`#nosec <rule> -- reason`, `# nosec <ID>` + reason), never per job.
+- **Still report-only: the Trivy image scan** in `build.yml`/`release.yml`
+  (`exit-code: 0`). On main (19a758d) it reports HIGH findings: controller and worker 2 each
+  (alpine 3.20 OS packages), ML 53 in the debian OS packages of `python:3.11-slim`
+  plus 4 in Python packages. Flip to `exit-code: 1`
+  after PH.3 (golden apko bases).
 
 ---
 

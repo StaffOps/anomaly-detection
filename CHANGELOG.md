@@ -10,6 +10,14 @@ Versioning is **milestone-based**, not commit-based. Each component (`controller
 
 ### ci
 
+**Changed — gosec, lint-ml and bandit are blocking (2026-11-24)**
+- Removed `continue-on-error: true` (and the "report-only during rollout" notes) from
+  `gosec`, `bandit` (`sast.yml`) and `lint-ml` (`test.yml`); all three are green on
+  `main`. Every PR/push gate in `test.yml` and `sast.yml` now fails the run on findings.
+- The Trivy **image** scan in `build.yml`/`release.yml` stays report-only
+  (`exit-code: 0`): it still reports HIGH findings in the image OS packages (alpine
+  and debian bases) and in ML Python packages. Flip after PH.3.
+
 **Changed — Go 1.26, dependency CVE remediation, otel-libs direct fetch (2026-11-24)**
 - `dep_scan` (Trivy fs) reported 9 HIGH in `controller/go.mod`. Bumped
   `google.golang.org/grpc` 1.81.1 → 1.83.2, `golang.org/x/net` 0.55.0 → 0.62.0,
