@@ -66,20 +66,22 @@ Backing: Redis (baselines, dedup), Prometheus (PromQL), Loki (LogQL)
 **No local Go or Python.** Every operation runs in a container.
 
 ```bash
-# staffops-otel-libs is a public org module — Go pulls it via the default proxy,
-# no token / GOPRIVATE / git config needed.
+# staffops-otel-libs is public (no token), but its history was rewritten
+# (git filter-repo, 2026-10-28): its go/v0.2.x tags no longer match sum.golang.org
+# and the Go proxy does not serve it. GOPRIVATE + GONOSUMDB fetch it directly from
+# GitHub (the Debian golang image ships git); go.sum pins the current hash.
+# Needed until the move to otel-libs 0.3.0 (github.com/staffops/otel-libs/go).
 
 # Go — build both binaries
-# staffops-otel-libs is a public org module now — no token / GOPRIVATE needed.
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c '
+docker run --rm -v "$(pwd)/controller":/src -w /src -e GOPRIVATE='github.com/staffops/*' -e GONOSUMDB='github.com/staffops/*' golang:1.26 sh -c '
   CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ &&
   CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/'
 
 # Go — tests
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine go test ./...
+docker run --rm -v "$(pwd)/controller":/src -w /src -e GOPRIVATE='github.com/staffops/*' -e GONOSUMDB='github.com/staffops/*' golang:1.26 go test ./...
 
 # Go — tests with coverage (≥90% gate is PH.9 — done; CI test-go enforces it)
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine sh -c '
+docker run --rm -v "$(pwd)/controller":/src -w /src -e GOPRIVATE='github.com/staffops/*' -e GONOSUMDB='github.com/staffops/*' golang:1.26 sh -c '
   go test ./internal/... -coverprofile=cov.out && go tool cover -func=cov.out | tail -5'
 
 # Python ML — build image
@@ -423,8 +425,12 @@ Five workflows in `.github/workflows/` (org-standard layout, mirrors staffops-ai
   `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` secrets. Images:
   `<user>/staffops-anomaly-detection-{controller,worker,ml}`.
 - **Go module `staffops-otel-libs`**: public org module
-  (`github.com/staffops/staffops-otel-libs/go`, tagged `v0.1.0`) — pulled via the
-  default Go proxy. No token, no GOPRIVATE, no SSH.
+  (`github.com/staffops/staffops-otel-libs/go`, pinned `v0.2.1`). No token or SSH, but
+  its history was rewritten (git filter-repo, 2026-10-28), so the tags no longer match
+  sum.golang.org and the Go proxy does not serve it: every Go build (CI env, Dockerfile
+  builder, `scripts/dev`) sets `GOPRIVATE`/`GONOSUMDB=github.com/staffops/*` and fetches
+  it directly with git. `go.sum` pins the current tag contents. Drop this when moving to
+  otel-libs 0.3.0 (module path `github.com/staffops/otel-libs/go`).
 - **Rollout = report-only gates**: `lint-*`, `dep_scan`, `gosec`, `bandit` run
   `continue-on-error`, and the Trivy image scan is `exit-code: 0`. They surface
   pre-existing debt (gofmt, `go vet`, grpc/otel/base-image CVEs) without blocking `main`.

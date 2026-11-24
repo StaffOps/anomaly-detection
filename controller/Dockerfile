@@ -1,10 +1,18 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26.11-alpine AS builder
+
+# staffops-otel-libs had its history rewritten (git filter-repo, 2026-10-28): the
+# go/v0.2.x tags now point at rewritten commits, sum.golang.org keeps the old hash
+# and proxy.golang.org no longer serves the module. Fetch it directly from GitHub
+# (needs git, builder stage only) and skip the checksum DB; go.sum pins the hash of
+# the current tag contents. Remove once we move to otel-libs 0.3.0
+# (module path github.com/staffops/otel-libs/go).
+RUN apk add --no-cache git
+ENV GOPRIVATE=github.com/staffops/* \
+    GONOSUMDB=github.com/staffops/*
 
 WORKDIR /src
 COPY go.mod go.sum ./
-# staffops-otel-libs is a public org module now — no GOPRIVATE / token needed;
-# fetched via the default Go proxy.
 RUN go mod download
 
 COPY . .

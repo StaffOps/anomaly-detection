@@ -14,6 +14,14 @@ on:
 permissions:
   contents: read
 
+# staffops-otel-libs had its history rewritten (git filter-repo, 2026-10-28): its
+# go/v0.2.x tags no longer match sum.golang.org and proxy.golang.org does not serve
+# it. Fetch it directly and skip the checksum DB; go.sum pins the current hash.
+# Remove once we move to otel-libs 0.3.0 (module path github.com/staffops/otel-libs/go).
+env:
+  GOPRIVATE: "github.com/staffops/*"
+  GONOSUMDB: "github.com/staffops/*"
+
 jobs:
   gosec:
     runs-on: ubuntu-latest
@@ -23,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.26.11"
           cache-dependency-path: controller/go.sum
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@latest

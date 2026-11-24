@@ -56,7 +56,7 @@ Recorded as numbered decisions in [Architecture decisions](site/architecture/dec
 
 ```bash
 gh run list -R StaffOps/anomaly-detection -L 5
-docker run --rm -v "$(pwd)/controller":/src -w /src golang:1.25-alpine go test ./...
+docker run --rm -v "$(pwd)/controller":/src -w /src -e GOPRIVATE='github.com/staffops/*' -e GONOSUMDB='github.com/staffops/*' golang:1.26 go test ./...
 docker run --rm -v "$(pwd)":/src -w /src python:3.11-slim sh -c \
   "pip install -q ruff && ruff check ml/ --exclude 'ml/server/generated/*'"
 ```

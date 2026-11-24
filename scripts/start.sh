@@ -8,7 +8,8 @@ echo "=== Building Go binaries ==="
 docker run --rm \
   -v "$CONTROLLER_DIR":/src \
   -w /src \
-  golang:1.25 sh -c \
+  -e "GOPRIVATE=github.com/staffops/*" -e "GONOSUMDB=github.com/staffops/*" \
+  golang:1.26 sh -c \
   "CGO_ENABLED=0 go build -o bin/controller ./cmd/controller/ && \
    CGO_ENABLED=0 go build -o bin/worker ./cmd/worker/"
 
